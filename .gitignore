@@ -1,0 +1,7 @@
+*
+!scripts/
+!scripts/**
+!jobs/
+!jobs/**
+!.gitignore
+!README.md
