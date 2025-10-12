@@ -1,59 +1,81 @@
 #!/usr/bin/env Rscript
 
 # General FASTA to NEXUS converter
-# Usage: Rscript "/groups/itay_mayrose/tomulanovski/gene2net/scripts/fasta_to_nex.r" input.fasta output.nex
+# Usage: Rscript "/groups/itay_mayrose/tomulanovski/gene2net/scripts/fasta_to_nex.r" path_to_input_directory path_to_output_directory
+# Converts all fasta files in the directory to NEXUS files
+
 
 library(ape)
 
 # Get command line arguments
 args <- commandArgs(trailingOnly = TRUE)
 
-# Check if correct number of arguments provided
 if(length(args) != 2) {
-  cat("\nUsage: Rscript fasta_to_nexus.r <input.fasta> <output.nex>\n")
-  cat("Example: Rscript fasta_to_nexus.r sequences.fasta sequences.nex\n\n")
+  cat("\nUsage: Rscript fasta_to_nex.r <input_directory> <output_directory>\n")
+  cat("Example: Rscript fasta_to_nex.r /path/to/fasta_files /path/to/nexus_output\n\n")
   quit(status = 1)
 }
 
-input_file <- args[1]
-output_file <- args[2]
+input_dir <- args[1]
+output_dir <- args[2]
 
-# Check if input file exists
-if(!file.exists(input_file)) {
-  cat("Error: Input file '", input_file, "' not found\n", sep="")
+# Check if input directory exists
+if(!dir.exists(input_dir)) {
+  cat("Error: Input directory '", input_dir, "' not found\n", sep="")
   quit(status = 1)
 }
 
-# Check if ape package is available
-if(!require(ape, quietly = TRUE)) {
-  cat("Error: R package 'ape' is required but not installed\n")
-  cat("Install it with: install.packages('ape')\n")
+# Create output directory if it doesn't exist
+if(!dir.exists(output_dir)) {
+  cat("Creating output directory:", output_dir, "\n")
+  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+  if(!dir.exists(output_dir)) {
+    cat("Error: Could not create output directory '", output_dir, "'\n", sep="")
+    quit(status = 1)
+  }
+} else {
+  cat("Using existing output directory:", output_dir, "\n")
+}
+
+# Get all .fasta files
+fasta_files <- list.files(path = input_dir, pattern = "\\.fasta$", full.names = TRUE)
+
+if(length(fasta_files) == 0) {
+  cat("No .fasta files found in the directory.\n")
   quit(status = 1)
 }
 
-cat("Converting FASTA to NEXUS...\n")
-cat("Input file: ", input_file, "\n")
-cat("Output file:", output_file, "\n")
+cat("Found", length(fasta_files), "FASTA files to convert.\n\n")
 
-# Read FASTA file
-tryCatch({
-  sequences <- read.FASTA(input_file)
-}, error = function(e) {
-  cat("Error reading FASTA file:", e$message, "\n")
-  quit(status = 1)
-})
+# Loop through each FASTA file
+successful_conversions <- 0
+failed_conversions <- 0
 
-# Write NEXUS file
-tryCatch({
-  write.nexus.data(sequences, output_file, format="DNA")
-}, error = function(e) {
-  cat("Error writing NEXUS file:", e$message, "\n")
-  quit(status = 1)
-})
+for(fasta_file in fasta_files) {
+  # Get the base filename without path and extension
+  base_filename <- tools::file_path_sans_ext(basename(fasta_file))
+  
+  # Create output file path in the output directory
+  output_file <- file.path(output_dir, paste0(base_filename, ".nex"))
+  
+  cat("Converting:", basename(fasta_file), "->", basename(output_file), "\n")
+  
+  tryCatch({
+    # Read FASTA file
+    sequences <- read.FASTA(fasta_file)
+    
+    # Write NEXUS file
+    write.nexus.data(sequences, output_file, format="DNA")
+    
+    cat("  Success! Number of sequences:", length(sequences), "\n\n")
+    successful_conversions <- successful_conversions + 1
+  }, error = function(e) {
+    cat("  Error processing file:", e$message, "\n\n")
+    failed_conversions <- failed_conversions + 1
+  })
+}
 
-# Print summary
-cat("\nConversion successful!\n")
-cat("Number of sequences:", length(sequences), "\n")
-cat("Sequence names (first 5):\n")
-print(head(names(sequences), 5))
-cat("Output saved to:", output_file, "\n")
+cat("Conversion completed!\n")
+cat("Successful conversions:", successful_conversions, "\n")
+cat("Failed conversions:", failed_conversions, "\n")
+cat("Output directory:", output_dir, "\n")

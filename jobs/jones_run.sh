@@ -2,7 +2,7 @@
 #SBATCH --job-name=beast_pgic
 #SBATCH --output=/groups/itay_mayrose/tomulanovski/gene2net/papers/Sessa_2012b/%x.o%j
 #SBATCH --error=/groups/itay_mayrose/tomulanovski/gene2net/papers/Sessa_2012b/%x.e%j
-#SBATCH --time=48:00:00
+#SBATCH --time=120:00:00
 #SBATCH --mem=32G
 #SBATCH --partition=itaym
 #SBATCH --account=itaym-users

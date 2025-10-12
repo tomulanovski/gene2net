@@ -4,14 +4,14 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=power-general
 #SBATCH --account=power-general-users
-#SBATCH --output=/groups/itay_mayrose/tomulanovski/gene2net/papers/Lawrence_2016/%x.o%j
-#SBATCH --error=/groups/itay_mayrose/tomulanovski/gene2net/papers/Lawrence_2016/%x.e%j
+#SBATCH --output=/groups/itay_mayrose/tomulanovski/gene2net/papers/Marcussen_2015/%x.o%j
+#SBATCH --error=/groups/itay_mayrose/tomulanovski/gene2net/papers/Marcussen_2015/%x.e%j
 
 # Define input and output files
 
-INPUT_FILE="/groups/itay_mayrose/tomulanovski/gene2net/papers/Diaz-Perez_2018/gene_trees/polyphest_trees_1.tre"
-OUTPUT_FILE="/groups/itay_mayrose/tomulanovski/gene2net/papers/Diaz-Perez_2018/gene_trees/astral_41.tre"
-LOG_FILE="/groups/itay_mayrose/tomulanovski/gene2net/papers/Diaz-Perez_2018/gene_trees/astral4_run1.log"
+INPUT_FILE="/groups/itay_mayrose/tomulanovski/gene2net/papers/Marcussen_2015/gene_trees/trees_reduced.tre"
+OUTPUT_FILE="/groups/itay_mayrose/tomulanovski/gene2net/papers/Marcussen_2015/gene_trees/astral_4.tre"
+LOG_FILE="/groups/itay_mayrose/tomulanovski/gene2net/papers/Marcussen_2015/gene_trees/astral4_run.log"
 
 # Path to ASTRAL-4 executable
 # Change this to match your installation path
@@ -23,7 +23,7 @@ echo "Input file: $INPUT_FILE"
 echo "Output will be written to: $OUTPUT_FILE"
 echo "Log will be written to: $LOG_FILE"
 
-cd /groups/itay_mayrose/tomulanovski/gene2net/papers/Lawrence_2016/gene_trees/
+cd /groups/itay_mayrose/tomulanovski/gene2net/papers/Marcussen_2015/gene_trees/
 
 $ASTRAL_PATH -o $OUTPUT_FILE $INPUT_FILE 2>$LOG_FILE
 

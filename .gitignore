@@ -1,7 +1,19 @@
+# Ignore everything by default
 *
+
+# --- Keep top-level folders ---
 !scripts/
 !scripts/**
 !jobs/
 !jobs/**
+
+# --- Keep simulations subfolders ---
+!simulations/
+!simulations/jobs/
+!simulations/jobs/**
+!simulations/scripts/
+!simulations/scripts/**
+
+# --- Always keep key files ---
 !.gitignore
 !README.md

@@ -255,26 +255,26 @@ Examples:
     
     args = parser.parse_args()
     
-    # Taxa dictionary with desired copy numbers for Brachypodium species
+    # Taxa dictionary with desired copy numbers
     TAXA_DICT = {
-        'Brachypodium_arbuscula': 1,
-        'Brachypodium_boissieri': 3, 
-        'Brachypodium_bolusii': 2,
-        'Brachypodium_distachyon': 1,
-        'Brachypodium_flexum': 3,
-        'Brachypodium_genuense': 1,
-        'Brachypodium_sylvaticum_subsp_glaucovirens': 1,
-        'Brachypodium_hybridum': 2,
-        'Brachypodium_kawakamii': 3,
-        'Brachypodium_madagascariense': 2,
-        'Brachypodium_mexicanum': 2,
-        'Brachypodium_phoenicoides': 2,
-        'Brachypodium_pinnatum': 1,
-        'Brachypodium_retusum': 3,
-        'Brachypodium_rupestre': 1,
-        'Brachypodium_stacei': 1,
-        'Brachypodium_sylvaticum': 1,
-        'Brachypodium_cf_pinnatum_DLA-2015': 1
+        'ALLEXIS': 1,
+        'Andinium': 1, 
+        'Chamaemelanium': 1,
+        'Chilenium': 5,
+        'Delphiniopsis': 2,
+        'Erpetion': 5,
+        'Leptidium': 2,
+        'Melanium': 2,
+        'Noisettia': 1,
+        'Nosphinium': 5,
+        'Plagiostigma': 2,
+        'Rubellium': 1,
+        'Sclerosium': 2,
+        'Tridens': 6,
+        'Viola': 2,
+        'Xylinosium': 4,
+        'sectnovA': 6,
+        'sectnovB': 4
     }
     
     # Read trees
