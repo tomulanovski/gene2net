@@ -1,27 +1,59 @@
 #!/usr/bin/env python3
 """
 Scale branch lengths in all ultrametric species trees across all networks.
+Uses high-precision decimal arithmetic to maintain ultrametricity.
+Applies ETE3 convert_to_ultrametric() after scaling to ensure ultrametricity is preserved.
+
 Usage:
     python scale_ultrametric_species_trees.py <base_dir> <scale_factor>
     
 Example:
-    python scale_ultrametric_species_trees.py /groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations 0.001
+    python scale_ultrametric_species_trees.py /groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations 1000000
 """
 import sys
 import os
 from pathlib import Path
 from io import StringIO
 from Bio import Phylo
+from decimal import Decimal, getcontext
+from ete3 import Tree
+
+# Set high precision for decimal calculations
+getcontext().prec = 50
 
 def scale_tree(tree, factor):
-    """Multiply all branch lengths by factor."""
+    """Multiply all branch lengths by factor using high-precision arithmetic."""
+    factor_decimal = Decimal(str(factor))
+    
     for clade in tree.find_clades():
         if clade.branch_length is not None:
-            clade.branch_length *= factor
+            # Convert to Decimal for precision, scale, then back to float
+            original = Decimal(str(clade.branch_length))
+            scaled = original * factor_decimal
+            clade.branch_length = float(scaled)
+    
     return tree
 
+def ensure_ultrametric_with_ete3(newick_str):
+    """
+    Convert tree to ultrametric using ETE3.
+    Takes a Newick string, applies convert_to_ultrametric(), and returns the result.
+    """
+    try:
+        # Load tree with ETE3
+        ete_tree = Tree(newick_str, format=1)
+        
+        # Convert to ultrametric
+        ete_tree.convert_to_ultrametric()
+        
+        # Return the ultrametric newick string
+        return ete_tree.write(format=1)
+    except Exception as e:
+        print(f"    Warning: ETE3 ultrametric conversion failed: {e}")
+        return newick_str
+
 def write_simphy_nexus(tree, output_file):
-    """Write tree in SimPhy Nexus format with no root branch length."""
+    """Write tree in SimPhy Nexus format with high-precision branch lengths."""
     handle = StringIO()
     Phylo.write([tree], handle, "newick")
     newick_str = handle.getvalue().strip().replace("\n", "")
@@ -30,10 +62,19 @@ def write_simphy_nexus(tree, output_file):
     if not newick_str.endswith(";"):
         newick_str += ";"
     
+    # Apply ETE3 ultrametric conversion
+    print("    Applying ETE3 convert_to_ultrametric()...")
+    newick_str = ensure_ultrametric_with_ete3(newick_str)
+    
+    # Ensure it ends with a semicolon after ETE3 processing
+    if not newick_str.endswith(";"):
+        newick_str += ";"
+    
     # Remove root branch length if present (SimPhy requirement)
-    newick_str = newick_str.replace("):0.0;", ");")
-    newick_str = newick_str.replace("):0.00000;", ");")
-    newick_str = newick_str.replace("):0.000000;", ");")
+    import re
+    newick_str = re.sub(r'\):0\.0+;', ');', newick_str)
+    newick_str = re.sub(r'\):[0-9]+\.0+;', ');', newick_str)
+    newick_str = re.sub(r'\):[0-9.]+;$', ');', newick_str)
     
     with open(output_file, "w") as out:
         out.write("#NEXUS\n")
@@ -54,7 +95,7 @@ def process_species_tree(input_file, output_file, scale_factor):
         tree = trees[0]
         scaled_tree = scale_tree(tree, scale_factor)
         
-        # Write to output file
+        # Write to output file (includes ETE3 ultrametric conversion)
         write_simphy_nexus(scaled_tree, output_file)
         
         return True
@@ -77,8 +118,8 @@ def process_all_networks(base_dir, scale_factor):
     networks_processed = 0
     
     for network in networks:
-        input_file = base_path / network / "species_tree_ultrametric.nex"
-        output_file = base_path / network / "species_tree_ultrametric_scaled.nex"
+        input_file = base_path / network / "species_tree_ultrametric_normalized.nex"
+        output_file = base_path / network / "species_tree_ultrametric_height_1_million.nex"
         
         if not input_file.exists():
             print(f"??  {network}: Species tree not found: {input_file}")
@@ -101,15 +142,18 @@ def process_all_networks(base_dir, scale_factor):
     print(f"SUMMARY:")
     print(f"  Networks processed: {networks_processed}/{len(networks)}")
     print(f"  Scale factor: {scale_factor}")
-    print(f"  Output files: species_tree_ultrametric_scaled.nex")
+    print(f"  Output files: species_tree_ultrametric_height_1_million.nex")
+    print(f"  Precision: {getcontext().prec} decimal places")
+    print(f"  Ultrametric conversion: ETE3 convert_to_ultrametric()")
     print(f"{'='*60}")
 
 def main():
     if len(sys.argv) < 3:
         print("Usage: python scale_ultrametric_species_trees.py <base_dir> <scale_factor>")
         print("\nExample:")
-        print("  python scale_ultrametric_species_trees.py /groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations 0.001")
-        print("\nThis will create species_tree_ultrametric_scaled.nex for each network")
+        print("  python scale_ultrametric_species_trees.py /groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations 1000000")
+        print("\nThis will create species_tree_ultrametric_height_1_million.nex for each network")
+        print("Uses high-precision decimal arithmetic and ETE3 convert_to_ultrametric().")
         sys.exit(1)
     
     base_dir = sys.argv[1]
@@ -121,7 +165,8 @@ def main():
     
     print(f"Base directory: {base_dir}")
     print(f"Scale factor: {scale_factor}")
-    print(f"Processing ultrametric species trees...")
+    print(f"Decimal precision: {getcontext().prec} places")
+    print(f"Processing ultrametric species trees with ETE3 conversion...")
     
     process_all_networks(base_dir, scale_factor)
 

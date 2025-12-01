@@ -83,7 +83,7 @@ python $POLYPHEST \
     --consensus_multiset_file $MULTISET \
     --filter_strategy percentile \
     --output_dir $OUTPUT_DIR \
-    --percentile 50 \
+    --percentile 60 \
     --use_near_isomorphic "True" \
     --isomorphic_threshold 0.2
 
