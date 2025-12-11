@@ -13,6 +13,8 @@
 !simulations/jobs/**
 !simulations/scripts/
 !simulations/scripts/**
+!simulations/networks/
+!simulations/networks/**
 !simulations/*.md
 
 # --- Always keep key files ---
