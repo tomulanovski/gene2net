@@ -40,6 +40,7 @@ Key job types:
 Contains two subdirectories mirroring the main structure:
 
 - **`simulations/scripts/`**: Simulation-specific analysis scripts
+  - `check_pipeline_status.py` - **Comprehensive pipeline validator** that checks SimPhy simulations and all method inputs/outputs
   - `compare_nets.py` - Comprehensive network comparison pipeline that handles both MUL-trees (standard Newick) and networks (extended Newick with #H markers)
   - `compare_reticulations.py` - Pairwise network comparison utilities
   - `add_nhx_tags.py`, `add_nhx_single.py` - Add NHX format tags for reconciliation
@@ -74,7 +75,24 @@ Contains two subdirectories mirroring the main structure:
 
 1. Configure simulation parameters by editing the config script (e.g., `simulations/jobs/conf_ils_low_run_simphy.sh`)
 2. Submit the simulation job which will call the reusable script
-3. Use comparison scripts to analyze results:
+3. Check simulation completion and pipeline status:
+   ```bash
+   # Check if SimPhy simulations completed (1000 trees per replicate)
+   python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step simphy
+
+   # Check if input files are ready before running methods
+   python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step prep
+
+   # Check if method outputs were generated successfully
+   python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step run
+
+   # Check specific method (grampa, polyphest, mpsugar, padre)
+   python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --method grampa
+
+   # Export results to CSV for analysis
+   python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --export status.csv
+   ```
+4. Use comparison scripts to analyze results:
    ```bash
    python simulations/scripts/compare_nets.py
    ```
@@ -130,6 +148,51 @@ The codebase uses absolute paths pointing to `/groups/itay_mayrose/tomulanovski/
 1. Update paths in job scripts to point to your input/output directories
 2. Ensure conda paths match your environment setup
 3. Scripts in `scripts/` directory can be called with absolute paths or relative to the working directory
+
+## Pipeline Validation and Monitoring
+
+### check_pipeline_status.py
+A comprehensive script to validate all stages of the simulation and inference pipeline:
+
+**Key Features:**
+- Check SimPhy simulations (verifies 1000 trees per replicate for all 5 replicates)
+- Validate input file preparation for each method
+- Verify output file generation after running methods
+- Parse SLURM logs for error diagnostics
+- Export results to CSV for further analysis
+
+**Usage Examples:**
+```bash
+# Check everything for a configuration
+python simulations/scripts/check_pipeline_status.py conf_ils_low_10M
+
+# Check only SimPhy simulations
+python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step simphy
+
+# Check only input preparation (before running methods)
+python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step prep
+
+# Check only outputs (after running methods)
+python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step run
+
+# Check specific method's inputs
+python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --method grampa --step prep
+
+# Check specific method's outputs
+python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --method polyphest --step run
+
+# Verbose mode (show all details including successes)
+python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --verbose
+
+# Export to CSV
+python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --export results.csv
+```
+
+**Typical Workflow:**
+1. After SimPhy completes: `--step simphy` to verify 1000 trees per replicate
+2. After prep jobs: `--step prep` to ensure all input files are ready
+3. Before running methods: Check inputs to avoid wasting compute time
+4. After method runs: `--step run` to identify failed jobs and diagnose issues
 
 ## Working with Claude Code
 

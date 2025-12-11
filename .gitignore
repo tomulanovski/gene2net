@@ -13,6 +13,7 @@
 !simulations/jobs/**
 !simulations/scripts/
 !simulations/scripts/**
+!simulations/*.md
 
 # --- Always keep key files ---
 !.gitignore
