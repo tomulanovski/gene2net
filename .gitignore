@@ -17,3 +17,4 @@
 # --- Always keep key files ---
 !.gitignore
 !README.md
+!CLAUDE.md
