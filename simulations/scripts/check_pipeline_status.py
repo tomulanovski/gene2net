@@ -62,7 +62,8 @@ EXPECTED_TREES_PER_REPLICATE = 1000
 # Expected files for each method
 METHOD_FILES = {
     'grampa': {
-        'prep': ['grampa_trees.tre', 'clean_trees.tre', 'taxa_map.txt', 'species.tre'],
+        'prep': ['grampa_trees.tre', 'clean_trees.tre', 'species.tre'],  # taxa_map.txt is optional
+        'prep_optional': ['taxa_map.txt'],  # Only created if substring fixes needed
         'run': ['analysis/grampa-scores.txt']  # GRAMPA success marker
     },
     'polyphest': {
@@ -240,6 +241,7 @@ def check_method_inputs(config: str, method: str, verbose: bool = False) -> List
     """Check if input files for a method are ready"""
     results = []
     expected_files = METHOD_FILES[method]['prep']
+    optional_files = METHOD_FILES[method].get('prep_optional', [])
 
     for network in NETWORKS:
         for replicate in range(1, NUM_REPLICATES + 1):
@@ -256,7 +258,9 @@ def check_method_inputs(config: str, method: str, verbose: bool = False) -> List
 
             missing = []
             errors = []
+            optional_present = []
 
+            # Check required files
             for expected_file in expected_files:
                 filepath = os.path.join(input_dir, expected_file)
                 if not os.path.exists(filepath):
@@ -264,12 +268,20 @@ def check_method_inputs(config: str, method: str, verbose: bool = False) -> List
                 elif os.path.getsize(filepath) == 0:
                     errors.append(f"{expected_file} is empty")
 
+            # Check optional files (just note if present, don't mark as missing)
+            for optional_file in optional_files:
+                filepath = os.path.join(input_dir, optional_file)
+                if os.path.exists(filepath):
+                    optional_present.append(optional_file)
+
             if not missing and not errors:
                 status = 'SUCCESS'
-                details = f"All {len(expected_files)} input files present"
+                details = f"All {len(expected_files)} required files present"
+                if optional_present:
+                    details += f" (+{len(optional_present)} optional)"
             elif missing:
                 status = 'MISSING'
-                details = f"Missing {len(missing)}/{len(expected_files)} files"
+                details = f"Missing {len(missing)}/{len(expected_files)} required files"
             else:
                 status = 'FAILED'
                 details = f"Files exist but have errors"
@@ -371,15 +383,22 @@ def print_summary(results: List[ValidationResult], title: str):
 
     success_rate = (success / total * 100) if total > 0 else 0
 
+    # Calculate what we're checking
+    num_networks = len(set(r.network for r in results))
+    num_replicates = len(set(r.replicate for r in results))
+
     print(f"\n{'='*80}")
     print(f"{title}")
     print(f"{'='*80}")
-    print(f"Total:    {total:3d}")
-    print(f"Success:  {success:3d} ({success_rate:5.1f}%)")
+    print(f"Checking: {num_networks} networks × {num_replicates} replicates = {total} combinations")
+    print(f"")
+    print(f"Success:  {success:3d} / {total:3d} ({success_rate:5.1f}%)")
     if partial > 0:
-        print(f"Partial:  {partial:3d} ({partial/total*100:5.1f}%)")
-    print(f"Failed:   {failed:3d} ({failed/total*100:5.1f}%)")
-    print(f"Missing:  {missing:3d} ({missing/total*100:5.1f}%)")
+        print(f"Partial:  {partial:3d} / {total:3d} ({partial/total*100:5.1f}%)")
+    if failed > 0:
+        print(f"Failed:   {failed:3d} / {total:3d} ({failed/total*100:5.1f}%)")
+    if missing > 0:
+        print(f"Missing:  {missing:3d} / {total:3d} ({missing/total*100:5.1f}%)")
     print(f"{'='*80}\n")
 
 def print_detailed_results(results: List[ValidationResult], show_success: bool = False):

@@ -75,7 +75,7 @@ Contains two subdirectories mirroring the main structure:
 
 1. Configure simulation parameters by editing the config script (e.g., `simulations/jobs/conf_ils_low_run_simphy.sh`)
 2. Submit the simulation job which will call the reusable script
-3. Check simulation completion and pipeline status:
+3. **Validate pipeline at each stage** - See `simulations/PIPELINE_STATUS_GUIDE.md` for complete guide:
    ```bash
    # Check if SimPhy simulations completed (1000 trees per replicate)
    python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step simphy
@@ -86,11 +86,8 @@ Contains two subdirectories mirroring the main structure:
    # Check if method outputs were generated successfully
    python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step run
 
-   # Check specific method (grampa, polyphest, mpsugar, padre)
-   python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --method grampa
-
-   # Export results to CSV for analysis
-   python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --export status.csv
+   # Check specific method (important: specify --percentile for Polyphest!)
+   python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --method polyphest --step run --percentile 50
    ```
 4. Use comparison scripts to analyze results:
    ```bash
@@ -152,47 +149,32 @@ The codebase uses absolute paths pointing to `/groups/itay_mayrose/tomulanovski/
 ## Pipeline Validation and Monitoring
 
 ### check_pipeline_status.py
-A comprehensive script to validate all stages of the simulation and inference pipeline:
+
+A comprehensive script to validate all stages of the simulation and inference pipeline. **See `simulations/PIPELINE_STATUS_GUIDE.md` for the complete usage guide.**
 
 **Key Features:**
-- Check SimPhy simulations (verifies 1000 trees per replicate for all 5 replicates)
-- Validate input file preparation for each method
+- Check SimPhy simulations (verifies 1000 trees per replicate for all 5 replicates × 21 networks)
+- Validate input file preparation for each method (GRAMPA, Polyphest, MPSUGAR, PADRE)
 - Verify output file generation after running methods
-- Parse SLURM logs for error diagnostics
+- Support for multiple parameter variations (e.g., Polyphest percentiles)
 - Export results to CSV for further analysis
 
-**Usage Examples:**
+**Quick Start:**
 ```bash
-# Check everything for a configuration
+# Check everything
 python simulations/scripts/check_pipeline_status.py conf_ils_low_10M
 
-# Check only SimPhy simulations
+# Check SimPhy (1000 trees per replicate)
 python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step simphy
 
-# Check only input preparation (before running methods)
+# Check inputs before running
 python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step prep
 
-# Check only outputs (after running methods)
-python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step run
-
-# Check specific method's inputs
-python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --method grampa --step prep
-
-# Check specific method's outputs
-python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --method polyphest --step run
-
-# Verbose mode (show all details including successes)
-python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --verbose
-
-# Export to CSV
-python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --export results.csv
+# Check outputs (IMPORTANT: specify --percentile for Polyphest!)
+python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --method polyphest --step run --percentile 50
 ```
 
-**Typical Workflow:**
-1. After SimPhy completes: `--step simphy` to verify 1000 trees per replicate
-2. After prep jobs: `--step prep` to ensure all input files are ready
-3. Before running methods: Check inputs to avoid wasting compute time
-4. After method runs: `--step run` to identify failed jobs and diagnose issues
+**For detailed usage, examples, and troubleshooting, see:** `simulations/PIPELINE_STATUS_GUIDE.md`
 
 ## Working with Claude Code
 
