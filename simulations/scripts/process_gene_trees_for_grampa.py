@@ -5,11 +5,12 @@ Process gene trees for GRAMPA: Clean, fix substrings, and reformat in one pass.
 This script:
 1. Removes everything from first underscore onwards in taxa names
 2. Fixes substring label issues (where one label is contained in another)
-3. Reformats for GRAMPA by adding copy numbers (e.g., 1_species, 2_species)
-4. Outputs a taxa replacement map for use with species trees
+3. Outputs clean trees (for ASTRAL)
+4. Reformats for GRAMPA by adding copy numbers (e.g., 1_species, 2_species)
+5. Outputs a taxa replacement map for reference
 
 Usage:
-    python "/groups/itay_mayrose/tomulanovski/gene2net/simulations/scripts/process_gene_trees_for_grampa.py" <input_dir> <output_file> [--taxa-map <map_file>]
+    python process_gene_trees_for_grampa.py <input_dir> <output_dir> [options]
 """
 
 import sys
@@ -142,26 +143,12 @@ def reformat_for_grampa(tree_string):
     return ''.join(result)
 
 
-def process_single_tree(tree_string, replacements):
-    """Process a single tree through all steps."""
-    # Step 1: Clean taxa names (remove underscores)
-    tree = clean_taxa_names(tree_string)
-    
-    # Step 2: Fix substring issues
-    tree = fix_substring_issues(tree, replacements)
-    
-    # Step 3: Reformat for GRAMPA
-    tree = reformat_for_grampa(tree)
-    
-    return tree
-
-
 def write_taxa_map(replacements, output_file, verbose=False):
     """Write the taxa replacement map to a file."""
     if not replacements:
         if verbose:
             print(f"No taxa replacements needed, skipping map file: {output_file}")
-        return
+        return False
     
     with open(output_file, 'w') as f:
         # Write header
@@ -177,15 +164,26 @@ def write_taxa_map(replacements, output_file, verbose=False):
     
     if verbose:
         print(f"Taxa map saved to: {output_file}")
+    
+    return True
 
 
-def process_gene_trees(input_dir, output_file, taxa_map_file=None, verbose=False):
+def process_gene_trees(input_dir, output_dir, verbose=False):
     """Process all gene trees in a directory."""
     input_path = Path(input_dir)
+    output_path = Path(output_dir)
     
     if not input_path.exists():
         print(f"ERROR: Input directory not found: {input_dir}")
         return False
+    
+    # Create output directory
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    # Define output files
+    clean_trees_file = output_path / "clean_trees.tre"
+    grampa_trees_file = output_path / "grampa_trees.tre"
+    taxa_map_file = output_path / "taxa_map.txt"
     
     # Find all gene tree files (starting with 'g_')
     gene_tree_files = sorted(input_path.glob('g_*'))
@@ -233,26 +231,45 @@ def process_gene_trees(input_dir, output_file, taxa_map_file=None, verbose=False
         print("No substring issues found")
         replacements = {}
     
-    # Step 2.5: Write taxa map if requested
-    if taxa_map_file:
-        write_taxa_map(replacements, taxa_map_file, verbose)
-    
-    # Step 3: Process all trees and write to output
+    # Step 3: Write taxa map
     if verbose:
-        print("Step 3: Reformatting for GRAMPA and writing output...")
+        print("Step 3: Writing taxa map...")
+    write_taxa_map(replacements, taxa_map_file, verbose)
     
-    with open(output_file, 'w') as out:
-        for i, cleaned_tree in enumerate(cleaned_trees, 1):
-            # Fix substrings and reformat
-            processed_tree = fix_substring_issues(cleaned_tree, replacements)
-            final_tree = reformat_for_grampa(processed_tree)
-            out.write(final_tree + '\n')
+    # Step 4: Fix substring issues and write clean trees (for ASTRAL)
+    if verbose:
+        print("Step 4: Writing clean trees (for ASTRAL)...")
+    
+    fixed_trees = []
+    with open(clean_trees_file, 'w') as out:
+        for cleaned_tree in cleaned_trees:
+            fixed_tree = fix_substring_issues(cleaned_tree, replacements)
+            fixed_trees.append(fixed_tree)
+            out.write(fixed_tree + '\n')
+    
+    print(f"Clean trees saved to: {clean_trees_file}")
+    
+    # Step 5: Add copy numbers and write GRAMPA trees
+    if verbose:
+        print("Step 5: Writing GRAMPA trees (with copy numbers)...")
+    
+    with open(grampa_trees_file, 'w') as out:
+        for i, fixed_tree in enumerate(fixed_trees, 1):
+            grampa_tree = reformat_for_grampa(fixed_tree)
+            out.write(grampa_tree + '\n')
             
             if verbose and i % 100 == 0:
-                print(f"  Processed {i}/{len(cleaned_trees)} trees...")
+                print(f"  Processed {i}/{len(fixed_trees)} trees...")
     
-    print(f"Successfully processed {len(cleaned_trees)} trees")
-    print(f"Output saved to: {output_file}")
+    print(f"GRAMPA trees saved to: {grampa_trees_file}")
+    
+    print(f"\nSuccessfully processed {len(cleaned_trees)} trees")
+    print(f"Output directory: {output_dir}")
+    print(f"  - clean_trees.tre   (for ASTRAL)")
+    print(f"  - grampa_trees.tre  (for GRAMPA)")
+    if replacements:
+        print(f"  - taxa_map.txt      (substring replacements)")
+    
     return True
 
 
@@ -262,22 +279,24 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Example:
-    python process_trees_for_grampa.py /path/to/replicate_dir output_trees.tre
-    python process_trees_for_grampa.py /path/to/replicate_dir output_trees.tre --taxa-map taxa_map.txt
+    python process_gene_trees_for_grampa.py /path/to/replicate_dir /path/to/output_dir
+    python process_gene_trees_for_grampa.py /path/to/replicate_dir /path/to/output_dir -v
+
+Output files:
+    clean_trees.tre   - Trees with clean names (for ASTRAL)
+    grampa_trees.tre  - Trees with copy numbers (for GRAMPA)
+    taxa_map.txt      - Substring replacement map (if any fixes needed)
         """
     )
     
     parser.add_argument('input_dir', help='Directory containing gene tree files (g_*)')
-    parser.add_argument('output_file', help='Output file for processed trees')
-    parser.add_argument('--taxa-map', '-m', dest='taxa_map_file',
-                       help='Output file for taxa replacement map (optional)')
+    parser.add_argument('output_dir', help='Output directory for processed files')
     parser.add_argument('-v', '--verbose', action='store_true', 
                        help='Print detailed progress information')
     
     args = parser.parse_args()
     
-    success = process_gene_trees(args.input_dir, args.output_file, 
-                                 args.taxa_map_file, args.verbose)
+    success = process_gene_trees(args.input_dir, args.output_dir, args.verbose)
     sys.exit(0 if success else 1)
 
 

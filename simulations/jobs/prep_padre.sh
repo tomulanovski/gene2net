@@ -1,24 +1,25 @@
 #!/bin/bash
-#SBATCH --job-name=astral_grampa
+#SBATCH --job-name=prep_padre
 #SBATCH --array=1-21
-#SBATCH --output=/groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/astral_grampa_%A_%a.out
-#SBATCH --error=/groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/astral_grampa_%A_%a.err
-#SBATCH --time=5:00:00
-#SBATCH --mem=32G
-#SBATCH --cpus-per-task=8
+#SBATCH --output=/groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/prep_padre_%A_%a.out
+#SBATCH --error=/groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/prep_padre_%A_%a.err
+#SBATCH --time=2:00:00
+#SBATCH --mem=4g
+#SBATCH --cpus-per-task=1
 #SBATCH --partition=itaym-pool
 #SBATCH --account=itaym-users_v2
 #SBATCH --qos=owner
 
 # ============================================================================
-# run_astral.sh
+# PREP_PADRE.SH
 # ============================================================================
-# Runs ASTRAL on clean trees to generate species tree for GRAMPA.
-# Processes all replicates for a single network.
+# Prepares SimPhy output for PADRE by:
+#   1. Concatenating gene trees from all batches (if applicable)
+#   2. Cleaning taxa names (removing suffixes after first underscore)
 #
 # Usage:
-#   sbatch --export=CONFIG=conf_ils_low_10M run_astral.sh
-#   sbatch --export=CONFIG=conf_ils_low_10M,NUM_REPLICATES=3 run_astral.sh
+#   sbatch --export=CONFIG=conf_ils_low_10M prep_padre.sh
+#   sbatch --export=CONFIG=conf_ils_low_10M,NUM_REPLICATES=3 prep_padre.sh
 #
 # Environment variables:
 #   CONFIG          - Configuration name (required, e.g., conf_ils_low_10M)
@@ -45,10 +46,6 @@ NUM_REPLICATES="${NUM_REPLICATES:-5}"
 # ============================================================================
 
 BASE_DIR="/groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations"
-CONDA_PATH="/groups/itay_mayrose/tomulanovski/miniconda3"
-
-# ASTRAL command (from conda environment)
-ASTRAL_CMD="astral4"
 
 # Array of networks
 networks=(
@@ -67,14 +64,16 @@ network_idx=$((SLURM_ARRAY_TASK_ID - 1))
 network="${networks[$network_idx]}"
 
 # Define paths
-GRAMPA_INPUT_DIR="${BASE_DIR}/${network}/processed/${CONFIG}/grampa_input"
+DATA_DIR="${BASE_DIR}/${network}/data/${CONFIG}"
+OUTPUT_BASE="${BASE_DIR}/${network}/processed/${CONFIG}/padre_input"
 
 echo "============================================================================"
-echo "RUN ASTRAL FOR GRAMPA - ${network}"
+echo "PREP PADRE - ${network}"
 echo "============================================================================"
 echo "Configuration: ${CONFIG}"
 echo "Replicates: ${NUM_REPLICATES}"
-echo "Input directory: ${GRAMPA_INPUT_DIR}"
+echo "Data directory: ${DATA_DIR}"
+echo "Output directory: ${OUTPUT_BASE}"
 echo "Date: $(date)"
 echo "============================================================================"
 echo ""
@@ -83,32 +82,84 @@ echo ""
 # VALIDATION
 # ============================================================================
 
-if [ ! -d "$GRAMPA_INPUT_DIR" ]; then
-    echo "ERROR: GRAMPA input directory not found: $GRAMPA_INPUT_DIR"
-    echo "Did you run prep_grampa.sh first?"
+if [ ! -d "$DATA_DIR" ]; then
+    echo "ERROR: Data directory not found: $DATA_DIR"
     exit 1
 fi
 
 # ============================================================================
-# ACTIVATE CONDA
+# HELPER FUNCTIONS
 # ============================================================================
 
-source "$CONDA_PATH/etc/profile.d/conda.sh"
-conda activate gene2net || {
-    echo "ERROR: Could not activate gene2net environment"
-    exit 1
+process_gene_trees() {
+    # Process gene trees for a single replicate
+    # Args: replicate_num, replicate_data_dir, output_dir
+    local replicate=$1
+    local replicate_data_dir=$2
+    local output_dir=$3
+    
+    local output_file="${output_dir}/padre_trees.tre"
+    local gene_tree_count=0
+    
+    # Remove output file if it exists
+    rm -f "$output_file"
+    
+    # Check if this is a batched structure or single batch
+    if [ -d "${replicate_data_dir}/batch_1" ]; then
+        # Multiple batches structure: replicate_X/batch_Y/1/g_*
+        echo "    Detected batched structure"
+        
+        for batch_dir in "$replicate_data_dir"/batch_*/; do
+            if [ ! -d "$batch_dir" ]; then
+                continue
+            fi
+            
+            local inner_dir="${batch_dir}1"
+            if [ ! -d "$inner_dir" ]; then
+                echo "    WARNING: No '1' subdirectory in $(basename $batch_dir)"
+                continue
+            fi
+            
+            for gene_tree in "$inner_dir"/g_*; do
+                if [ ! -f "$gene_tree" ]; then
+                    continue
+                fi
+                
+                # Process: remove everything from first underscore onwards in taxa names
+                sed 's/_[^,):]*\([,):]\)/\1/g' "$gene_tree" >> "$output_file"
+                gene_tree_count=$((gene_tree_count + 1))
+            done
+        done
+    else
+        # Single batch structure: replicate_X/1/g_*
+        echo "    Detected single batch structure"
+        
+        local inner_dir="${replicate_data_dir}/1"
+        if [ ! -d "$inner_dir" ]; then
+            echo "    ERROR: No '1' subdirectory found in ${replicate_data_dir}"
+            return 1
+        fi
+        
+        for gene_tree in "$inner_dir"/g_*; do
+            if [ ! -f "$gene_tree" ]; then
+                continue
+            fi
+            
+            # Process: remove everything from first underscore onwards in taxa names
+            sed 's/_[^,):]*\([,):]\)/\1/g' "$gene_tree" >> "$output_file"
+            gene_tree_count=$((gene_tree_count + 1))
+        done
+    fi
+    
+    if [ $gene_tree_count -eq 0 ]; then
+        echo "    ERROR: No gene trees found"
+        rm -f "$output_file"
+        return 1
+    fi
+    
+    echo "    Processed $gene_tree_count gene trees"
+    return 0
 }
-
-echo "? Conda environment activated: gene2net"
-
-# Check if ASTRAL is available
-if ! command -v $ASTRAL_CMD &> /dev/null; then
-    echo "ERROR: $ASTRAL_CMD command not found. Check if it's installed in your conda environment."
-    exit 1
-fi
-
-echo "? ASTRAL found: $(which $ASTRAL_CMD)"
-echo ""
 
 # ============================================================================
 # MAIN PROCESSING
@@ -122,48 +173,35 @@ for replicate in $(seq 1 $NUM_REPLICATES); do
     echo "REPLICATE ${replicate}/${NUM_REPLICATES}"
     echo "----------------------------------------------------------------------------"
     
-    # Define paths for this replicate
-    replicate_dir="${GRAMPA_INPUT_DIR}/replicate_${replicate}"
-    input_file="${replicate_dir}/clean_trees.tre"
-    output_file="${replicate_dir}/species.tre"
-    log_file="${replicate_dir}/astral.log"
+    # Find the replicate data directory
+    replicate_data_dir="${DATA_DIR}/replicate_${replicate}"
     
-    if [ ! -d "$replicate_dir" ]; then
-        echo "  ERROR: Replicate directory not found: $replicate_dir"
+    if [ ! -d "$replicate_data_dir" ]; then
+        echo "  ERROR: Replicate directory not found: $replicate_data_dir"
         error_count=$((error_count + 1))
         continue
     fi
     
-    if [ ! -f "$input_file" ]; then
-        echo "  ERROR: Clean trees file not found: $input_file"
+    # Create output directory for this replicate
+    output_dir="${OUTPUT_BASE}/replicate_${replicate}"
+    mkdir -p "$output_dir"
+    
+    echo "  Input: $replicate_data_dir"
+    echo "  Output: $output_dir"
+    echo ""
+    
+    # Process gene trees
+    echo "  Processing gene trees..."
+    if ! process_gene_trees "$replicate" "$replicate_data_dir" "$output_dir"; then
+        echo "  ? Failed to process gene trees"
         error_count=$((error_count + 1))
         continue
     fi
-    
-    echo "  Input: $input_file"
-    echo "  Output: $output_file"
+    echo "  ? Gene trees processed"
     echo ""
     
-    # Run ASTRAL
-    echo "  Running ASTRAL..."
-    start_time=$(date +%s)
-    
-    $ASTRAL_CMD -o "$output_file" "$input_file" 2>"$log_file"
-    
-    exit_code=$?
-    end_time=$(date +%s)
-    duration=$((end_time - start_time))
-    
-    if [ $exit_code -eq 0 ] && [ -f "$output_file" ]; then
-        echo "  ? ASTRAL completed (${duration}s)"
-        echo "  Species tree saved to: $output_file"
-        success_count=$((success_count + 1))
-    else
-        echo "  ? ASTRAL failed (exit code: $exit_code)"
-        echo "  Check log file: $log_file"
-        error_count=$((error_count + 1))
-    fi
-    echo ""
+    echo "  ? Replicate ${replicate} completed successfully"
+    success_count=$((success_count + 1))
 done
 
 # ============================================================================
@@ -177,6 +215,7 @@ echo "==========================================================================
 echo "Configuration: ${CONFIG}"
 echo "Successful replicates: ${success_count}/${NUM_REPLICATES}"
 echo "Failed replicates: ${error_count}/${NUM_REPLICATES}"
+echo "Output directory: ${OUTPUT_BASE}"
 echo ""
 
 if [ $error_count -gt 0 ]; then

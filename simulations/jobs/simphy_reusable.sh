@@ -18,7 +18,7 @@ CONFIGURATION="${SIMPHY_CONFIG:-ils_low_10M}"
 TREE_HEIGHT="${SIMPHY_TREE_HEIGHT:-10M}"
 
 # ILS parameters
-NE="${SIMPHY_NE:-10000}"  # Effective population size
+NE="${SIMPHY_NE:-200000}"  # Effective population size
 
 # Gene duplication/loss parameters (per gene per million years)
 # Note: SimPhy uses rates per generation, so we'll convert
@@ -188,8 +188,12 @@ echo "==========================================================================
 echo ""
 
 # Define paths
-SPECIES_TREE="${BASE_DIR}/${network}/tree_10_mil.nex"
-OUTPUT_BASE="${BASE_DIR}/${network}/data/conf_${CONFIGURATION}"
+if [ "$TREE_HEIGHT" == "50M" ]; then
+    SPECIES_TREE="${BASE_DIR}/${network}/tree_50_mil.nex"
+else
+    SPECIES_TREE="${BASE_DIR}/${network}/tree_10_mil.nex"
+fi
+OUTPUT_BASE="${BASE_DIR}/${network}/data/${CONFIGURATION}"
 
 # Validation
 if [ ! -f "$SPECIES_TREE" ]; then
@@ -232,8 +236,14 @@ echo ""
 # Batch configurations to try
 BATCH_CONFIGS=(
     "1000:1"
-    "10:100"
+    "1:1000"
 )
+
+# Maximum retries for single batch (1000 trees)
+MAX_SINGLE_BATCH_RETRIES=10
+
+# Maximum retries for small batch approach
+MAX_BATCH_RETRIES=100
 
 success=0
 
@@ -245,6 +255,11 @@ for config in "${BATCH_CONFIGS[@]}"; do
     echo "ATTEMPTING CONFIGURATION:"
     echo "  ${trees_per_run} trees ª ${num_runs} runs ª ${NUM_REPLICATES} replicates"
     echo "  = ${total_trees} trees per replicate"
+    if [ $num_runs -gt 1 ]; then
+        echo "  (with up to ${MAX_BATCH_RETRIES} retries per batch)"
+    else
+        echo "  (with up to ${MAX_SINGLE_BATCH_RETRIES} retries)"
+    fi
     echo "============================================================================"
     echo ""
     
@@ -264,42 +279,115 @@ for config in "${BATCH_CONFIGS[@]}"; do
         replicate_success=1
         
         for run in $(seq 1 $num_runs); do
-            SEED=$((BASE_SEED + replicate * 10000 + run * 100))
-            
             if [ $num_runs -eq 1 ]; then
+                # Single batch mode - with retries
                 RUN_OUTPUT="${OUTPUT_BASE}/replicate_${replicate}"
                 if [ $run -eq 1 ]; then
-                    echo "Mode: Single batch"
+                    echo "Mode: Single batch (${MAX_SINGLE_BATCH_RETRIES} retries)"
                     echo "Output: ${RUN_OUTPUT}"
                 fi
+                
+                batch_succeeded=0
+                
+                for retry in $(seq 1 $MAX_SINGLE_BATCH_RETRIES); do
+                    # Use different seed for each retry attempt
+                    SEED=$((BASE_SEED + replicate * 10000 + run * 100 + retry))
+                    
+                    if [ $retry -eq 1 ]; then
+                        echo "  Attempt ${retry}/${MAX_SINGLE_BATCH_RETRIES}"
+                    else
+                        echo "  Retry ${retry}/${MAX_SINGLE_BATCH_RETRIES}"
+                        # Clean up failed attempt before retrying
+                        if [ -d "$RUN_OUTPUT" ]; then
+                            rm -rf "$RUN_OUTPUT"
+                        fi
+                    fi
+                    
+                    echo "    Seed: ${SEED}"
+                    echo "    Trees: ${trees_per_run}"
+                    echo "    Starting SimPhy (timeout: ${TIMEOUT_SECONDS}s)..."
+                    
+                    start_time=$(date +%s)
+                    
+                    run_simphy_single_replicate "$RUN_OUTPUT" "$trees_per_run" "$SUB_RATE" "$SEED" "$SPECIES_TREE" "$TIMEOUT_SECONDS"
+                    
+                    run_exit_code=$?
+                    end_time=$(date +%s)
+                    duration=$((end_time - start_time))
+                    
+                    if [ $run_exit_code -eq 0 ]; then
+                        echo "  ? Completed on attempt ${retry} (duration: ${duration}s)"
+                        batch_succeeded=1
+                        break
+                    else
+                        echo "  ? Attempt ${retry} FAILED (duration: ${duration}s)"
+                        if [ $retry -lt $MAX_SINGLE_BATCH_RETRIES ]; then
+                            echo "  ? Retrying..."
+                        fi
+                    fi
+                done
+                
+                if [ $batch_succeeded -eq 0 ]; then
+                    echo "? Single batch FAILED after ${MAX_SINGLE_BATCH_RETRIES} attempts"
+                    replicate_success=0
+                    all_runs_succeeded=0
+                    break
+                fi
             else
+                # Multiple batch mode - with retries
                 RUN_OUTPUT="${OUTPUT_BASE}/replicate_${replicate}/batch_${run}"
                 if [ $run -eq 1 ]; then
-                    echo "Mode: Multiple batches (${num_runs} batches per replicate)"
+                    echo "Mode: Multiple batches (${num_runs} batches per replicate, ${MAX_BATCH_RETRIES} retries each)"
                 fi
                 echo "  Batch ${run}/${num_runs}"
                 echo "  Output: ${RUN_OUTPUT}"
-            fi
-            
-            echo "  Seed: ${SEED}"
-            echo "  Trees: ${trees_per_run}"
-            echo "  Starting SimPhy (timeout: ${TIMEOUT_SECONDS}s)..."
-            
-            start_time=$(date +%s)
-            
-            run_simphy_single_replicate "$RUN_OUTPUT" "$trees_per_run" "$SUB_RATE" "$SEED" "$SPECIES_TREE" "$TIMEOUT_SECONDS"
-            
-            run_exit_code=$?
-            end_time=$(date +%s)
-            duration=$((end_time - start_time))
-            
-            if [ $run_exit_code -ne 0 ]; then
-                echo "  ? Batch ${run} FAILED (duration: ${duration}s)"
-                replicate_success=0
-                all_runs_succeeded=0
-                break
-            else
-                echo "  ? Batch ${run} completed (duration: ${duration}s)"
+                
+                batch_succeeded=0
+                
+                for retry in $(seq 1 $MAX_BATCH_RETRIES); do
+                    # Use different seed for each retry attempt
+                    SEED=$((BASE_SEED + replicate * 10000 + run * 100 + retry))
+                    
+                    if [ $retry -eq 1 ]; then
+                        echo "    Attempt ${retry}/${MAX_BATCH_RETRIES}"
+                    else
+                        echo "    Retry ${retry}/${MAX_BATCH_RETRIES}"
+                        # Clean up failed attempt before retrying
+                        if [ -d "$RUN_OUTPUT" ]; then
+                            rm -rf "$RUN_OUTPUT"
+                        fi
+                    fi
+                    
+                    echo "    Seed: ${SEED}"
+                    echo "    Trees: ${trees_per_run}"
+                    echo "    Starting SimPhy (timeout: ${TIMEOUT_SECONDS}s)..."
+                    
+                    start_time=$(date +%s)
+                    
+                    run_simphy_single_replicate "$RUN_OUTPUT" "$trees_per_run" "$SUB_RATE" "$SEED" "$SPECIES_TREE" "$TIMEOUT_SECONDS"
+                    
+                    run_exit_code=$?
+                    end_time=$(date +%s)
+                    duration=$((end_time - start_time))
+                    
+                    if [ $run_exit_code -eq 0 ]; then
+                        echo "    ? Batch ${run} completed on attempt ${retry} (duration: ${duration}s)"
+                        batch_succeeded=1
+                        break
+                    else
+                        echo "    ? Attempt ${retry} FAILED (duration: ${duration}s)"
+                        if [ $retry -lt $MAX_BATCH_RETRIES ]; then
+                            echo "    ? Retrying..."
+                        fi
+                    fi
+                done
+                
+                if [ $batch_succeeded -eq 0 ]; then
+                    echo "  ? Batch ${run} FAILED after ${MAX_BATCH_RETRIES} attempts"
+                    replicate_success=0
+                    all_runs_succeeded=0
+                    break
+                fi
             fi
         done
         
@@ -345,6 +433,7 @@ Batch Configuration:
 Trees per run: ${trees_per_run}
 Number of runs per replicate: ${num_runs}
 Total trees per replicate: ${total_trees}
+Max retries per batch: ${MAX_BATCH_RETRIES}
 
 Base seed: ${BASE_SEED}
 ================================================================================
@@ -359,7 +448,7 @@ EOF
         echo "============================================================================"
         
         if [ "$config" == "1000:1" ]; then
-            echo "? Falling back to smaller batches (10 trees ª 100 runs)"
+            echo "? Falling back to smaller batches (1 tree ª 1000 runs with ${MAX_BATCH_RETRIES} retries each)"
         fi
         echo ""
     fi
