@@ -64,7 +64,7 @@ METHOD_FILES = {
     'grampa': {
         'prep': ['grampa_trees.tre', 'clean_trees.tre', 'species.tre'],  # taxa_map.txt is optional
         'prep_optional': ['taxa_map.txt'],  # Only created if substring fixes needed
-        'run': ['analysis/grampa-scores.txt']  # GRAMPA success marker
+        'run': ['grampa-scores.txt']  # GRAMPA success marker (no analysis/ subdirectory)
     },
     'polyphest': {
         'prep': ['polyphest_trees.tre', 'multi_set.txt'],

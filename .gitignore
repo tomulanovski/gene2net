@@ -15,6 +15,8 @@
 !simulations/scripts/**
 !simulations/networks/
 !simulations/networks/**
+!simulations/md_files/
+!simulations/md_files/**
 !simulations/*.md
 
 # --- Always keep key files ---
