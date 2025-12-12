@@ -151,7 +151,7 @@ class ResultPostprocessor:
         Copy PADRE result (already clean MUL-tree)
 
         Args:
-            input_file: Path to padre_tree-result.tre
+            input_file: Path to padre_trees-result.tre
 
         Returns:
             Tree string or None if failed
@@ -185,25 +185,36 @@ class ResultPostprocessor:
         method_config = self.methods[method]
         method_dir = method_config['directory']
 
-        # Construct result directory path
-        result_dir = (self.base_dir / network / "results" / self.config /
-                     method_dir / f"replicate_{replicate}")
+        # Determine input file location based on method
+        if method == 'padre':
+            # PADRE writes output to input directory (processed/)
+            input_dir = (self.base_dir / network / "processed" / self.config /
+                        "padre_input" / f"replicate_{replicate}")
+            input_file = input_dir / "padre_trees-result.tre"
 
-        # Determine input filename based on method
-        if method.startswith('polyphest'):
-            input_file = result_dir / "polyphest_trees-polyphest.txt"
-        elif method == 'grampa':
-            input_file = result_dir / "grampa-scores.txt"
-        elif method == 'mpsugar':
-            input_file = result_dir / "mpsugar_results.txt"
-        elif method == 'padre':
-            input_file = result_dir / "padre_tree-result.tre"
+            # Output goes to results directory (for summary pipeline)
+            output_dir = (self.base_dir / network / "results" / self.config /
+                         method_dir / f"replicate_{replicate}")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_file = output_dir / "padre_result.tre"
         else:
-            print(f"  ERROR: Unknown method '{method}'")
-            return False
+            # All other methods: input and output in results directory
+            result_dir = (self.base_dir / network / "results" / self.config /
+                         method_dir / f"replicate_{replicate}")
 
-        # Output file (standardized naming)
-        output_file = result_dir / f"{method.split('_')[0]}_result.tre"
+            # Determine input filename based on method
+            if method.startswith('polyphest'):
+                input_file = result_dir / "polyphest_trees-polyphest.txt"
+            elif method == 'grampa':
+                input_file = result_dir / "grampa-scores.txt"
+            elif method == 'mpsugar':
+                input_file = result_dir / "mpsugar_results.txt"
+            else:
+                print(f"  ERROR: Unknown method '{method}'")
+                return False
+
+            # Output file (standardized naming)
+            output_file = result_dir / f"{method.split('_')[0]}_result.tre"
 
         # Check if input exists
         if not input_file.exists():

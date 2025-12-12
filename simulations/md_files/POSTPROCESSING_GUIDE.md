@@ -12,12 +12,12 @@ After running phylogenetic network inference methods (GRAMPA, Polyphest, MPSUGAR
 
 Each program outputs results in different formats:
 
-| Program | Raw Output File | Format | What We Extract |
-|---------|----------------|--------|-----------------|
-| **Polyphest** | `polyphest_trees-polyphest.txt` | Text with "multree:" and "network:" lines | MUL-tree from "multree:" line |
-| **GRAMPA** | `grampa-scores.txt` | TSV with multiple ranked trees | Best tree (first row, last column) |
-| **MPSUGAR** | `mpsugar_results.txt` | Detailed report with "Newick:" line | Newick tree from "Newick:" line |
-| **PADRE** | `padre_tree-result.tre` | Already clean MUL-tree | Copy as-is |
+| Program | Raw Output File | Location | Format | What We Extract |
+|---------|----------------|----------|--------|-----------------|
+| **Polyphest** | `polyphest_trees-polyphest.txt` | `results/{method}/replicate_N/` | Text with "multree:" and "network:" lines | MUL-tree from "multree:" line |
+| **GRAMPA** | `grampa-scores.txt` | `results/grampa/replicate_N/` | TSV with multiple ranked trees | Best tree (first row, last column) |
+| **MPSUGAR** | `mpsugar_results.txt` | `results/mpsugar/replicate_N/` | Detailed report with "Newick:" line | Newick tree from "Newick:" line |
+| **PADRE** | `padre_trees-result.tre` | `processed/padre_input/replicate_N/` ⚠️ | Already clean MUL-tree | Copy to results directory |
 
 All programs output standardized `{program}_result.tre` files after post-processing.
 
@@ -30,7 +30,15 @@ All programs output standardized `{program}_result.tre` files after post-process
 ```
 /groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations/
 └── {NetworkName}/
-    └── results/
+    ├── processed/                                      # Input files
+    │   └── {CONFIG}/
+    │       └── padre_input/
+    │           ├── replicate_1/
+    │           │   ├── padre_trees.tre                 # Input
+    │           │   └── padre_trees-result.tre          # PADRE writes here!
+    │           └── ... (replicates 2-5)
+    │
+    └── results/                                        # Output files
         └── {CONFIG}/
             ├── grampa/
             │   ├── replicate_1/
@@ -52,10 +60,12 @@ All programs output standardized `{program}_result.tre` files after post-process
             │
             └── padre/
                 ├── replicate_1/
-                │   └── padre_tree-result.tre          # Already clean
+                │   └── padre_result.tre               # Created by post-processing
                 ├── replicate_2/
                 └── ... (replicates 3-5)
 ```
+
+**Note**: PADRE uniquely writes output to its input directory (`processed/padre_input/`), not the results directory. Post-processing copies it to `results/padre/` where the summary pipeline expects it.
 
 ### Example Raw Outputs
 
@@ -95,13 +105,17 @@ Score: -80228
 
 **Extracted**: `(((A,B)UID_1,C)UID_2,D)UID_3;`
 
-#### PADRE Output (`padre_tree-result.tre`)
+#### PADRE Output (`padre_trees-result.tre`)
+
+**Location**: `processed/conf_ils_low_10M/padre_input/replicate_1/padre_trees-result.tre`
+
+**Note**: PADRE writes output to input directory, not results directory!
 
 ```
 (((A,B),C),D);
 ```
 
-**Extracted**: Same (already clean)
+**Extracted**: Same (already clean), but **copied to results directory**
 
 ---
 
@@ -326,16 +340,23 @@ Score: -12345
 
 ### PADRE Extraction
 
+**Input Location**: `processed/{config}/padre_input/replicate_{N}/padre_trees-result.tre`
+
+**Output Location**: `results/{config}/padre/replicate_{N}/padre_result.tre`
+
 **Input Format**: Already clean MUL-tree
 ```
 (tree_string_here);
 ```
 
 **Extraction Logic**:
-1. Read entire file
+1. Read from `processed/padre_input/` directory (PADRE's output location)
 2. Strip whitespace
 3. Ensure ends with semicolon
-4. Write to `padre_result.tre`
+4. Create `results/padre/replicate_N/` directory if needed
+5. Write to `padre_result.tre` in results directory
+
+**Why copy?** PADRE writes output to input directory, but summary pipeline expects results in standard location.
 
 ---
 

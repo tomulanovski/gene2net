@@ -76,7 +76,7 @@ METHOD_FILES = {
     },
     'padre': {
         'prep': ['padre_trees.tre'],
-        'run': ['padre_tree-result.tre']  # PADRE output file
+        'run': ['padre_trees-result.tre']  # PADRE writes to input directory (processed/)
     }
 }
 
@@ -314,7 +314,8 @@ def check_method_outputs(config: str, method: str, percentile: int = 60,
                 # Note: MPSUGAR doesn't include parameters in directory name
                 output_dir = os.path.join(BASE_DIR, network, "results", config, "mpsugar", f"replicate_{replicate}")
             elif method == 'padre':
-                output_dir = os.path.join(BASE_DIR, network, "results", config, "padre", f"replicate_{replicate}")
+                # PADRE writes output to input directory (processed/)
+                output_dir = os.path.join(BASE_DIR, network, "processed", config, "padre_input", f"replicate_{replicate}")
             else:
                 continue
 
