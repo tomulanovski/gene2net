@@ -31,9 +31,13 @@ gene2net/
 - Taxa mapping generators for MPAllopp/MPSUGAR
 
 ### Simulations Directory
+- **`submit_all_methods.sh`** - Master orchestration script for running methods across multiple configs
 - **`check_pipeline_status.py`** - Validates SimPhy simulations and all method inputs/outputs
 - **`compare_nets.py`** - Network comparison pipeline (handles MUL-trees and networks)
-- **Full documentation:** `simulations/PIPELINE_STATUS_GUIDE.md`
+- **Full documentation:**
+  - `simulations/COMPLETE_PIPELINE_GUIDE.md` - End-to-end workflow from SimPhy to summary
+  - `simulations/METHODS_GUIDE.md` - Running phylogenetic network inference methods
+  - `simulations/PIPELINE_STATUS_GUIDE.md` - Validation and status checking
 
 ## Common Workflows
 
@@ -41,18 +45,33 @@ gene2net/
 
 ```bash
 # 1. Configure and submit SimPhy
-sbatch simulations/jobs/conf_ils_low_run_simphy.sh
+cd simulations/jobs
+./submit_simphy.sh conf_ils_low_10M
 
 # 2. Verify simulations completed (1000 trees × 5 replicates × 21 networks)
-python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step simphy
+cd ../scripts
+python check_pipeline_status.py conf_ils_low_10M --step simphy
 
-# 3. Submit method pipelines
-sbatch simulations/jobs/submit_grampa_pipeline.sh conf_ils_low_10M
-sbatch simulations/jobs/submit_polyphest_pipeline.sh conf_ils_low_10M
+# 3. Submit ALL method pipelines with master script (RECOMMENDED)
+cd ../jobs
+./submit_all_methods.sh conf_ils_low_10M
 
-# 4. Verify results (see PIPELINE_STATUS_GUIDE.md for details)
-python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step run
+# OR submit methods individually
+./submit_grampa_pipeline.sh conf_ils_low_10M
+./submit_polyphest_pipeline.sh conf_ils_low_10M
+./submit_padre_pipeline.sh conf_ils_low_10M
+./submit_mpsugar_pipeline.sh conf_ils_low_10M
+
+# 4. Verify results
+cd ../scripts
+python check_pipeline_status.py conf_ils_low_10M --step run --verbose
+
+# 5. Post-process and analyze
+python postprocess_results.py conf_ils_low_10M
+python run_full_summary.py conf_ils_low_10M
 ```
+
+**For complete workflow:** See `simulations/COMPLETE_PIPELINE_GUIDE.md`
 
 ### Running Analyses on Real Data
 
