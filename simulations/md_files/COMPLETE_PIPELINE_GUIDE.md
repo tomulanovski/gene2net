@@ -469,8 +469,19 @@ cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
 
 ./submit_rf.sh conf_ils_low_10M
 
-# Outputs: rf_distance_results.txt in each replicate directory
+# Per-replicate output: rf_distance_results.txt in each replicate directory
+#   Location: simulations/{NETWORK}/data/{CONFIG}/replicate_{1-5}/rf_distance_results.txt
+#
+# Aggregated output (AUTOMATICALLY CREATED): aggregate_AD_{CONFIG}.csv
+#   Location: /groups/itay_mayrose/tomulanovski/gene2net/simulations/analysis/aggregate_AD_conf_ils_low_10M.csv
+#   Contains: Mean ± std AD (Average Distance) across replicates for each network
 ```
+
+**What it does:**
+- Calculates Robinson-Foulds distances for each replicate (per-replicate analysis)
+- **Automatically aggregates** results across all networks and replicates (no separate command needed)
+- **Handles multi-batch SimPhy outputs:** Automatically detects and merges batches of 1, 10, or 100 trees
+- Single SLURM job processes all 21 networks × 5 replicates
 
 ### Duplication/Loss Event Extraction
 
@@ -481,8 +492,21 @@ cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
 
 ./submit_dup_loss_extraction.sh conf_ils_low_10M
 
-# Outputs: dup_loss_summary.txt per replicate + aggregated summary
+# Per-replicate output: dup_loss_summary.txt
+#   Location: simulations/{NETWORK}/data/{CONFIG}/replicate_{1-5}/dup_loss_summary.txt
+#   Contains: Duplication and loss event counts for that replicate
+#
+# Aggregated output (AUTOMATICALLY CREATED): dup_loss_summary_{CONFIG}.txt
+#   Location: /groups/itay_mayrose/tomulanovski/gene2net/simulations/dup_loss_summary_conf_ils_low_10M.txt
+#   Contains: Summary statistics (mean ± std) across all networks and replicates
 ```
+
+**What it does:**
+- Extracts gene trees, locus trees, and species trees from SimPhy SQLite databases
+- Counts duplication and loss events per replicate
+- **Automatically aggregates** results across all networks and replicates (no separate command needed)
+- **Handles multi-batch SimPhy outputs:** Automatically detects and merges all batches (1, 10, or 100 trees per batch)
+- Single SLURM job processes all 21 networks × 5 replicates
 
 **Note:** These are typically run **after** SimPhy for characterizing the simulation scenarios, not for evaluating methods.
 

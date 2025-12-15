@@ -37,7 +37,8 @@
 #   python ../scripts/run_full_summary.py <CONFIG>
 # ============================================================================
 
-set -euo pipefail
+# Note: Not using 'set -e' to allow script to continue even if some submissions fail
+set -uo pipefail
 
 # ============================================================================
 # DEFAULTS
