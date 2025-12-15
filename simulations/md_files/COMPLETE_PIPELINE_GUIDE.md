@@ -202,11 +202,7 @@ python simulations/scripts/sequence_evolution/filter_and_extract_gtr.py
 cd simulations/scripts
 python check_pipeline_status.py conf_ils_low_10M --step simphy
 
-# 3. Split gene trees into individual files (REQUIRED)
-python split_gene_trees.py conf_ils_low_10M
-
-# This splits SimPhy's g_trees.trees into g_trees0001.trees, g_trees0002.trees, etc.
-# Works with both single-batch and multi-batch SimPhy outputs
+# That's it! No tree splitting needed - the script reads directly from SimPhy output
 ```
 
 ### Running Sequence Simulation
@@ -229,7 +225,12 @@ cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
 
 For each gene tree (e.g., gene tree #42 in network "Ding_2023"):
 
-1. **Sample parameters once** from the 2,709 empirical genes:
+1. **Detect batch structure** - Script automatically determines:
+   - Single batch: Reads `replicate_1/1/g_trees0042.trees`
+   - Batches of 10: Calculates batch 5, reads `replicate_1/batch_5/1/g_trees2.trees`
+   - Batches of 1: Reads `replicate_1/batch_42/1/g_trees1.trees`
+
+2. **Sample parameters once** from the 2,709 empirical genes:
    ```
    Example sampled parameters:
    - GTR rates: AC=1.52, AG=4.31, AT=1.08, CG=0.67, CT=5.29, GT=1.00
@@ -238,7 +239,7 @@ For each gene tree (e.g., gene tree #42 in network "Ding_2023"):
    - Alignment length: 609 bp
    ```
 
-2. **Use same parameters across all replicates**, but with **different random seeds**:
+3. **Use same parameters across all replicates**, but with **different random seeds**:
    ```
    Replicate 1: Same model, seed=421234 → alignment_0042.phy
    Replicate 2: Same model, seed=422567 → alignment_0042.phy (different sequences!)
@@ -281,20 +282,39 @@ head -20 ${BASE}/${NETWORK}/data/${CONFIG}/replicate_1/1/alignments/alignment_00
 
 ### Expected Outputs
 
+**Single batch mode:**
 ```
 simulations/simulations/{NETWORK}/data/{CONFIG}/
 └── replicate_{1-5}/
     └── 1/
-        ├── g_trees0001.trees        # Gene tree (from SimPhy)
+        ├── g_trees0001.trees        # Gene trees (from SimPhy)
         ├── g_trees0002.trees
         ├── ...
         └── alignments/              # NEW: Sequence alignments
-            ├── alignment_0001.phy   # Sequences for g_trees0001.trees
-            ├── alignment_0002.phy   # Sequences for g_trees0002.trees
+            ├── alignment_0001.phy   # Sequences for gene tree 0001
+            ├── alignment_0002.phy   # Sequences for gene tree 0002
+            └── ...
+```
+
+**Multi-batch mode:**
+```
+simulations/simulations/{NETWORK}/data/{CONFIG}/
+└── replicate_{1-5}/
+    ├── batch_1/1/
+    │   ├── g_trees1.trees ... g_treesN.trees   # Gene trees (SimPhy)
+    ├── batch_2/1/
+    │   ├── g_trees1.trees ... g_treesN.trees
+    ├── ...
+    └── 1/
+        └── alignments/              # NEW: Sequence alignments (all here!)
+            ├── alignment_0001.phy   # Sequences for gene tree 0001
+            ├── alignment_0002.phy   # Sequences for gene tree 0002
             └── ...
 ```
 
 **Total output:** 105,000 sequence alignments (21 networks × 5 replicates × 1000 genes)
+
+**Note:** Alignments are always placed in `replicate_N/1/alignments/`, regardless of batch mode.
 
 ### Parameter Sampling Details
 

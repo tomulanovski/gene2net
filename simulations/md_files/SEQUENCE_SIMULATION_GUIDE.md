@@ -56,29 +56,7 @@ Before simulating sequences, you need gene trees from SimPhy:
 python simulations/scripts/check_pipeline_status.py ils_low_10M --step simphy
 ```
 
-### 3. Split Gene Trees into Individual Files (REQUIRED)
-
-SimPhy outputs gene trees in a single file (`g_trees.trees`), but sequence simulation needs individual files. Split them first:
-
-```bash
-cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/scripts
-
-# Split trees for all networks
-python split_gene_trees.py conf_ils_low_10M
-
-# Or for specific networks only (for testing)
-python split_gene_trees.py conf_ils_low_10M --networks Ding_2023
-
-# Or specific replicates only
-python split_gene_trees.py conf_ils_low_10M --replicates 1 2 3
-```
-
-**What this does:**
-- Reads `g_trees.trees` from each replicate (handles both single-batch and multi-batch modes)
-- Splits into individual files: `g_trees0001.trees`, `g_trees0002.trees`, ..., `g_trees1000.trees`
-- Places them in the same directory as the original file
-
-**This only needs to be done once per configuration.**
+That's it! The sequence simulation script automatically reads gene trees from SimPhy output (whether in single-batch or multi-batch mode).
 
 ## Usage
 
