@@ -4,6 +4,7 @@ check_pipeline_status.py - Comprehensive pipeline status checker
 
 Validates SimPhy simulations and phylogenetic network inference pipeline steps:
 - SimPhy simulations (1000 trees per replicate)
+- Sequence alignments (1000 alignments per replicate)
 - Input preparation for GRAMPA, Polyphest, MPSUGAR, PADRE
 - Method outputs and results
 
@@ -13,6 +14,9 @@ Usage:
 
     # Check only SimPhy simulations
     python check_pipeline_status.py conf_ils_low_10M --step simphy
+
+    # Check only sequence alignments
+    python check_pipeline_status.py conf_ils_low_10M --step sequences
 
     # Check only GRAMPA inputs
     python check_pipeline_status.py conf_ils_low_10M --method grampa --step prep
@@ -225,6 +229,55 @@ def check_simphy_simulations(config: str, verbose: bool = False) -> List[Validat
                 details = status_msg
                 missing = [f"Expected {EXPECTED_TREES_PER_REPLICATE} trees"]
                 errors = []
+
+            results.append(ValidationResult(
+                network=network,
+                replicate=replicate,
+                status=status,
+                missing_files=missing,
+                error_messages=errors,
+                details=details
+            ))
+
+    return results
+
+def check_sequence_alignments(config: str, verbose: bool = False) -> List[ValidationResult]:
+    """Check if sequence alignments have been generated"""
+    results = []
+
+    for network in NETWORKS:
+        data_dir = os.path.join(BASE_DIR, network, "data", config)
+
+        for replicate in range(1, NUM_REPLICATES + 1):
+            replicate_dir = os.path.join(data_dir, f"replicate_{replicate}")
+            alignment_dir = os.path.join(replicate_dir, "1", "alignments")
+
+            if not os.path.exists(alignment_dir):
+                status = 'MISSING'
+                details = f"Alignments directory not found"
+                missing = [f"Expected directory: {alignment_dir}"]
+                errors = []
+                alignment_count = 0
+            else:
+                # Count alignment files (alignment_0001.phy through alignment_1000.phy)
+                alignment_files = glob.glob(os.path.join(alignment_dir, "alignment_*.phy"))
+                alignment_count = len(alignment_files)
+
+                if alignment_count == EXPECTED_TREES_PER_REPLICATE:
+                    status = 'SUCCESS'
+                    details = f"{alignment_count} alignments"
+                    missing = []
+                    errors = []
+                elif alignment_count > 0:
+                    status = 'PARTIAL'
+                    details = f"{alignment_count}/{EXPECTED_TREES_PER_REPLICATE} alignments"
+                    missing = [f"Missing {EXPECTED_TREES_PER_REPLICATE - alignment_count} alignments"]
+                    errors = []
+                else:
+                    status = 'FAILED'
+                    details = "Alignment directory exists but no alignments found"
+                    missing = [f"Expected {EXPECTED_TREES_PER_REPLICATE} alignment files"]
+                    errors = []
 
             results.append(ValidationResult(
                 network=network,
@@ -476,6 +529,9 @@ Examples:
   # Check only SimPhy simulations
   %(prog)s conf_ils_low_10M --step simphy
 
+  # Check only sequence alignments
+  %(prog)s conf_ils_low_10M --step sequences
+
   # Check GRAMPA inputs only
   %(prog)s conf_ils_low_10M --method grampa --step prep
 
@@ -491,7 +547,7 @@ Examples:
     )
 
     parser.add_argument('config', help='Configuration name (e.g., conf_ils_low_10M)')
-    parser.add_argument('--step', choices=['simphy', 'prep', 'run', 'all'], default='all',
+    parser.add_argument('--step', choices=['simphy', 'sequences', 'prep', 'run', 'all'], default='all',
                        help='Which step to check (default: all)')
     parser.add_argument('--method', choices=['grampa', 'polyphest', 'mpsugar', 'padre', 'all'], default='all',
                        help='Which method to check (default: all)')
@@ -516,19 +572,28 @@ Examples:
 
     # Check SimPhy simulations
     if args.step in ['simphy', 'all']:
-        print("\n[1/3] Checking SimPhy simulations...")
+        print("\n[1/4] Checking SimPhy simulations...")
         simphy_results = check_simphy_simulations(args.config, args.verbose)
         print_summary(simphy_results, f"SimPhy Simulations - {args.config}")
         if args.verbose or any(r.status != 'SUCCESS' for r in simphy_results):
             print_detailed_results(simphy_results, show_success=args.verbose)
         all_results.extend([(f"SimPhy", r) for r in simphy_results])
 
+    # Check sequence alignments
+    if args.step in ['sequences', 'all']:
+        print("\n[2/4] Checking sequence alignments...")
+        alignment_results = check_sequence_alignments(args.config, args.verbose)
+        print_summary(alignment_results, f"Sequence Alignments - {args.config}")
+        if args.verbose or any(r.status != 'SUCCESS' for r in alignment_results):
+            print_detailed_results(alignment_results, show_success=args.verbose)
+        all_results.extend([(f"Sequences", r) for r in alignment_results])
+
     # Check method inputs (prep step)
     if args.step in ['prep', 'all']:
         methods = ['grampa', 'polyphest', 'mpsugar', 'padre'] if args.method == 'all' else [args.method]
 
         for i, method in enumerate(methods, start=1):
-            print(f"\n[{i+1}/{len(methods)+1}] Checking {method.upper()} inputs...")
+            print(f"\n[{i+2}/{len(methods)+2}] Checking {method.upper()} inputs...")
             input_results = check_method_inputs(args.config, method, args.verbose)
             print_summary(input_results, f"{method.upper()} Input Files - {args.config}")
             if args.verbose or any(r.status != 'SUCCESS' for r in input_results):
@@ -540,7 +605,7 @@ Examples:
         methods = ['grampa', 'polyphest', 'mpsugar', 'padre'] if args.method == 'all' else [args.method]
 
         for i, method in enumerate(methods, start=1):
-            print(f"\n[{i+1}/{len(methods)+1}] Checking {method.upper()} outputs...")
+            print(f"\n[{i+2}/{len(methods)+2}] Checking {method.upper()} outputs...")
             output_results = check_method_outputs(
                 args.config, method,
                 percentile=args.percentile,

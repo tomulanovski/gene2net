@@ -321,6 +321,19 @@ This design:
 
 ### Check That Sequences Were Generated
 
+**Recommended: Use the pipeline status checker**
+
+```bash
+# Check sequence alignments for all networks
+cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/scripts
+python check_pipeline_status.py ils_low_10M --step sequences
+
+# Check only specific network with verbose output
+python check_pipeline_status.py ils_low_10M --step sequences --verbose
+```
+
+**Manual verification (alternative)**
+
 ```bash
 # For a specific network and configuration
 NETWORK="Ding_2023"

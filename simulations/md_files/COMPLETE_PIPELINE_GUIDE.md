@@ -264,6 +264,20 @@ tail -f /groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/alisim_conf_
 
 ### Validate Sequence Completion
 
+**Recommended: Use the pipeline status checker**
+
+```bash
+cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/scripts
+
+# Check sequence alignments for all networks
+python check_pipeline_status.py conf_ils_low_10M --step sequences
+
+# Verbose output to see details
+python check_pipeline_status.py conf_ils_low_10M --step sequences --verbose
+```
+
+**Manual verification (alternative)**
+
 ```bash
 # Check alignments were generated for a network
 NETWORK="Ding_2023"
@@ -904,9 +918,10 @@ cd ../scripts && python check_pipeline_status.py CONFIG --step simphy
 # 2. SEQUENCES (DNA Alignments)
 cd ../jobs
 ./submit_sequences.sh CONFIG
-# Validate: Check alignments exist in replicate_*/1/alignments/
+cd ../scripts && python check_pipeline_status.py CONFIG --step sequences
 
 # 3. METHODS (Network Inference)
+cd ../jobs
 ./submit_all_methods.sh CONFIG
 cd ../scripts && python check_pipeline_status.py CONFIG --step run
 
