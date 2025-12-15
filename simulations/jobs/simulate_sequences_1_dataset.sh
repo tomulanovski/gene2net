@@ -135,24 +135,67 @@ for replicate in $(seq 1 $NUM_REPLICATES); do
     echo "REPLICATE ${replicate}/${NUM_REPLICATES}"
     echo "----------------------------------------------------------------------------"
 
-    INPUT_DIR="${BASE_DIR}/${NETWORK}/data/${CONFIGURATION}/replicate_${replicate}/1"
-    OUTPUT_DIR="${INPUT_DIR}/alignments"
+    REPLICATE_DIR="${BASE_DIR}/${NETWORK}/data/${CONFIGURATION}/replicate_${replicate}"
+    OUTPUT_DIR="${REPLICATE_DIR}/1/alignments"
 
     # Create output directory if it doesn't exist
     mkdir -p "$OUTPUT_DIR"
 
-    # Define input and output files
-    GENE_TREE="${INPUT_DIR}/g_trees${GENE_NUM}.trees"
     OUTPUT_PREFIX="${OUTPUT_DIR}/alignment_${GENE_NUM}"
 
-    # Check if gene tree file exists
-    if [ ! -f "$GENE_TREE" ]; then
-        echo "  WARNING: Gene tree file not found: $GENE_TREE"
-        echo "  This might be beyond the number of gene trees generated."
-        continue
+    # ========================================================================
+    # SMART GENE TREE DETECTION
+    # SimPhy creates tree files numbered WITHIN each batch:
+    # - Single batch: replicate_N/1/g_trees0001.trees ... g_trees1000.trees
+    # - Batches of 10: Each batch has g_trees1.trees ... g_trees10.trees
+    # - Batches of 1: Each batch has g_trees1.trees
+    # ========================================================================
+
+    GENE_TREE_FILE=""
+
+    # Try single batch first: replicate_N/1/g_treesXXXX.trees
+    SINGLE_BATCH_FILE="${REPLICATE_DIR}/1/g_trees${GENE_NUM}.trees"
+
+    if [ -f "$SINGLE_BATCH_FILE" ]; then
+        # Single batch mode - tree file exists directly
+        GENE_TREE_FILE="$SINGLE_BATCH_FILE"
+        echo "  Mode: Single batch"
+        echo "  File: replicate_${replicate}/1/g_trees${GENE_NUM}.trees"
+
+    else
+        # Multi-batch mode - calculate which batch and tree number within batch
+        # Count batches to determine trees per batch
+        NUM_BATCHES=$(ls -d ${REPLICATE_DIR}/batch_* 2>/dev/null | wc -l)
+
+        if [ $NUM_BATCHES -eq 0 ]; then
+            echo "  ERROR: No gene trees found in ${REPLICATE_DIR}"
+            exit 1
+        fi
+
+        # Calculate trees per batch (1000 total / number of batches)
+        TREES_PER_BATCH=$((1000 / NUM_BATCHES))
+
+        # Calculate which batch contains this gene tree (1-indexed)
+        # Gene tree 42 with batches of 10: batch = ceiling(42/10) = 5
+        BATCH_NUM=$(( (SLURM_ARRAY_TASK_ID - 1) / TREES_PER_BATCH + 1 ))
+
+        # Calculate tree number WITHIN that batch (1-indexed)
+        # Gene tree 42 with batches of 10: tree_in_batch = ((42-1) % 10) + 1 = 2
+        TREE_IN_BATCH=$(( (SLURM_ARRAY_TASK_ID - 1) % TREES_PER_BATCH + 1 ))
+
+        # Format tree number (no leading zeros for batch tree numbering)
+        GENE_TREE_FILE="${REPLICATE_DIR}/batch_${BATCH_NUM}/1/g_trees${TREE_IN_BATCH}.trees"
+
+        if [ ! -f "$GENE_TREE_FILE" ]; then
+            echo "  ERROR: Gene tree file not found: $GENE_TREE_FILE"
+            echo "  Calculated: Gene tree ${SLURM_ARRAY_TASK_ID} → batch ${BATCH_NUM}, tree ${TREE_IN_BATCH}"
+            exit 1
+        fi
+
+        echo "  Mode: ${NUM_BATCHES} batches of ${TREES_PER_BATCH} trees each"
+        echo "  Gene tree ${SLURM_ARRAY_TASK_ID} → batch_${BATCH_NUM}/1/g_trees${TREE_IN_BATCH}.trees"
     fi
 
-    echo "  Input: $GENE_TREE"
     echo "  Output: ${OUTPUT_PREFIX}.phy"
 
     # Create unique seed for this replicate's simulation
@@ -160,9 +203,10 @@ for replicate in $(seq 1 $NUM_REPLICATES); do
     echo "  Simulation seed: ${SIM_SEED}"
 
     # Run AliSim with sampled empirical parameters
+    # The gene tree file contains exactly ONE tree
     iqtree --alisim "$OUTPUT_PREFIX" \
         -m "$IQTREE_MODEL" \
-        -t "$GENE_TREE" \
+        -t "$GENE_TREE_FILE" \
         --length "$ALIGNMENT_LENGTH" \
         -seed "$SIM_SEED" \
         --quiet

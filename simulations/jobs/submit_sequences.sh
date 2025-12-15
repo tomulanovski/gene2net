@@ -111,6 +111,11 @@ echo "GTR parameters: ${GTR_PICKLE}"
 echo "Date: $(date)"
 echo "============================================================================"
 echo ""
+echo "The sequence simulation will automatically detect SimPhy batch mode:"
+echo "  - Single batch (1000 trees in one file)"
+echo "  - Batches of 10 (100 batches)"
+echo "  - Batches of 1 (1000 batches)"
+echo ""
 
 # Submit jobs
 job_count=0

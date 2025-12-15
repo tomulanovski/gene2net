@@ -8,12 +8,13 @@ This guide covers the **entire workflow** for phylogenetic network inference sim
 
 1. [Pipeline Overview](#pipeline-overview)
 2. [Step 1: Generate Simulations (SimPhy)](#step-1-generate-simulations-simphy)
-3. [Step 2: Run Network Inference Methods](#step-2-run-network-inference-methods)
-4. [Step 3: Post-Process Results](#step-3-post-process-results)
-5. [Step 4: Analyze and Compare](#step-4-analyze-and-compare)
-6. [Optional: Additional Analyses](#optional-additional-analyses)
-7. [Complete Examples](#complete-examples)
-8. [Troubleshooting](#troubleshooting)
+3. [Step 2: Simulate Sequences (AliSim)](#step-2-simulate-sequences-alisim)
+4. [Step 3: Run Network Inference Methods](#step-3-run-network-inference-methods)
+5. [Step 4: Post-Process Results](#step-4-post-process-results)
+6. [Step 5: Analyze and Compare](#step-5-analyze-and-compare)
+7. [Optional: Additional Analyses](#optional-additional-analyses)
+8. [Complete Examples](#complete-examples)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -24,7 +25,7 @@ This guide covers the **entire workflow** for phylogenetic network inference sim
 │ COMPLETE SIMULATION PIPELINE                                        │
 └─────────────────────────────────────────────────────────────────────┘
 
-STEP 1: GENERATE SIMULATIONS
+STEP 1: GENERATE SIMULATIONS (Gene Trees)
    │
    ├─> submit_simphy.sh
    │       ↓
@@ -33,7 +34,18 @@ STEP 1: GENERATE SIMULATIONS
    └─> check_pipeline_status.py --step simphy
            ✓ Validate 105,000 gene trees generated
 
-STEP 2: RUN NETWORK INFERENCE METHODS
+STEP 2: SIMULATE SEQUENCES (DNA Alignments)
+   │
+   ├─> submit_sequences.sh
+   │       ↓
+   │   Sample GTR+Gamma parameters from 2,709 empirical genes
+   │       ↓
+   │   21 networks × 5 replicates × 1000 alignments
+   │       ↓
+   └─> Verification: Check alignments generated
+           ✓ 105,000 sequence alignments with realistic parameters
+
+STEP 3: RUN NETWORK INFERENCE METHODS
    │
    ├─> submit_all_methods.sh (RECOMMENDED)
    │   OR submit individual methods
@@ -45,14 +57,14 @@ STEP 2: RUN NETWORK INFERENCE METHODS
    └─> check_pipeline_status.py --step prep/run
            ✓ Validate inputs prepared and outputs generated
 
-STEP 3: POST-PROCESS RESULTS
+STEP 4: POST-PROCESS RESULTS
    │
    └─> postprocess_results.py
            ↓
        Extract clean MUL-trees from method-specific formats
            ✓ 630 standardized result files (21 × 6 methods × 5 reps)
 
-STEP 4: ANALYZE AND COMPARE
+STEP 5: ANALYZE AND COMPARE
    │
    └─> run_full_summary.py
            ↓
@@ -162,7 +174,169 @@ simulations/simulations/{NETWORK}/data/{CONFIG}/
 
 ---
 
-## Step 2: Run Network Inference Methods
+## Step 2: Simulate Sequences (AliSim)
+
+### What This Does
+
+After SimPhy generates gene trees, this step simulates realistic DNA sequences along those trees using:
+- **GTR+Gamma substitution model** with parameters sampled from empirical data
+- **2,709 real genes** from three datasets (Zhao_2021, Ren_2024, Morales_Briones_2021)
+- **Alignment lengths** sampled from empirical distribution (147-6,487 bp, median 609 bp)
+
+**Key Design Decision:** Each gene tree gets the same GTR+Gamma parameters across all replicates (just like SimPhy uses the same substitution rate across replicates). This ensures:
+- Replicates represent different stochastic realizations of the **same** evolutionary scenario
+- Variance comes from random mutations, not parameter variation
+- Proper statistical evaluation of method performance under specific conditions
+
+### Prerequisites
+
+```bash
+# 1. Ensure GTR parameters are extracted (one-time setup)
+ls -lh /groups/itay_mayrose/tomulanovski/gene2net/simulations/distributions/gtr_parameters_all.pkl
+
+# If file doesn't exist, extract parameters:
+cd /groups/itay_mayrose/tomulanovski/gene2net
+python simulations/scripts/sequence_evolution/filter_and_extract_gtr.py
+
+# 2. Verify SimPhy completed successfully
+cd simulations/scripts
+python check_pipeline_status.py conf_ils_low_10M --step simphy
+
+# 3. Split gene trees into individual files (REQUIRED)
+python split_gene_trees.py conf_ils_low_10M
+
+# This splits SimPhy's g_trees.trees into g_trees0001.trees, g_trees0002.trees, etc.
+# Works with both single-batch and multi-batch SimPhy outputs
+```
+
+### Running Sequence Simulation
+
+```bash
+cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
+
+# Simulate sequences for all 21 networks
+./submit_sequences.sh conf_ils_low_10M
+
+# Test on single network first (recommended)
+./submit_sequences.sh conf_ils_low_10M Ding_2023
+
+# Different configurations
+./submit_sequences.sh conf_ils_med_10M
+./submit_sequences.sh conf_ils_high_10M
+```
+
+### What Happens During Execution
+
+For each gene tree (e.g., gene tree #42 in network "Ding_2023"):
+
+1. **Sample parameters once** from the 2,709 empirical genes:
+   ```
+   Example sampled parameters:
+   - GTR rates: AC=1.52, AG=4.31, AT=1.08, CG=0.67, CT=5.29, GT=1.00
+   - Base frequencies: πA=0.289, πC=0.211, πG=0.211, πT=0.289
+   - Alpha (Gamma shape): 0.543
+   - Alignment length: 609 bp
+   ```
+
+2. **Use same parameters across all replicates**, but with **different random seeds**:
+   ```
+   Replicate 1: Same model, seed=421234 → alignment_0042.phy
+   Replicate 2: Same model, seed=422567 → alignment_0042.phy (different sequences!)
+   Replicate 3: Same model, seed=423891 → alignment_0042.phy (different sequences!)
+   ...
+   ```
+
+**Why same parameters?** Just like SimPhy uses the same substitution rate across replicates, sequence simulation uses the same GTR+Gamma parameters. Replicates = different random outcomes of the **same** evolutionary process.
+
+### Monitor Sequence Simulation Jobs
+
+```bash
+# Check running jobs
+squeue -u $USER | grep alisim
+
+# Check job status
+sacct -X --format=JobName,State,ExitCode | grep alisim_conf_ils_low_10M
+
+# Monitor logs
+tail -f /groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/alisim_conf_ils_low_10M_Ding_2023_1.out
+```
+
+### Validate Sequence Completion
+
+```bash
+# Check alignments were generated for a network
+NETWORK="Ding_2023"
+CONFIG="conf_ils_low_10M"
+BASE="/groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations"
+
+# Count alignments per replicate (should be 1000 each)
+for rep in {1..5}; do
+    count=$(ls ${BASE}/${NETWORK}/data/${CONFIG}/replicate_${rep}/1/alignments/*.phy 2>/dev/null | wc -l)
+    echo "Replicate $rep: $count alignments"
+done
+
+# Inspect a sample alignment
+head -20 ${BASE}/${NETWORK}/data/${CONFIG}/replicate_1/1/alignments/alignment_0001.phy
+```
+
+### Expected Outputs
+
+```
+simulations/simulations/{NETWORK}/data/{CONFIG}/
+└── replicate_{1-5}/
+    └── 1/
+        ├── g_trees0001.trees        # Gene tree (from SimPhy)
+        ├── g_trees0002.trees
+        ├── ...
+        └── alignments/              # NEW: Sequence alignments
+            ├── alignment_0001.phy   # Sequences for g_trees0001.trees
+            ├── alignment_0002.phy   # Sequences for g_trees0002.trees
+            └── ...
+```
+
+**Total output:** 105,000 sequence alignments (21 networks × 5 replicates × 1000 genes)
+
+### Parameter Sampling Details
+
+**Special handling for extreme alpha values:**
+- For α ≤ 3.0: Use `GTR+Gamma` model (rate heterogeneity)
+- For α > 3.0: Use `GTR` only (uniform rates across sites)
+  - Affects 90 genes (3.3% of empirical data)
+  - Biologically reasonable: high α ≈ uniform rates
+
+**Empirical parameter statistics:**
+- **GTR rates:** Transitions (AG, CT) higher than transversions (AC, AT, CG)
+- **Base composition:** Moderately AT-rich (56% AT, 44% GC on average)
+- **Alpha distribution:** Median 0.54, mean 18.47 (right-skewed due to outliers)
+- **Alignment lengths:** Range 147-6,487 bp, median 609 bp
+
+### Troubleshooting Sequence Simulation
+
+**Problem:** "GTR parameters file not found"
+
+**Solution:**
+```bash
+cd /groups/itay_mayrose/tomulanovski/gene2net
+python simulations/scripts/sequence_evolution/filter_and_extract_gtr.py
+```
+
+**Problem:** "No replicate directories found"
+
+**Solution:** Run SimPhy first for that configuration:
+```bash
+./submit_simphy.sh conf_ils_low_10M
+```
+
+**Problem:** Some alignments missing
+
+**Solution:** Check job logs for errors:
+```bash
+grep -l "ERROR" /groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/alisim_*.err
+```
+
+---
+
+## Step 3: Run Network Inference Methods
 
 ### What This Does
 
@@ -300,7 +474,7 @@ simulations/simulations/{NETWORK}/
 
 ---
 
-## Step 3: Post-Process Results
+## Step 4: Post-Process Results
 
 ### What This Does
 
@@ -368,7 +542,7 @@ The script reports:
 
 ---
 
-## Step 4: Analyze and Compare
+## Step 5: Analyze and Compare
 
 ### What This Does
 
@@ -520,14 +694,27 @@ cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
 # Navigate to jobs directory
 cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
 
-# 1. Generate simulations
+# 1. Generate gene trees (SimPhy)
 ./submit_simphy.sh conf_ils_low_10M
 
 # Wait for SimPhy jobs, then validate
 cd ../scripts
 python check_pipeline_status.py conf_ils_low_10M --step simphy
 
-# 2. Run all methods
+# 2. Simulate sequences (AliSim)
+cd ../jobs
+./submit_sequences.sh conf_ils_low_10M
+
+# Wait for sequence jobs, then validate
+NETWORK="Ding_2023"
+CONFIG="conf_ils_low_10M"
+BASE="/groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations"
+for rep in {1..5}; do
+    count=$(ls ${BASE}/${NETWORK}/data/${CONFIG}/replicate_${rep}/1/alignments/*.phy 2>/dev/null | wc -l)
+    echo "Replicate $rep: $count alignments"
+done
+
+# 3. Run all methods
 cd ../jobs
 ./submit_all_methods.sh conf_ils_low_10M
 
@@ -535,13 +722,13 @@ cd ../jobs
 cd ../scripts
 python check_pipeline_status.py conf_ils_low_10M --step run --verbose
 
-# 3. Post-process
+# 4. Post-process
 python postprocess_results.py conf_ils_low_10M
 
-# 4. Analyze
+# 5. Analyze
 python run_full_summary.py conf_ils_low_10M
 
-# 5. View results
+# 6. View results
 cd ../analysis/summary/conf_ils_low_10M/
 ls level1_detailed_per_network/edit_distance.csv
 ```
@@ -669,6 +856,7 @@ Approximate wall-clock times (cluster dependent):
 | Step | Time | Notes |
 |------|------|-------|
 | **SimPhy** | 2-12 hours | Depends on batch mode, retries |
+| **Sequence Simulation** | 1-3 hours | Parallel array jobs (1000 genes) |
 | **Methods Prep** | 1-3 hours | Parallel across networks |
 | **GRAMPA** | 3-6 hours | ASTRAL + GRAMPA |
 | **Polyphest** | 2-4 hours | Fast |
@@ -688,23 +876,27 @@ Approximate wall-clock times (cluster dependent):
 # COMPLETE WORKFLOW
 # ====================
 
-# 1. SIMPHY
+# 1. SIMPHY (Gene Trees)
 cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
 ./submit_simphy.sh CONFIG
 cd ../scripts && python check_pipeline_status.py CONFIG --step simphy
 
-# 2. METHODS
+# 2. SEQUENCES (DNA Alignments)
 cd ../jobs
+./submit_sequences.sh CONFIG
+# Validate: Check alignments exist in replicate_*/1/alignments/
+
+# 3. METHODS (Network Inference)
 ./submit_all_methods.sh CONFIG
 cd ../scripts && python check_pipeline_status.py CONFIG --step run
 
-# 3. POST-PROCESS
+# 4. POST-PROCESS (Extract Results)
 python postprocess_results.py CONFIG
 
-# 4. ANALYZE
+# 5. ANALYZE (Compare & Summarize)
 python run_full_summary.py CONFIG
 
-# 5. VIEW RESULTS
+# 6. VIEW RESULTS
 cd ../analysis/summary/CONFIG/
 ```
 
@@ -715,13 +907,15 @@ cd ../analysis/summary/CONFIG/
 This complete pipeline transforms raw species trees into comprehensive method evaluations:
 
 1. **SimPhy** generates realistic gene trees (105,000 per config)
-2. **Methods** infer networks from gene trees (4 methods × 21 networks × 5 replicates)
-3. **Post-processing** standardizes outputs for comparison
-4. **Analysis** computes performance metrics and rankings
+2. **Sequence Simulation** generates DNA alignments using empirically-sampled GTR+Gamma parameters (105,000 alignments per config)
+3. **Methods** infer networks from gene trees (4 methods × 21 networks × 5 replicates)
+4. **Post-processing** standardizes outputs for comparison
+5. **Analysis** computes performance metrics and rankings
 
-**Result:** Quantitative evaluation of network inference method performance under different evolutionary scenarios.
+**Result:** Quantitative evaluation of network inference method performance under different evolutionary scenarios, using biologically realistic sequence data.
 
 For detailed information on specific steps:
+- **Sequence Simulation:** See `SEQUENCE_SIMULATION_GUIDE.md`
 - **Methods:** See `METHODS_GUIDE.md`
 - **Validation:** See `PIPELINE_STATUS_GUIDE.md`
 - **Repository structure:** See `../CLAUDE.md`
