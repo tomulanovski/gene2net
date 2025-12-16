@@ -96,14 +96,17 @@ cat("Found", length(nex_files), "NEXUS alignment files\n\n")
 alignmentnames <- sub("\\.nex$", "", nex_files)
 
 # BEAST configuration
-fpath.taxatable <- file.path(input_dir, "taxa_table.txt")
+# Note: fpath.taxatable should be JUST the filename, not full path
+# AlloppDT will construct the full path using data.dpath + fpath.taxatable
+fpath.taxatable <- "taxa_table.txt"
 
-# Verify taxa table exists
-if (!file.exists(fpath.taxatable)) {
+# Verify taxa table exists (construct full path for verification)
+full_taxatable_path <- file.path(input_dir, fpath.taxatable)
+if (!file.exists(full_taxatable_path)) {
     stop("ERROR: taxa_table.txt not found in input directory: ", input_dir)
 }
 
-cat("Taxa table: ", fpath.taxatable, "\n\n")
+cat("Taxa table: ", full_taxatable_path, "\n\n")
 
 # BEAST XML output file
 beastXMLfilename <- file.path(output_dir, "alloppnet.XML")
