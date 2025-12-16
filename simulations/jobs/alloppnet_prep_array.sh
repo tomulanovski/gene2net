@@ -223,8 +223,12 @@ conda activate alloppnet || {
     exit 1
 }
 
+# Add trailing slash to INPUT_DIR for AlloppDT path construction
+# AlloppDT concatenates paths without separator, so we need the trailing /
+INPUT_DIR_WITH_SLASH="${INPUT_DIR}/"
+
 Rscript "${SCRIPTS_DIR}/generate_beast_xml.r" \
-    "${INPUT_DIR}" \
+    "${INPUT_DIR_WITH_SLASH}" \
     "${OUTPUT_DIR}"
 
 if [ $? -ne 0 ]; then

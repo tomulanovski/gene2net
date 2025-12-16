@@ -412,7 +412,9 @@ build_submit_command() {
     local cmd="${submit_script} ${config}"
 
     # Add common parameters
-    cmd="${cmd} --replicates ${NUM_REPLICATES}"
+    # Generate comma-separated list of replicates (1,2,3,4,5)
+    local replicate_list=$(seq -s ',' 1 ${NUM_REPLICATES})
+    cmd="${cmd} --replicates ${replicate_list}"
 
     # Add step control flags
     if [ "$PREP_ONLY" = true ]; then
