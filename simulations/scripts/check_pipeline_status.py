@@ -5,7 +5,7 @@ check_pipeline_status.py - Comprehensive pipeline status checker
 Validates SimPhy simulations and phylogenetic network inference pipeline steps:
 - SimPhy simulations (1000 trees per replicate)
 - Sequence alignments (1000 alignments per replicate)
-- Input preparation for GRAMPA, Polyphest, MPSUGAR, PADRE
+- Input preparation for GRAMPA, Polyphest, MPSUGAR, PADRE, AlloppNET
 - Method outputs and results
 
 Usage:
@@ -23,6 +23,9 @@ Usage:
 
     # Check only GRAMPA outputs
     python check_pipeline_status.py conf_ils_low_10M --method grampa --step run
+
+    # Check AlloppNET outputs (only 8 compatible networks)
+    python check_pipeline_status.py conf_ils_low_10M --method alloppnet --step run
 
     # Check all methods, only outputs
     python check_pipeline_status.py conf_ils_low_10M --step run
@@ -60,6 +63,12 @@ NETWORKS = [
     "Marcussen_2015", "Shahrestani_2015", "Morales-Briones_2021", "Soza_2014"
 ]
 
+# AlloppNET-compatible networks (max 2 copies in network topology)
+ALLOPPNET_NETWORKS = [
+    "Bendiksby_2011", "Ding_2023", "Koenen_2020", "Liu_2023",
+    "Shahrestani_2015", "Wisecaver_2023", "Wu_2015", "Zhao_2021"
+]
+
 NUM_REPLICATES = 5
 EXPECTED_TREES_PER_REPLICATE = 1000
 
@@ -81,6 +90,10 @@ METHOD_FILES = {
     'padre': {
         'prep': ['padre_trees.tre'],
         'run': ['padre_trees-result.tre']  # PADRE writes to input directory (processed/)
+    },
+    'alloppnet': {
+        'prep': ['taxa_table.txt', 'ploidy_level.json'],  # Also has ~1000 .nex files
+        'run': ['alloppnet_final.tre', 'sampledmultrees.txt', 'alloppnet.XML']
     }
 }
 
@@ -296,7 +309,10 @@ def check_method_inputs(config: str, method: str, verbose: bool = False) -> List
     expected_files = METHOD_FILES[method]['prep']
     optional_files = METHOD_FILES[method].get('prep_optional', [])
 
-    for network in NETWORKS:
+    # AlloppNET only runs on 8 compatible networks
+    networks_to_check = ALLOPPNET_NETWORKS if method == 'alloppnet' else NETWORKS
+
+    for network in networks_to_check:
         for replicate in range(1, NUM_REPLICATES + 1):
             if method == 'grampa':
                 input_dir = os.path.join(BASE_DIR, network, "processed", config, "grampa_input", f"replicate_{replicate}")
@@ -306,6 +322,8 @@ def check_method_inputs(config: str, method: str, verbose: bool = False) -> List
                 input_dir = os.path.join(BASE_DIR, network, "processed", config, "mpsugar_input", f"replicate_{replicate}")
             elif method == 'padre':
                 input_dir = os.path.join(BASE_DIR, network, "processed", config, "padre_input", f"replicate_{replicate}")
+            elif method == 'alloppnet':
+                input_dir = os.path.join(BASE_DIR, network, "processed", config, "alloppnet_input", f"replicate_{replicate}")
             else:
                 continue
 
@@ -357,7 +375,10 @@ def check_method_outputs(config: str, method: str, percentile: int = 60,
     results = []
     expected_files = METHOD_FILES[method]['run']
 
-    for network in NETWORKS:
+    # AlloppNET only runs on 8 compatible networks
+    networks_to_check = ALLOPPNET_NETWORKS if method == 'alloppnet' else NETWORKS
+
+    for network in networks_to_check:
         for replicate in range(1, NUM_REPLICATES + 1):
             if method == 'grampa':
                 output_dir = os.path.join(BASE_DIR, network, "results", config, "grampa", f"replicate_{replicate}")
@@ -369,6 +390,8 @@ def check_method_outputs(config: str, method: str, percentile: int = 60,
             elif method == 'padre':
                 # PADRE writes output to input directory (processed/)
                 output_dir = os.path.join(BASE_DIR, network, "processed", config, "padre_input", f"replicate_{replicate}")
+            elif method == 'alloppnet':
+                output_dir = os.path.join(BASE_DIR, network, "results", config, "alloppnet", f"replicate_{replicate}")
             else:
                 continue
 

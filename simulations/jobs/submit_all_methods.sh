@@ -52,7 +52,7 @@ DEFAULT_CONFIGS=(
 )
 
 # All available methods
-ALL_METHODS=(grampa polyphest padre mpsugar)
+ALL_METHODS=(grampa polyphest padre mpsugar alloppnet)
 
 # Common parameters
 NUM_REPLICATES=5
@@ -296,6 +296,9 @@ if [ "$GRAMPA_ASTRAL_ONLY" = true ] || [ "$GRAMPA_SKIP_PREP" = true ]; then
     fi
 fi
 
+# AlloppNET-specific validation (no longer needed - now supports prep/run split)
+# AlloppNET now supports --prep-only and --run-only like other methods
+
 # Validate that submit scripts exist
 for method in "${METHODS[@]}"; do
     submit_script="${SCRIPT_DIR}/submit_${method}_pipeline.sh"
@@ -330,7 +333,7 @@ done
 echo ""
 echo "Common Parameters:"
 echo "  Replicates: ${NUM_REPLICATES}"
-echo "  Networks: 21"
+echo "  Networks: 21 (AlloppNET: 8 compatible networks only)"
 echo ""
 
 # Show method-specific parameters only for selected methods
@@ -362,6 +365,18 @@ if [[ " ${METHODS[@]} " =~ " mpsugar " ]]; then
     echo "  MP-SUGAR:"
     echo "    Iterations: ${MPSUGAR_ITERATIONS}"
     echo "    Chains: ${MPSUGAR_CHAINS}"
+fi
+
+if [[ " ${METHODS[@]} " =~ " alloppnet " ]]; then
+    if [ "$method_params_shown" = false ]; then
+        echo "Method-Specific Parameters:"
+        method_params_shown=true
+    fi
+    echo "  AlloppNET:"
+    echo "    Compatible networks: 8 (Bendiksby, Ding, Koenen, Liu,"
+    echo "                            Shahrestani, Wisecaver, Wu, Zhao)"
+    echo "    PREP: Fast (~minutes), generates BEAST XML with kernel smoothing"
+    echo "    RUN: Slow (~5 days per network-replicate, 100M BEAST iterations)"
 fi
 
 if [ "$method_params_shown" = true ]; then

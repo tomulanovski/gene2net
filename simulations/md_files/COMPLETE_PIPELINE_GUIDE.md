@@ -379,6 +379,7 @@ Runs phylogenetic network inference on simulated gene trees using:
 - **Polyphest:** Maximum parsimony network
 - **PADRE:** Parsimony-based network
 - **MPSUGAR:** Bayesian network inference
+- **AlloppNET:** Bayesian MCMC network for allopolyploids (8 compatible networks only)
 
 ### Option A: Master Script (RECOMMENDED)
 
@@ -398,6 +399,9 @@ cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
 
 # Specific methods only
 ./submit_all_methods.sh conf_ils_low_10M --methods grampa,polyphest
+
+# Include AlloppNET (runs on 8 compatible networks only)
+./submit_all_methods.sh conf_ils_low_10M --methods grampa,polyphest,alloppnet
 ```
 
 **Advantages:**
@@ -448,9 +452,17 @@ cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
 
 # MPSUGAR with more iterations
 ./submit_mpsugar_pipeline.sh conf_ils_low_10M --iterations 1000 --chains 2
+
+# AlloppNET (all-in-one pipeline, ~5 days per replicate)
+./submit_alloppnet_pipeline.sh conf_ils_low_10M
+
+# AlloppNET - specific replicates only
+./submit_alloppnet_pipeline.sh conf_ils_low_10M --replicates 1,3,5
 ```
 
-**See:** `METHODS_GUIDE.md` for detailed method documentation
+**See:**
+- `METHODS_GUIDE.md` for GRAMPA, Polyphest, PADRE, MPSUGAR
+- `ALLOPPNET_GUIDE.md` for AlloppNET detailed documentation
 
 ### Monitor Method Jobs
 
@@ -462,10 +474,14 @@ squeue -u $USER
 squeue -u $USER | grep prep
 
 # Run jobs
-squeue -u $USER | grep -E "grampa|polyphest|padre|mpsugar"
+squeue -u $USER | grep -E "grampa|polyphest|padre|mpsugar|alloppnet"
 
-# Monitor logs
+# Monitor logs (GRAMPA example)
 tail -f /groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/run_grampa_*.out
+
+# Monitor AlloppNET progress (~5 days per job)
+tail -f /groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/alloppnet_*.out
+grep "STATE_" results/<Network>/<config>/alloppnet/replicate_1/sampledmultrees.txt | tail
 ```
 
 ### Validate Method Completion
@@ -494,7 +510,11 @@ simulations/simulations/{NETWORK}/
 │   ├── grampa_input/replicate_{1-5}/
 │   ├── polyphest_input/replicate_{1-5}/
 │   ├── padre_input/replicate_{1-5}/
-│   └── mpsugar_input/replicate_{1-5}/
+│   ├── mpsugar_input/replicate_{1-5}/
+│   └── alloppnet_input/replicate_{1-5}/  # Only for 8 compatible networks
+│       ├── alignment_*.nex (1000 files)
+│       ├── taxa_table.txt
+│       └── ploidy_level.json
 └── results/{CONFIG}/            # Run stage outputs
     ├── grampa/replicate_{1-5}/
     │   └── grampa-scores.txt
@@ -502,8 +522,12 @@ simulations/simulations/{NETWORK}/
     │   └── polyphest_trees-polyphest.txt
     ├── padre/replicate_{1-5}/
     │   └── padre_trees-result.tre
-    └── mpsugar/replicate_{1-5}/
-        └── mpsugar_results.txt
+    ├── mpsugar/replicate_{1-5}/
+    │   └── mpsugar_results.txt
+    └── alloppnet/replicate_{1-5}/  # Only for 8 compatible networks
+        ├── alloppnet_final.tre  # Final consensus tree
+        ├── sampledmultrees.txt  # BEAST MCMC output
+        └── alloppnet.XML        # BEAST configuration
 ```
 
 ---

@@ -1,8 +1,10 @@
 # Methods Guide: Running Phylogenetic Network Inference
 
-This guide covers running network inference methods (GRAMPA, Polyphest, PADRE, MPSUGAR) on simulated gene trees.
+This guide covers running network inference methods (GRAMPA, Polyphest, PADRE, MPSUGAR, AlloppNET) on simulated gene trees.
 
 **Prerequisites:** SimPhy simulations must be completed and validated.
+
+**Note:** AlloppNET has a dedicated guide (`ALLOPPNET_GUIDE.md`) due to its unique all-in-one pipeline and network compatibility requirements.
 
 ---
 
@@ -64,10 +66,10 @@ Configuration:
                                   Default: conf_ils_low/medium/high_10M
 
 Method Control:
-  --methods METHOD1,METHOD2,...   Methods to run (grampa,polyphest,padre,mpsugar)
+  --methods METHOD1,METHOD2,...   Methods to run (grampa,polyphest,padre,mpsugar,alloppnet)
                                   Default: all methods
-  --prep-only                     Only prepare inputs
-  --run-only                      Only run methods (assumes prep done)
+  --prep-only                     Only prepare inputs (not supported by AlloppNET)
+  --run-only                      Only run methods (not supported by AlloppNET)
 
 Common Parameters:
   --replicates N                  Number of replicates (default: 5)
@@ -438,9 +440,13 @@ simulations/simulations/{NETWORK}/processed/{CONFIG}/
 │   └── multi_set.txt          # Multi-set file
 ├── padre_input/replicate_{1-5}/
 │   └── padre_trees.tre        # Formatted trees
-└── mpsugar_input/replicate_{1-5}/
-    ├── mpsugar_trees.nex      # NEXUS format
-    └── taxon_map.json         # Taxon mapping
+├── mpsugar_input/replicate_{1-5}/
+│   ├── mpsugar_trees.nex      # NEXUS format
+│   └── taxon_map.json         # Taxon mapping
+└── alloppnet_input/replicate_{1-5}/
+    ├── alignment_*.nex        # NEXUS alignments (1000 files)
+    ├── ploidy_level.json      # Ploidy assignments (kernel smoothing)
+    └── taxa_table.txt         # Homeolog pairing
 ```
 
 ### Run Stage Output Locations
@@ -453,14 +459,26 @@ simulations/simulations/{NETWORK}/results/{CONFIG}/
 │   └── polyphest_trees-polyphest.txt  # Inferred network
 ├── padre/replicate_{1-5}/
 │   └── padre_trees-result.tre  # Inferred network
-└── mpsugar/replicate_{1-5}/
-    └── mpsugar_results.txt     # Inferred network with posterior
+├── mpsugar/replicate_{1-5}/
+│   └── mpsugar_results.txt     # Inferred network with posterior
+└── alloppnet/replicate_{1-5}/
+    ├── alloppnet_final.tre    # Final consensus network
+    ├── sampledmultrees.txt    # BEAST MCMC samples (100K trees)
+    └── alloppnet.XML          # BEAST configuration
 ```
 
 ### Summary
 
-- **21 networks** × **5 replicates** = **105 total runs per method**
-- **4 methods** = **420 total output files** (full pipeline)
+- **Standard methods (GRAMPA, Polyphest, PADRE, MPSUGAR):**
+  - **21 networks** × **5 replicates** = **105 total runs per method**
+  - **4 methods** = **420 total output files**
+
+- **AlloppNET (special case):**
+  - **8 compatible networks** × **5 replicates** = **40 total runs**
+  - Only runs on networks with max 2 copies (diploid/tetraploid only)
+  - All-in-one pipeline: prep → BEAST → summarize (~5 days per run)
+  - See `ALLOPPNET_GUIDE.md` for complete details
+
 - All outputs validated with `check_pipeline_status.py --step run`
 
 ---
@@ -512,6 +530,10 @@ python run_full_summary.py conf_ils_low_10M
 ./submit_polyphest_pipeline.sh --help
 ./submit_padre_pipeline.sh --help
 ./submit_mpsugar_pipeline.sh --help
+./submit_alloppnet_pipeline.sh --help
+
+# AlloppNET has its own dedicated guide
+cat ../md_files/ALLOPPNET_GUIDE.md
 
 # Validation help
 python check_pipeline_status.py --help
