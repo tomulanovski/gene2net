@@ -206,7 +206,7 @@ def count_copies_from_alignments(alignment_dir, kernel_width=2, verbose=False):
             print(f"  Processing alignment {i}/{len(phy_files)}...")
 
         try:
-            alignment = AlignIO.read(phy_file, 'phylip')
+            alignment = AlignIO.read(phy_file, 'phylip-relaxed')
         except Exception as e:
             print(f"WARNING: Could not read {phy_file}: {e}")
             continue
@@ -305,7 +305,7 @@ def convert_phy_to_nexus(alignment_dir, output_dir, taxon_representative_copies,
             print(f"  Converting {i}/{len(phy_files)}...")
 
         try:
-            alignment = AlignIO.read(phy_file, 'phylip')
+            alignment = AlignIO.read(phy_file, 'phylip-relaxed')
         except Exception as e:
             print(f"WARNING: Could not read {phy_file}: {e}")
             continue
