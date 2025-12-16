@@ -167,6 +167,36 @@ def get_representative_copy_number(copy_distribution, kernel_width=2):
     return representative
 
 
+def read_phylip_manual(phy_file):
+    """
+    Manually parse PHYLIP file (sequential format).
+
+    Returns:
+        dict: {seq_id: sequence_string}
+    """
+    sequences = {}
+
+    with open(phy_file, 'r') as f:
+        lines = f.readlines()
+
+    if not lines:
+        return sequences
+
+    # Skip header line (ntax nchar)
+    for line in lines[1:]:
+        line = line.strip()
+        if not line:
+            continue
+
+        # Split on whitespace - first part is taxon name, rest is sequence
+        parts = line.split(None, 1)
+        if len(parts) == 2:
+            taxon_name, sequence = parts
+            sequences[taxon_name] = sequence.replace(' ', '')  # Remove any spaces in sequence
+
+    return sequences
+
+
 def count_copies_from_alignments(alignment_dir, kernel_width=2, verbose=False):
     """
     Count copies per taxon across all alignment files and determine representative copy numbers.
@@ -206,17 +236,21 @@ def count_copies_from_alignments(alignment_dir, kernel_width=2, verbose=False):
             print(f"  Processing alignment {i}/{len(phy_files)}...")
 
         try:
-            alignment = AlignIO.read(phy_file, 'phylip-relaxed')
+            # Manually parse PHYLIP file
+            sequences = read_phylip_manual(phy_file)
         except Exception as e:
             print(f"WARNING: Could not read {phy_file}: {e}")
+            continue
+
+        if not sequences:
             continue
 
         gene_num = extract_gene_number(os.path.basename(phy_file))
 
         # Count copies in this alignment
-        for record in alignment:
-            taxon = extract_taxon_name(record.id)
-            copy = extract_copy_number(record.id)
+        for seq_id in sequences.keys():
+            taxon = extract_taxon_name(seq_id)
+            copy = extract_copy_number(seq_id)
             taxon_gene_copies[taxon][gene_num].add(copy)
 
     # Calculate copy number distributions for each taxon
@@ -305,24 +339,39 @@ def convert_phy_to_nexus(alignment_dir, output_dir, taxon_representative_copies,
             print(f"  Converting {i}/{len(phy_files)}...")
 
         try:
-            alignment = AlignIO.read(phy_file, 'phylip-relaxed')
-        except Exception as e:
-            print(f"WARNING: Could not read {phy_file}: {e}")
-            continue
+            # Manually parse PHYLIP file
+            sequences = read_phylip_manual(phy_file)
 
-        # Modify sequence IDs: species_locusid_individualid → species_individualid
-        for record in alignment:
-            taxon = extract_taxon_name(record.id)
-            copy = extract_copy_number(record.id)
-            record.id = f"{taxon}_{copy}"
-            record.description = ""  # Clear description
+            if not sequences:
+                print(f"WARNING: No sequences found in {phy_file}")
+                continue
 
-        # Write NEXUS file
-        nex_file = os.path.join(output_dir, os.path.basename(phy_file).replace('.phy', '.nex'))
-        try:
-            AlignIO.write(alignment, nex_file, 'nexus')
+            # Get sequence length
+            seq_length = len(next(iter(sequences.values())))
+            ntax = len(sequences)
+
+            # Write NEXUS file manually
+            nex_file = os.path.join(output_dir, os.path.basename(phy_file).replace('.phy', '.nex'))
+
+            with open(nex_file, 'w') as f:
+                f.write("#NEXUS\n")
+                f.write("BEGIN DATA;\n")
+                f.write(f"  DIMENSIONS NTAX={ntax} NCHAR={seq_length};\n")
+                f.write("  FORMAT DATATYPE=DNA MISSING=N GAP=-;\n")
+                f.write("  MATRIX\n")
+
+                # Write sequences with modified names
+                for seq_id, sequence in sequences.items():
+                    taxon = extract_taxon_name(seq_id)
+                    copy = extract_copy_number(seq_id)
+                    new_id = f"{taxon}_{copy}"
+                    f.write(f"    {new_id}  {sequence}\n")
+
+                f.write("  ;\n")
+                f.write("END;\n")
+
         except Exception as e:
-            print(f"WARNING: Could not write {nex_file}: {e}")
+            print(f"WARNING: Could not convert {phy_file}: {e}")
             continue
 
     if verbose:
