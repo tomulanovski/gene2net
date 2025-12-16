@@ -572,7 +572,7 @@ Examples:
     parser.add_argument('config', help='Configuration name (e.g., conf_ils_low_10M)')
     parser.add_argument('--step', choices=['simphy', 'sequences', 'prep', 'run', 'all'], default='all',
                        help='Which step to check (default: all)')
-    parser.add_argument('--method', choices=['grampa', 'polyphest', 'mpsugar', 'padre', 'all'], default='all',
+    parser.add_argument('--method', choices=['grampa', 'polyphest', 'mpsugar', 'padre', 'alloppnet', 'all'], default='all',
                        help='Which method to check (default: all)')
     parser.add_argument('--verbose', '-v', action='store_true',
                        help='Show detailed results including successful runs')
@@ -613,7 +613,7 @@ Examples:
 
     # Check method inputs (prep step)
     if args.step in ['prep', 'all']:
-        methods = ['grampa', 'polyphest', 'mpsugar', 'padre'] if args.method == 'all' else [args.method]
+        methods = ['grampa', 'polyphest', 'mpsugar', 'padre', 'alloppnet'] if args.method == 'all' else [args.method]
 
         for i, method in enumerate(methods, start=1):
             print(f"\n[{i+2}/{len(methods)+2}] Checking {method.upper()} inputs...")
@@ -625,7 +625,7 @@ Examples:
 
     # Check method outputs (run step)
     if args.step in ['run', 'all']:
-        methods = ['grampa', 'polyphest', 'mpsugar', 'padre'] if args.method == 'all' else [args.method]
+        methods = ['grampa', 'polyphest', 'mpsugar', 'padre', 'alloppnet'] if args.method == 'all' else [args.method]
 
         for i, method in enumerate(methods, start=1):
             print(f"\n[{i+2}/{len(methods)+2}] Checking {method.upper()} outputs...")
