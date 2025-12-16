@@ -345,14 +345,36 @@ def check_method_inputs(config: str, method: str, verbose: bool = False) -> List
                 if os.path.exists(filepath):
                     optional_present.append(optional_file)
 
+            # Special handling for AlloppNET: check for 1000 NEXUS alignment files + BEAST XML
+            nex_file_count = 0
+            if method == 'alloppnet':
+                # Check NEXUS alignment files in processed/alloppnet_input/
+                nex_files = glob.glob(os.path.join(input_dir, "alignment_*.nex"))
+                nex_file_count = len(nex_files)
+                if nex_file_count < EXPECTED_TREES_PER_REPLICATE:
+                    missing.append(f"NEXUS files ({nex_file_count}/{EXPECTED_TREES_PER_REPLICATE})")
+                elif nex_file_count > EXPECTED_TREES_PER_REPLICATE:
+                    errors.append(f"Too many NEXUS files ({nex_file_count}/{EXPECTED_TREES_PER_REPLICATE})")
+
+                # Check BEAST XML file in results/alloppnet/
+                xml_dir = os.path.join(BASE_DIR, network, "results", config, "alloppnet", f"replicate_{replicate}")
+                xml_file = os.path.join(xml_dir, "alloppnet.XML")
+                if not os.path.exists(xml_file):
+                    missing.append("alloppnet.XML")
+                elif os.path.getsize(xml_file) == 0:
+                    errors.append("alloppnet.XML is empty")
+
             if not missing and not errors:
                 status = 'SUCCESS'
-                details = f"All {len(expected_files)} required files present"
+                if method == 'alloppnet':
+                    details = f"All {len(expected_files)} metadata files + {nex_file_count} NEXUS alignments + BEAST XML present"
+                else:
+                    details = f"All {len(expected_files)} required files present"
                 if optional_present:
                     details += f" (+{len(optional_present)} optional)"
             elif missing:
                 status = 'MISSING'
-                details = f"Missing {len(missing)}/{len(expected_files)} required files"
+                details = f"Missing {len(missing)}/{len(expected_files) + (1 if method == 'alloppnet' else 0)} required files"
             else:
                 status = 'FAILED'
                 details = f"Files exist but have errors"
