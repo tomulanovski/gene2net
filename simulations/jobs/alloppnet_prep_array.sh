@@ -223,8 +223,11 @@ conda activate alloppnet || {
     exit 1
 }
 
+# AlloppDT expects data.dpath with trailing slash for NEXUS file paths
+# (it concatenates directly: data.dpath + alignmentname + ".nex")
+# But fpath.taxatable should be just filename (AlloppDT uses file.path() for that)
 Rscript "${SCRIPTS_DIR}/generate_beast_xml.r" \
-    "${INPUT_DIR}" \
+    "${INPUT_DIR}/" \
     "${OUTPUT_DIR}"
 
 if [ $? -ne 0 ]; then
