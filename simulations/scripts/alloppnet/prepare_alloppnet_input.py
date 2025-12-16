@@ -35,35 +35,25 @@ from Bio import AlignIO, Phylo
 
 def extract_taxon_name(seq_id):
     """
-    Extract species name from SimPhy format: species_locusid_individualid.
+    Extract species name from sequence ID.
 
-    SimPhy gene tree leaves follow the scheme "species_locusid_individualid":
-    - species: The species/taxon name
-    - locusid: The locus/gene number
-    - individualid: The individual/copy number
+    The taxon name is everything BEFORE the first underscore.
+    Everything after the first underscore is gene/copy information.
 
     Examples:
         Galeopsisspeciosa_0_0 → Galeopsisspeciosa
         Lamiummoschatum3_1_0 → Lamiummoschatum3
-        Complex_Taxon_Name_5_2 → Complex_Taxon_Name
+        Lamiumconfertum1_1_0_0 → Lamiumconfertum1
+        Lamiumamplexicaulevarorientale2_2_0_0 → Lamiumamplexicaulevarorientale2
 
     Args:
-        seq_id (str): Sequence ID in species_locusid_individualid format
+        seq_id (str): Sequence ID
 
     Returns:
-        str: Species name (everything except last 2 underscore parts)
+        str: Species name (everything before first underscore)
     """
-    parts = seq_id.split('_')
-    if len(parts) >= 3:
-        # Join all except last 2 parts (locusid and individualid)
-        return '_'.join(parts[:-2])
-    elif len(parts) == 2:
-        # Only 1 underscore - might be species_locusid or species_individualid
-        # Assume species_individualid and return first part
-        return parts[0]
-    else:
-        # No underscores - return as is
-        return seq_id
+    parts = seq_id.split('_', 1)  # Split on first underscore only
+    return parts[0]
 
 
 def extract_gene_number(filename):

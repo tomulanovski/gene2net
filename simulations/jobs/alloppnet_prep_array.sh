@@ -216,6 +216,13 @@ if [ ! -f "${SCRIPTS_DIR}/AlloppDT_6beastxml_bits.r" ]; then
     exit 1
 fi
 
+# Activate alloppnet environment for Rscript
+conda activate alloppnet || {
+    echo "ERROR: Could not activate alloppnet environment"
+    echo "Please create environment: conda create -n alloppnet -c conda-forge r-base"
+    exit 1
+}
+
 Rscript "${SCRIPTS_DIR}/generate_beast_xml.r" \
     "${INPUT_DIR}" \
     "${OUTPUT_DIR}"
