@@ -35,24 +35,28 @@ from Bio import AlignIO, Phylo
 
 def extract_taxon_name(seq_id):
     """
-    Extract species name from sequence ID.
+    Extract species name from sequence ID (WITHOUT network copy suffix).
 
-    The taxon name is everything BEFORE the first underscore.
-    Everything after the first underscore is gene/copy information.
+    SimPhy format: species_locus_individual (3 parts)
+    Modified format: species_copy_locus_individual (4+ parts)
+
+    The network copy suffix (_0, _1, etc.) was added to simulate polyploidy
+    since SimPhy can't have the same species appear multiple times.
 
     Examples:
-        Galeopsisspeciosa_0_0 → Galeopsisspeciosa
-        Lamiummoschatum3_1_0 → Lamiummoschatum3
-        Lamiumconfertum1_1_0_0 → Lamiumconfertum1
-        Lamiumamplexicaulevarorientale2_2_0_0 → Lamiumamplexicaulevarorientale2
+        Galeopsisladanum_2_0 → Galeopsisladanum (diploid, 3 parts)
+        Lamiumalbum_0_3_1 → Lamiumalbum (polyploid copy 0, 4 parts)
+        Lamiumalbum_1_2_0 → Lamiumalbum (polyploid copy 1, 4 parts)
 
     Args:
         seq_id (str): Sequence ID
 
     Returns:
-        str: Species name (everything before first underscore)
+        str: Species name (without copy suffix)
     """
-    parts = seq_id.split('_', 1)  # Split on first underscore only
+    parts = seq_id.split('_')
+
+    # First part is always the species name
     return parts[0]
 
 
@@ -79,20 +83,37 @@ def extract_gene_number(filename):
 
 def extract_copy_number(seq_id):
     """
-    Extract individual ID from SimPhy format: species_locusid_individualid.
+    Extract network copy number from sequence ID.
 
-    Example: Galeopsisspeciosa_0_0 → 0
+    This extracts the user-added copy suffix (_0, _1, etc.) that was added
+    to species names to simulate polyploidy in SimPhy.
+
+    Format detection:
+    - 3 parts (species_locus_individual): Diploid, return '0'
+    - 4+ parts (species_copy_locus_individual): Polyploid, return copy number
+
+    Examples:
+        Galeopsisladanum_2_0 → '0' (diploid, 3 parts, no copy suffix)
+        Lamiumalbum_0_3_1 → '0' (polyploid, 4 parts, network copy 0)
+        Lamiumalbum_1_2_0 → '1' (polyploid, 4 parts, network copy 1)
+        Lamiumalbum_2_5_1 → '2' (polyploid, 4 parts, network copy 2)
 
     Args:
-        seq_id (str): Sequence ID in species_locusid_individualid format
+        seq_id (str): Sequence ID
 
     Returns:
-        str: Individual ID (last part after underscore)
+        str: Network copy number (the _i suffix added for polyploidy)
     """
     parts = seq_id.split('_')
-    if len(parts) >= 1:
-        return parts[-1]
+
+    if len(parts) == 3:
+        # Format: species_locus_individual (diploid, no copy suffix)
+        return '0'
+    elif len(parts) >= 4:
+        # Format: species_copy_locus_individual (polyploid)
+        return parts[1]  # Return the network copy number
     else:
+        # Unexpected format
         return '0'
 
 
