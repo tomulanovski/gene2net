@@ -117,6 +117,41 @@ def extract_copy_number(seq_id):
         return '0'
 
 
+def extract_locus_id(seq_id):
+    """
+    Extract locus ID from sequence ID.
+
+    SimPhy assigns locus IDs to distinguish gene duplications.
+    Multiple loci for the same species can occur due to gene duplications.
+
+    Format detection:
+    - 3 parts (species_locus_individual): Return locus (parts[1])
+    - 4+ parts (species_copy_locus_individual): Return locus (parts[2])
+
+    Examples:
+        Galeopsisladanum_2_0 → '2' (diploid, locus 2)
+        Lamiumalbum_0_3_1 → '3' (polyploid, network copy 0, locus 3)
+        Lamiumalbum_1_5_0 → '5' (polyploid, network copy 1, locus 5)
+
+    Args:
+        seq_id (str): Sequence ID
+
+    Returns:
+        str: Locus ID
+    """
+    parts = seq_id.split('_')
+
+    if len(parts) == 3:
+        # Format: species_locus_individual (diploid)
+        return parts[1]  # Locus is second part
+    elif len(parts) >= 4:
+        # Format: species_copy_locus_individual (polyploid)
+        return parts[2]  # Locus is third part
+    else:
+        # Unexpected format
+        return '0'
+
+
 def get_representative_copy_number(copy_distribution, kernel_width=2):
     """
     Determine the most representative copy number using kernel smoothing.
@@ -372,10 +407,12 @@ def convert_phy_to_nexus(alignment_dir, output_dir, taxon_representative_copies,
                 f.write("  MATRIX\n")
 
                 # Write sequences with modified names
+                # Include locus ID to handle gene duplications (unique IDs)
                 for seq_id, sequence in sequences.items():
                     taxon = extract_taxon_name(seq_id)
                     copy = extract_copy_number(seq_id)
-                    new_id = f"{taxon}_{copy}"
+                    locus = extract_locus_id(seq_id)
+                    new_id = f"{taxon}_{copy}_{locus}"
                     f.write(f"    {new_id}  {sequence}\n")
 
                 f.write("  ;\n")
@@ -390,19 +427,21 @@ def convert_phy_to_nexus(alignment_dir, output_dir, taxon_representative_copies,
         print(f"  Saved to: {output_dir}")
 
 
-def generate_taxa_table(taxon_representative_copies, ploidy, output_file, verbose=False):
+def generate_taxa_table(alignment_dir, taxon_representative_copies, ploidy, output_file, verbose=False):
     """
-    Generate taxa_table.txt for AlloppNET.
+    Generate taxa_table.txt for AlloppNET handling gene duplications/losses.
 
     Format: ID species individual genome
 
-    - Diploid taxa (1 copy): Single individual with genome A
-    - Tetraploid taxa (2+ copies): Pair homeologs (A/B)
-      - _0 with _1 (individual 1, genomes A/B)
-      - _2 with _3 (individual 2, genomes A/B)
-      - If odd number, pair last with missing data
+    Following AlloppNET manual section 2.4:
+    - We DON'T know which sequences are homeologs vs duplications a priori
+    - For each gene, collect ALL sequences for a species (ignore network copy labels)
+    - Pair based on count:
+      - 2 sequences: Pair as homeologs (standard case)
+      - 1 or 3+ sequences: Use missing data approach (let AlloppNET explore)
 
     Args:
+        alignment_dir (str): Directory with alignment files
         taxon_representative_copies (dict): taxon -> representative_copies mapping
         ploidy (dict): taxon -> ploidy_level mapping
         output_file (str): Output taxa_table.txt path
@@ -411,29 +450,64 @@ def generate_taxa_table(taxon_representative_copies, ploidy, output_file, verbos
     if verbose:
         print(f"\nGenerating taxa_table.txt...")
 
+    # Collect all sequence IDs per taxon per gene
+    # taxon -> gene -> list of (copy, locus) tuples
+    taxon_gene_seqs = defaultdict(lambda: defaultdict(list))
+
+    phy_files = sorted(glob.glob(os.path.join(alignment_dir, "alignment_*.phy")))
+    for phy_file in phy_files:
+        gene_num = extract_gene_number(os.path.basename(phy_file))
+        sequences = read_phylip_manual(phy_file)
+
+        for seq_id in sequences.keys():
+            taxon = extract_taxon_name(seq_id)
+            copy = extract_copy_number(seq_id)
+            locus = extract_locus_id(seq_id)
+            taxon_gene_seqs[taxon][gene_num].append((copy, locus, seq_id))
+
     lines = ["ID species individual genome"]
 
     for taxon in sorted(taxon_representative_copies.keys()):
-        rep_copies = taxon_representative_copies[taxon]
         ploidy_level = ploidy[taxon]
+        gene_seqs = taxon_gene_seqs[taxon]
 
-        if ploidy_level == 2:  # Diploid (1 copy)
-            # Single sequence, genome A
-            lines.append(f"{taxon}_0 {taxon} {taxon}_ind1 A")
+        # Process each gene separately
+        for gene_num in sorted(gene_seqs.keys()):
+            seqs = gene_seqs[gene_num]  # List of (copy, locus, seq_id)
+            num_seqs = len(seqs)
 
-        else:  # Tetraploid (2+ copies)
-            # Pair homeologs: _0 with _1, _2 with _3, etc.
-            for i in range(0, rep_copies, 2):
-                ind_num = (i // 2) + 1
+            if ploidy_level == 2:  # Diploid
+                # For diploids, each sequence is genome A
+                for i, (copy, locus, seq_id) in enumerate(seqs, 1):
+                    seq_label = f"{taxon}_{copy}_{locus}"
+                    ind_label = f"{taxon}_gene{gene_num}_seq{i}"
+                    lines.append(f"{seq_label} {taxon} {ind_label} A")
 
-                if i + 1 < rep_copies:
-                    # Pair exists
-                    lines.append(f"{taxon}_{i} {taxon} {taxon}_ind{ind_num} A")
-                    lines.append(f"{taxon}_{i+1} {taxon} {taxon}_ind{ind_num} B")
-                else:
-                    # Odd one out - pair with missing data
-                    lines.append(f"{taxon}_{i} {taxon} {taxon}_ind{ind_num} A")
-                    lines.append(f"{taxon}_miss {taxon} {taxon}_ind{ind_num} B")
+            else:  # Tetraploid (ploidy=4)
+                if num_seqs == 2:
+                    # Standard case: 2 sequences, assume they're homeologs
+                    # Pair them as genome A and genome B
+                    seq1_copy, seq1_locus, _ = seqs[0]
+                    seq2_copy, seq2_locus, _ = seqs[1]
+                    ind_label = f"{taxon}_gene{gene_num}"
+                    lines.append(f"{taxon}_{seq1_copy}_{seq1_locus} {taxon} {ind_label} A")
+                    lines.append(f"{taxon}_{seq2_copy}_{seq2_locus} {taxon} {ind_label} B")
+
+                elif num_seqs == 1:
+                    # Gene loss: one sequence, pair with missing data
+                    seq_copy, seq_locus, _ = seqs[0]
+                    ind_label = f"{taxon}_gene{gene_num}"
+                    lines.append(f"{taxon}_{seq_copy}_{seq_locus} {taxon} {ind_label} A")
+                    lines.append(f"{taxon}_{seq_copy}_{seq_locus}_miss {taxon} {ind_label} B")
+
+                else:  # num_seqs >= 3
+                    # Gene duplication: Can't pair confidently
+                    # Use missing data approach (manual section 2.4)
+                    # Each sequence gets its own individual with missing data
+                    for i, (seq_copy, seq_locus, _) in enumerate(seqs, 1):
+                        ind_label = f"{taxon}_gene{gene_num}_seq{i}"
+                        lines.append(f"{taxon}_{seq_copy}_{seq_locus} {taxon} {ind_label} A")
+                        lines.append(f"{taxon}_{seq_copy}_{seq_locus}_miss {taxon} {ind_label} B")
 
     with open(output_file, 'w') as f:
         f.write('\n'.join(lines))
@@ -512,7 +586,7 @@ def main():
     # Step 4: Generate taxa_table.txt
     print("\n[Step 4/4] Generating taxa_table.txt...")
     taxa_table_file = os.path.join(args.output_dir, "taxa_table.txt")
-    generate_taxa_table(taxon_representative_copies, ploidy, taxa_table_file, args.verbose)
+    generate_taxa_table(args.alignment_dir, taxon_representative_copies, ploidy, taxa_table_file, args.verbose)
 
     print("\n" + "="*80)
     print("AlloppNET input preparation complete!")
