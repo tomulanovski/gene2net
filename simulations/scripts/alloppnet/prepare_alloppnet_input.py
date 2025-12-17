@@ -406,14 +406,10 @@ def convert_phy_to_nexus(alignment_dir, output_dir, taxon_representative_copies,
                 f.write("  FORMAT DATATYPE=DNA MISSING=N GAP=-;\n")
                 f.write("  MATRIX\n")
 
-                # Write sequences with modified names
-                # Include locus ID to handle gene duplications (unique IDs)
+                # Write sequences with original SimPhy IDs (no modification)
+                # The IDs are already unique per SimPhy design
                 for seq_id, sequence in sequences.items():
-                    taxon = extract_taxon_name(seq_id)
-                    copy = extract_copy_number(seq_id)
-                    locus = extract_locus_id(seq_id)
-                    new_id = f"{taxon}_{copy}_{locus}"
-                    f.write(f"    {new_id}  {sequence}\n")
+                    f.write(f"    {seq_id}  {sequence}\n")
 
                 f.write("  ;\n")
                 f.write("END;\n")
@@ -436,8 +432,10 @@ def generate_taxa_table(alignment_dir, taxon_representative_copies, ploidy, outp
     The taxa table is GLOBAL - each unique sequence ID appears once,
     applying to all genes where that ID appears in NEXUS files.
 
-    For tetraploids: Pair network copies as homeologs (copy_0 with copy_1).
-    For diploids: Each network copy gets genome A.
+    Uses original SimPhy IDs (no modification). Pairing logic:
+    - For polyploids: pair sequences by (species, locus, individual) - if 2 different
+      network copies exist with same locus+individual, pair as homeologs
+    - For diploids: each sequence gets its own individual
 
     Args:
         alignment_dir (str): Directory with alignment files
@@ -449,66 +447,80 @@ def generate_taxa_table(alignment_dir, taxon_representative_copies, ploidy, outp
     if verbose:
         print(f"\nGenerating taxa_table.txt...")
 
-    # Collect all unique (taxon, copy, locus) combinations across ALL genes
-    # This gives us the set of unique sequence IDs
-    unique_sequences = set()  # Set of (taxon, copy, locus) tuples
+    # Collect all unique sequence IDs across ALL genes
+    unique_seq_ids = set()
 
     phy_files = glob.glob(os.path.join(alignment_dir, "alignment_*.phy"))
     for phy_file in phy_files:
         sequences = read_phylip_manual(phy_file)
         for seq_id in sequences.keys():
-            taxon = extract_taxon_name(seq_id)
-            copy = extract_copy_number(seq_id)
-            locus = extract_locus_id(seq_id)
-            unique_sequences.add((taxon, copy, locus))
+            unique_seq_ids.add(seq_id)
 
-    # Group sequences by taxon
+    # Group sequence IDs by species
     taxon_sequences = defaultdict(list)
-    for taxon, copy, locus in unique_sequences:
-        taxon_sequences[taxon].append((copy, locus))
+    for seq_id in unique_seq_ids:
+        taxon = extract_taxon_name(seq_id)
+        taxon_sequences[taxon].append(seq_id)
 
     lines = ["ID species individual genome"]
 
     for taxon in sorted(taxon_representative_copies.keys()):
         ploidy_level = ploidy[taxon]
-        seqs = sorted(taxon_sequences[taxon])  # Sort by (copy, locus)
+        seq_ids = sorted(taxon_sequences[taxon])
 
         if ploidy_level == 2:  # Diploid
-            # Each sequence gets genome A
-            for copy, locus in seqs:
-                seq_id = f"{taxon}_{copy}_{locus}"
-                ind_id = f"{taxon}_ind{copy}_{locus}"
+            # Each sequence gets its own individual, genome A
+            for seq_id in seq_ids:
+                ind_id = f"{seq_id}_ind"
                 lines.append(f"{seq_id} {taxon} {ind_id} A")
 
         else:  # Tetraploid (ploidy=4)
-            # Group by locus, then pair network copies
-            locus_groups = defaultdict(list)  # locus -> list of copies
-            for copy, locus in seqs:
-                locus_groups[locus].append(copy)
+            # Group sequences by (locus, individual) - the last 2 parts of the ID
+            # For each group, check if we have 2 different network copies to pair
+            locus_ind_groups = defaultdict(list)
 
-            for locus in sorted(locus_groups.keys()):
-                copies = sorted(locus_groups[locus])
+            for seq_id in seq_ids:
+                parts = seq_id.split('_')
+                if len(parts) >= 4:
+                    # Format: species_copy_locus_individual
+                    copy = parts[1]
+                    locus = parts[2]
+                    individual = parts[3] if len(parts) > 3 else '0'
+                    group_key = (locus, individual)
+                    locus_ind_groups[group_key].append((seq_id, copy))
+                else:
+                    # Unexpected format for polyploid, treat as single
+                    ind_id = f"{seq_id}_ind"
+                    lines.append(f"{seq_id} {taxon} {ind_id} A")
+                    lines.append(f"{seq_id}_miss {taxon} {ind_id} B")
+
+            # Process each (locus, individual) group
+            for (locus, individual), seq_copy_list in sorted(locus_ind_groups.items()):
+                # Get unique network copies
+                copies = {}  # copy -> seq_id
+                for seq_id, copy in seq_copy_list:
+                    copies[copy] = seq_id
 
                 if len(copies) == 2:
-                    # Standard: pair copy 0 and copy 1 as homeologs
-                    seq_id_a = f"{taxon}_{copies[0]}_{locus}"
-                    seq_id_b = f"{taxon}_{copies[1]}_{locus}"
-                    ind_id = f"{taxon}_locus{locus}"
+                    # Pair as homeologs (same individual, genomes A and B)
+                    copy_ids = sorted(copies.items())
+                    seq_id_a = copy_ids[0][1]
+                    seq_id_b = copy_ids[1][1]
+                    ind_id = f"{taxon}_L{locus}_I{individual}"
                     lines.append(f"{seq_id_a} {taxon} {ind_id} A")
                     lines.append(f"{seq_id_b} {taxon} {ind_id} B")
 
                 elif len(copies) == 1:
-                    # Gene loss in one copy: pair with missing
-                    seq_id = f"{taxon}_{copies[0]}_{locus}"
-                    ind_id = f"{taxon}_locus{locus}"
+                    # Single copy: pair with missing
+                    seq_id = list(copies.values())[0]
+                    ind_id = f"{taxon}_L{locus}_I{individual}"
                     lines.append(f"{seq_id} {taxon} {ind_id} A")
                     lines.append(f"{seq_id}_miss {taxon} {ind_id} B")
 
-                else:  # 3+ copies (gene duplication within network copies)
-                    # Each copy gets its own individual with missing
-                    for i, copy in enumerate(copies, 1):
-                        seq_id = f"{taxon}_{copy}_{locus}"
-                        ind_id = f"{taxon}_locus{locus}_copy{i}"
+                else:  # 3+ copies
+                    # Each gets its own individual with missing
+                    for i, (copy, seq_id) in enumerate(sorted(copies.items()), 1):
+                        ind_id = f"{taxon}_L{locus}_I{individual}_C{i}"
                         lines.append(f"{seq_id} {taxon} {ind_id} A")
                         lines.append(f"{seq_id}_miss {taxon} {ind_id} B")
 
