@@ -109,7 +109,9 @@ if (!file.exists(full_taxatable_path)) {
 cat("Taxa table: ", full_taxatable_path, "\n\n")
 
 # BEAST XML output file
-beastXMLfilename <- file.path(output_dir, "alloppnet.XML")
+# Note: AlloppDT expects just filename, will create in data.dpath (input_dir)
+# We'll move it to output_dir after generation
+beastXMLfilename <- "alloppnet.XML"
 
 # BEAST runtime parameters
 beast.chain.length <- "100000000"      # 100M iterations (~5 days)
@@ -119,11 +121,13 @@ beast.gtrees.logevery <- "1000"        # Gene tree sampling every 1K
 beast.multree.logevery <- "1000"       # Species tree sampling every 1K
 beast.dbugtune.logevery <- "10000"     # Debug tuning every 10K
 
-# BEAST output file names (all in output_dir)
-sampledgtrees.fnamebase <- file.path(output_dir, "sampledgtrees")
-sampledmultrees.fpath <- file.path(output_dir, "sampledmultrees.txt")
-sampledparams.fpath <- file.path(output_dir, "sampledparams.txt")
-DBUGTUNE.fpath <- file.path(output_dir, "DBUGTUNE.txt")
+# BEAST output file names
+# AlloppDT expects filenames only, but we need full paths for BEAST to use
+# Construct full paths using paste0() like in AlloppNET manual
+sampledgtrees.fnamebase <- "sampledgtrees"
+sampledmultrees.fpath <- paste0(output_dir, "/sampledmultrees.txt")
+sampledparams.fpath <- paste0(output_dir, "/sampledparams.txt")
+DBUGTUNE.fpath <- paste0(output_dir, "/DBUGTUNE.txt")
 
 cat("BEAST configuration:\n")
 cat("  Chain length:   ", beast.chain.length, " iterations\n")
@@ -143,7 +147,7 @@ beastAlloppDTxmlinfo <- list(
     beast.gtrees.logevery = beast.gtrees.logevery,
     beast.multree.logevery = beast.multree.logevery,
     beast.dbugtune.logevery = beast.dbugtune.logevery,
-    sampledgtrees.fpathbase = sampledgtrees.fnamebase,
+    sampledgtrees.fpathbase = paste0(output_dir, "/", sampledgtrees.fnamebase),
     sampledmultrees.fpath = sampledmultrees.fpath,
     sampledparams.fpath = sampledparams.fpath,
     DBUGTUNE.fpath = DBUGTUNE.fpath
@@ -153,11 +157,24 @@ beastAlloppDTxmlinfo <- list(
 cat("Generating BEAST XML...\n")
 tryCatch({
     make.beastxml.AlloppDT.forRealData(beastAlloppDTxmlinfo)
+
+    # Move XML file from input_dir to output_dir
+    # AlloppDT creates it in data.dpath (input_dir), but we want it in output_dir
+    xml_source <- file.path(input_dir, beastXMLfilename)
+    xml_dest <- file.path(output_dir, beastXMLfilename)
+
+    if (file.exists(xml_source)) {
+        file.copy(xml_source, xml_dest, overwrite = TRUE)
+        file.remove(xml_source)
+        cat("\n")
+        cat("Moved XML to output directory\n")
+    }
+
     cat("\n")
     cat("==============================================================================\n")
     cat("BEAST XML generated successfully!\n")
     cat("==============================================================================\n")
-    cat("Output file: ", beastXMLfilename, "\n")
+    cat("Output file: ", xml_dest, "\n")
     cat("\n")
     cat("Expected BEAST output files:\n")
     cat("  - sampledmultrees.txt  (species networks)\n")
