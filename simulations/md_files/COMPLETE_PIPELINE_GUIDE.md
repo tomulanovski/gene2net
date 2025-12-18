@@ -417,22 +417,26 @@ Prepare inputs, validate, then run:
 ```bash
 cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
 
-# Step 2a: Prep all method inputs
+# Step 3a: Prep all method inputs
 ./submit_all_methods.sh conf_ils_low_10M --prep-only
 
 # Wait for prep jobs, then validate
 cd ../scripts
 python check_pipeline_status.py conf_ils_low_10M --step prep
 
-# Step 2b: Run all methods
+# Step 3b: Run all methods
 cd ../jobs
 ./submit_all_methods.sh conf_ils_low_10M --run-only
+
+# OR run specific methods (e.g., AlloppNET only)
+./submit_all_methods.sh conf_ils_low_10M --methods alloppnet --run-only
 ```
 
 **Advantages:**
-- Can validate inputs before running
+- Can validate inputs before expensive BEAST runs
 - Can run methods at different times
 - Easier to debug prep issues
+- **Especially useful for AlloppNET** (prep is fast ~minutes, run is slow ~5 days)
 
 ### Option C: Individual Methods
 
@@ -453,11 +457,12 @@ cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
 # MPSUGAR with more iterations
 ./submit_mpsugar_pipeline.sh conf_ils_low_10M --iterations 1000 --chains 2
 
-# AlloppNET (all-in-one pipeline, ~5 days per replicate)
-./submit_alloppnet_pipeline.sh conf_ils_low_10M
+# AlloppNET - two-step workflow (RECOMMENDED)
+./submit_alloppnet_pipeline.sh conf_ils_low_10M --prep-only      # Fast (~minutes)
+./submit_alloppnet_pipeline.sh conf_ils_low_10M --run-only       # Slow (~5 days)
 
 # AlloppNET - specific replicates only
-./submit_alloppnet_pipeline.sh conf_ils_low_10M --replicates 1,3,5
+./submit_alloppnet_pipeline.sh conf_ils_low_10M --replicates 1,3,5 --prep-only
 ```
 
 **See:**

@@ -105,13 +105,17 @@ class ResultPostprocessor:
 
     def extract_grampa_best_tree(self, input_file: Path) -> Optional[str]:
         """
-        Extract best MUL-tree from GRAMPA output
+        Extract best MUL-tree from GRAMPA output and clean formatting
 
         Format (TSV):
             mul.tree    h1.node    h2.node    score    labeled.tree
             5137    <29>    <39>    3309    (best tree here)
             5116    <28>    <39>    3326    (second best tree)
             ...
+
+        Cleans:
+            - Removes * and + from taxon names (e.g., Lamium* → Lamium)
+            - Removes internal node labels (e.g., <5>)
 
         Returns:
             Best tree (first data row, last column) or None if failed
@@ -137,6 +141,9 @@ class ResultPostprocessor:
 
             best_tree = columns[-1].strip()
 
+            # Clean the tree format
+            best_tree = self._clean_grampa_tree(best_tree)
+
             # Ensure it ends with semicolon
             if not best_tree.endswith(';'):
                 best_tree += ';'
@@ -145,6 +152,32 @@ class ResultPostprocessor:
 
         except Exception as e:
             return None
+
+    def _clean_grampa_tree(self, tree: str) -> str:
+        """
+        Clean GRAMPA tree format.
+
+        Removes:
+            - * and + from taxon names (e.g., Lamiumalbum+ → Lamiumalbum)
+            - Internal node labels like <5>, <29>, etc.
+
+        Args:
+            tree: Raw GRAMPA tree string
+
+        Returns:
+            Cleaned tree string
+        """
+        import re
+
+        # Remove * and + from taxon names
+        # Pattern: taxon name followed by * or +
+        tree = re.sub(r'([A-Za-z0-9_]+)[\*\+]', r'\1', tree)
+
+        # Remove internal node labels like <5>, <29>, etc.
+        # Pattern: <digits>
+        tree = re.sub(r'<\d+>', '', tree)
+
+        return tree
 
     def copy_padre_result(self, input_file: Path) -> Optional[str]:
         """

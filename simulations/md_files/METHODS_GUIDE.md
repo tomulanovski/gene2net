@@ -68,8 +68,8 @@ Configuration:
 Method Control:
   --methods METHOD1,METHOD2,...   Methods to run (grampa,polyphest,padre,mpsugar,alloppnet)
                                   Default: all methods
-  --prep-only                     Only prepare inputs (not supported by AlloppNET)
-  --run-only                      Only run methods (not supported by AlloppNET)
+  --prep-only                     Only prepare inputs
+  --run-only                      Only run methods (assumes prep done)
 
 Common Parameters:
   --replicates N                  Number of replicates (default: 5)
@@ -188,6 +188,46 @@ cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
 **MPSUGAR Pipeline Stages:**
 1. **Prep** (21 tasks): Convert to NEXUS, create taxon map JSON
 2. **Run** (105 tasks): Bayesian network inference
+
+### AlloppNET
+
+```bash
+cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
+
+# Full pipeline (prep + BEAST run, ~5 days per network)
+./submit_alloppnet_pipeline.sh conf_ils_low_10M
+
+# Two-step workflow (RECOMMENDED)
+# Step 1: Prep (fast, ~minutes)
+./submit_alloppnet_pipeline.sh conf_ils_low_10M --prep-only
+
+# Step 2: Run BEAST (slow, ~5 days)
+./submit_alloppnet_pipeline.sh conf_ils_low_10M --run-only
+
+# Specific replicates only
+./submit_alloppnet_pipeline.sh conf_ils_low_10M --replicates 1,3,5 --prep-only
+```
+
+**AlloppNET Pipeline Stages:**
+1. **Prep** (8 tasks, ~minutes each):
+   - Convert PHY → NEXUS (1000 alignments per network)
+   - Analyze copy number distributions using kernel smoothing
+   - Generate `ploidy_level.json` (robust ploidy inference)
+   - Create `taxa_table.txt` (homeolog pairing for allotetraploids)
+   - Generate BEAST XML using AlloppDT scripts
+2. **Run** (8 tasks, ~5 days each):
+   - Run BEAST (100M iterations)
+   - Summarize with TreeAnnotator (10% burnin)
+   - Post-process (remove copy suffixes from tree)
+
+**Important Notes:**
+- **Network compatibility:** Only runs on 8 networks with max 2 copies (diploid/tetraploid species):
+  - Bendiksby_2011, Ding_2023, Koenen_2020, Liu_2023
+  - Shahrestani_2015, Wisecaver_2023, Wu_2015, Zhao_2021
+- **Total jobs:** 8 networks × 5 replicates = 40 BEAST runs
+- **Runtime:** ~5 days per BEAST run (use `--prep-only` to validate inputs first)
+- **Input:** Uses sequence alignments (not just gene trees like other methods)
+- **Validation:** Use `--method alloppnet` when checking status
 
 ---
 
@@ -336,6 +376,10 @@ python check_pipeline_status.py conf_ils_low_10M --step run --method grampa
 
 # Check Polyphest with specific percentile
 python check_pipeline_status.py conf_ils_low_10M --step run --method polyphest --percentile 50
+
+# Check AlloppNET (8 networks only)
+python check_pipeline_status.py conf_ils_low_10M --step prep --method alloppnet
+python check_pipeline_status.py conf_ils_low_10M --step run --method alloppnet --verbose
 ```
 
 ### Monitor Logs
