@@ -32,7 +32,11 @@ class MetricAggregator:
         self.comparisons_df = comparisons_df
 
         # Filter out failed comparisons
-        self.valid_df = comparisons_df[comparisons_df['status'] == 'SUCCESS'].copy()
+        if not comparisons_df.empty and 'status' in comparisons_df.columns:
+            self.valid_df = comparisons_df[comparisons_df['status'] == 'SUCCESS'].copy()
+        else:
+            # No comparisons or missing status column - create empty DataFrame with expected columns
+            self.valid_df = pd.DataFrame(columns=['network', 'config', 'method', 'metric', 'value'])
 
     def aggregate_replicates(self) -> pd.DataFrame:
         """
@@ -41,6 +45,11 @@ class MetricAggregator:
         Returns:
             DataFrame with columns: network, config, method, metric, mean, std, min, max, n_valid
         """
+        # Handle empty dataframe
+        if self.valid_df.empty:
+            print("\nWARNING: No valid comparisons to aggregate (all methods missing or failed)")
+            return pd.DataFrame(columns=['network', 'config', 'method', 'metric', 'mean', 'std', 'min', 'max', 'n_valid'])
+
         # Group by (network, config, method, metric)
         grouped = self.valid_df.groupby(['network', 'config', 'method', 'metric'])['value']
 
