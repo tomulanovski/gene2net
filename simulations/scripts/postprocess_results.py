@@ -327,46 +327,86 @@ class ResultPostprocessor:
         print(f"Dry run: {self.dry_run}")
         print(f"{'='*80}\n")
 
+        # Track per-method statistics
+        method_stats = {}
+
         # Process each combination
         for method in methods_to_process:
             print(f"\nProcessing {method}...")
 
+            # Initialize per-method stats
+            method_stats[method] = {
+                'success': 0,
+                'skipped': 0,
+                'failed': 0,
+                'total': 0
+            }
+
+            method_start_total = self.stats['total']
+            method_start_success = self.stats['success']
+            method_start_skipped = self.stats['skipped']
+            method_start_failed = self.stats['failed']
+
             for network in self.networks:
                 for replicate in range(1, self.num_replicates + 1):
                     self.stats['total'] += 1
+                    method_stats[method]['total'] += 1
                     success = self.process_file(method, network, replicate)
 
-                    # Progress update
-                    if self.stats['total'] % 50 == 0:
-                        print(f"  Processed {self.stats['total']} files "
-                              f"(Success: {self.stats['success']}, "
-                              f"Skipped: {self.stats['skipped']}, "
-                              f"Failed: {self.stats['failed']})")
+            # Calculate method-specific stats
+            method_stats[method]['success'] = self.stats['success'] - method_start_success
+            method_stats[method]['skipped'] = self.stats['skipped'] - method_start_skipped
+            method_stats[method]['failed'] = self.stats['failed'] - method_start_failed
+
+            # Print per-method summary
+            print(f"  ✓ {method}: {method_stats[method]['success']} success, "
+                  f"{method_stats[method]['skipped']} skipped, "
+                  f"{method_stats[method]['failed']} failed "
+                  f"(out of {method_stats[method]['total']})")
 
         # Final statistics
-        self.print_statistics()
+        self.print_statistics(method_stats)
 
-    def print_statistics(self):
+    def print_statistics(self, method_stats: Dict):
         """Print processing statistics"""
         print(f"\n{'='*80}")
         print(f"Post-processing Statistics")
         print(f"{'='*80}")
-        print(f"Total files:        {self.stats['total']}")
-        print(f"Successfully processed: {self.stats['success']} "
+
+        # Per-method breakdown
+        print(f"\nPer-Method Results:")
+        print(f"{'-'*80}")
+        print(f"{'Method':<20} {'Total':>8} {'Success':>8} {'Skipped':>8} {'Failed':>8}")
+        print(f"{'-'*80}")
+
+        for method, stats in method_stats.items():
+            print(f"{method:<20} {stats['total']:>8} {stats['success']:>8} "
+                  f"{stats['skipped']:>8} {stats['failed']:>8}")
+
+        print(f"{'-'*80}")
+        print(f"{'TOTAL':<20} {self.stats['total']:>8} {self.stats['success']:>8} "
+              f"{self.stats['skipped']:>8} {self.stats['failed']:>8}")
+        print(f"{'-'*80}")
+
+        # Overall percentages
+        print(f"\nOverall:")
+        print(f"  Successfully processed: {self.stats['success']} "
               f"({self.stats['success']/self.stats['total']*100:.1f}%)")
-        print(f"Skipped (missing or already done): {self.stats['skipped']} "
+        print(f"  Skipped (missing/done): {self.stats['skipped']} "
               f"({self.stats['skipped']/self.stats['total']*100:.1f}%)")
-        print(f"Failed:             {self.stats['failed']} "
+        print(f"  Failed:                 {self.stats['failed']} "
               f"({self.stats['failed']/self.stats['total']*100:.1f}%)")
 
+        # List ALL errors
         if self.stats['errors']:
-            print(f"\nErrors ({len(self.stats['errors'])}):")
-            for i, error in enumerate(self.stats['errors'][:10], 1):
-                print(f"  {i}. {error['network']} / {error['method']} / rep_{error['replicate']}")
+            print(f"\n{'='*80}")
+            print(f"Failed Files ({len(self.stats['errors'])}):")
+            print(f"{'='*80}")
+            for i, error in enumerate(self.stats['errors'], 1):
+                print(f"  {i}. {error['network']} / {error['method']} / replicate_{error['replicate']}")
                 print(f"     {error['error']}")
-
-            if len(self.stats['errors']) > 10:
-                print(f"  ... and {len(self.stats['errors']) - 10} more")
+                if i < len(self.stats['errors']):
+                    print()
 
         print(f"{'='*80}\n")
 
