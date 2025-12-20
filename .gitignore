@@ -11,6 +11,8 @@
 !simulations/
 !simulations/jobs/
 !simulations/jobs/**
+!simulations/analysis/
+!simulations/analysis/**
 !simulations/scripts/
 !simulations/scripts/**
 !simulations/networks/
