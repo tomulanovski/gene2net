@@ -1,0 +1,86 @@
+Aggregate Duplication and Loss Summary Across All Networks
+============================================================
+
+Dataset Config: data/conf_dup_loss_medium_10M
+Number of networks analyzed: 18
+
+Overall average duplications: 1.2756
+Overall average losses: 1.2711
+
+Note: Values below are averages across available replicates.
+============================================================
+Per-Network Statistics:
+============================================================
+
+Koenen_2020 (5 reps):
+  Average duplications: 0.9216
+  Average losses: 0.9052
+
+Brysting_2007 (5 reps):
+  Average duplications: 1.5408
+  Average losses: 1.5884
+
+Lawrence_2016 (5 reps):
+  Average duplications: 1.3030
+  Average losses: 1.3134
+
+Diaz-Perez_2018 (5 reps):
+  Average duplications: 1.1086
+  Average losses: 1.0982
+
+Wisecaver_2023 (5 reps):
+  Average duplications: 0.6954
+  Average losses: 0.6840
+
+Ding_2023 (5 reps):
+  Average duplications: 0.9246
+  Average losses: 0.8768
+
+Liang_2019 (5 reps):
+  Average duplications: 1.8496
+  Average losses: 1.8820
+
+Popp_2005 (5 reps):
+  Average duplications: 0.7012
+  Average losses: 0.6960
+
+Wu_2015 (5 reps):
+  Average duplications: 1.0848
+  Average losses: 1.0844
+
+Liu_2023 (5 reps):
+  Average duplications: 1.0894
+  Average losses: 1.1046
+
+Ren_2024 (5 reps):
+  Average duplications: 1.0050
+  Average losses: 0.9928
+
+Sessa_2012b (5 reps):
+  Average duplications: 1.7628
+  Average losses: 1.7538
+
+Zhao_2021 (5 reps):
+  Average duplications: 1.0554
+  Average losses: 1.0722
+
+Hori_2014 (5 reps):
+  Average duplications: 1.0252
+  Average losses: 0.9884
+
+Marcussen_2015 (5 reps):
+  Average duplications: 1.5504
+  Average losses: 1.5384
+
+Shahrestani_2015 (5 reps):
+  Average duplications: 0.4400
+  Average losses: 0.4196
+
+Morales-Briones_2021 (5 reps):
+  Average duplications: 2.5526
+  Average losses: 2.5196
+
+Soza_2014 (5 reps):
+  Average duplications: 2.3496
+  Average losses: 2.3612
+

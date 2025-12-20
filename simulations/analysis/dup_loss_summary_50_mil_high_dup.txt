@@ -1,0 +1,85 @@
+Aggregate Duplication and Loss Summary Across All Networks
+============================================================
+
+Dataset: data/high_dup_ne_100000_height_50_million_trees
+Number of networks analyzed: 18
+
+Overall average duplications: 107.6257
+Overall average losses: 105.3803
+
+============================================================
+Per-Network Statistics:
+============================================================
+
+Koenen_2020:
+  Average duplications: 76.5120
+  Average losses: 74.2970
+
+Brysting_2007:
+  Average duplications: 132.3940
+  Average losses: 131.0990
+
+Lawrence_2016:
+  Average duplications: 111.5880
+  Average losses: 109.6320
+
+Diaz-Perez_2018:
+  Average duplications: 96.1210
+  Average losses: 94.1780
+
+Wisecaver_2023:
+  Average duplications: 68.3020
+  Average losses: 64.9700
+
+Ding_2023:
+  Average duplications: 81.5380
+  Average losses: 78.7720
+
+Liang_2019:
+  Average duplications: 131.8440
+  Average losses: 130.5320
+
+Popp_2005:
+  Average duplications: 69.0360
+  Average losses: 65.8030
+
+Wu_2015:
+  Average duplications: 90.3990
+  Average losses: 88.9470
+
+Liu_2023:
+  Average duplications: 94.5150
+  Average losses: 91.6150
+
+Ren_2024:
+  Average duplications: 97.4490
+  Average losses: 94.8330
+
+Sessa_2012b:
+  Average duplications: 138.3550
+  Average losses: 136.2790
+
+Zhao_2021:
+  Average duplications: 98.7760
+  Average losses: 96.7050
+
+Hori_2014:
+  Average duplications: 91.7390
+  Average losses: 89.3590
+
+Marcussen_2015:
+  Average duplications: 131.7100
+  Average losses: 130.4240
+
+Shahrestani_2015:
+  Average duplications: 47.1430
+  Average losses: 43.6000
+
+Morales-Briones_2021:
+  Average duplications: 213.2130
+  Average losses: 210.3270
+
+Soza_2014:
+  Average duplications: 166.6290
+  Average losses: 165.4740
+

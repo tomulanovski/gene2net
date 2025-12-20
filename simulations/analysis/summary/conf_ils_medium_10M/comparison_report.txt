@@ -1,0 +1,109 @@
+================================================================================
+Comparison Report
+================================================================================
+
+Total comparisons: 735
+Successful:        350 (47.6%)
+Failed:            32 (4.4%)
+From cache:        0
+Newly computed:    382
+
+
+Failed Comparisons (32):
+--------------------------------------------------------------------------------
+
+Diaz-Perez_2018 / conf_ils_medium_10M / grampa / rep_1
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / grampa / rep_3
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p50 / rep_1
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p50 / rep_2
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p50 / rep_3
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p50 / rep_4
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p50 / rep_5
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p50 / rep_1
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p50 / rep_2
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p50 / rep_3
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p50 / rep_4
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p50 / rep_5
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p70 / rep_1
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p70 / rep_2
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p70 / rep_3
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p70 / rep_4
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p70 / rep_5
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p70 / rep_1
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p70 / rep_2
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p70 / rep_3
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p70 / rep_4
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p70 / rep_5
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p90 / rep_1
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p90 / rep_2
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p90 / rep_3
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p90 / rep_4
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_medium_10M / polyphest_p90 / rep_5
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p90 / rep_1
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p90 / rep_2
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p90 / rep_3
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p90 / rep_4
+Error: division by zero
+
+Marcussen_2011 / conf_ils_medium_10M / polyphest_p90 / rep_5
+Error: division by zero

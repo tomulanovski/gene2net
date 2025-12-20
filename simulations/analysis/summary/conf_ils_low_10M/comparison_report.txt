@@ -1,0 +1,106 @@
+================================================================================
+Comparison Report
+================================================================================
+
+Total comparisons: 735
+Successful:        354 (48.2%)
+Failed:            31 (4.2%)
+From cache:        0
+Newly computed:    385
+
+
+Failed Comparisons (31):
+--------------------------------------------------------------------------------
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p50 / rep_1
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p50 / rep_2
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p50 / rep_3
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p50 / rep_4
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p50 / rep_5
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p50 / rep_1
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p50 / rep_2
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p50 / rep_3
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p50 / rep_4
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p50 / rep_5
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p70 / rep_1
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p70 / rep_2
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p70 / rep_3
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p70 / rep_4
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p70 / rep_5
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p70 / rep_1
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p70 / rep_2
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p70 / rep_3
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p70 / rep_4
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p70 / rep_5
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p90 / rep_1
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p90 / rep_2
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p90 / rep_3
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p90 / rep_4
+Error: division by zero
+
+Diaz-Perez_2018 / conf_ils_low_10M / polyphest_p90 / rep_5
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p90 / rep_1
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p90 / rep_2
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p90 / rep_3
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p90 / rep_4
+Error: division by zero
+
+Marcussen_2011 / conf_ils_low_10M / polyphest_p90 / rep_5
+Error: division by zero
+
+Marcussen_2015 / conf_ils_low_10M / polyphest_p90 / rep_5
+Error: division by zero

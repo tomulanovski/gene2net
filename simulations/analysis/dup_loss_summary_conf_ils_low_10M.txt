@@ -1,0 +1,94 @@
+Aggregate Duplication and Loss Summary Across All Networks
+============================================================
+
+Dataset Config: data/conf_ils_low_10M
+Number of networks analyzed: 20
+
+Overall average duplications: 0.0000
+Overall average losses: 0.0000
+
+Note: Values below are averages across available replicates.
+============================================================
+Per-Network Statistics:
+============================================================
+
+Bendiksby_2011 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Koenen_2020 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Brysting_2007 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Lawrence_2016 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Diaz-Perez_2018 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Wisecaver_2023 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Ding_2023 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Liang_2019 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Popp_2005 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Wu_2015 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Liu_2023 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Ren_2024 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Marcussen_2011 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Sessa_2012b (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Zhao_2021 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Hori_2014 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Marcussen_2015 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Shahrestani_2015 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Morales-Briones_2021 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
+Soza_2014 (5 reps):
+  Average duplications: 0.0000
+  Average losses: 0.0000
+
