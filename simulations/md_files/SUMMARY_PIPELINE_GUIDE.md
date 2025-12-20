@@ -46,7 +46,7 @@ Post-processing extracts/copies these to standardized `{program}_result.tre` fil
 ### Required Directory Structure
 
 ```
-/groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations/
+/groups/itay_mayrose/tomulanovski/gene2net/simulations/
 ├── networks/                                    # Ground truth networks (21 networks)
 │   ├── Bendiksby_2011.tre
 │   ├── Koenen_2020.tre
@@ -59,11 +59,10 @@ Post-processing extracts/copies these to standardized `{program}_result.tre` fil
         └── {CONFIG}/                            # e.g., conf_ils_low_10M
             ├── grampa/
             │   ├── replicate_1/
-            │   │   └── analysis/
-            │   │       └── grampa_result.tre    # Post-processed result
+            │   │   └── grampa_result.tre    # Post-processed result
+            │   │     
             │   ├── replicate_2/
-            │   │   └── analysis/
-            │   │       └── grampa_result.tre
+            │   │   └ grampa_result.tre
             │   ├── ... (replicates 3-5)
             │
             ├── polyphest_p50/
@@ -92,7 +91,7 @@ Post-processing extracts/copies these to standardized `{program}_result.tre` fil
 
 ### Ground Truth Networks
 
-**Location**: `/groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations/networks/`
+**Location**: `/groups/itay_mayrose/tomulanovski/gene2net/simulations/networks/`
 
 **Format**: Newick format (`.tre` files)
 

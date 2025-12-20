@@ -1,0 +1,49 @@
+================================================================================
+KEY FINDINGS - conf_ils_high_10M
+================================================================================
+
+BEST METHOD PER METRIC:
+--------------------------------------------------------------------------------
+  edit_distance                  -> polyphest_p70        (value: 0.8581)
+  num_rets_diff                  -> polyphest_p90        (value: 2.0800)
+  ploidy_diff.dist               -> polyphest_p70        (value: 0.0000)
+  ret_leaf_jaccard.dist          -> polyphest_p90        (value: 0.2985)
+  ret_sisters_jaccard.dist       -> polyphest_p70        (value: 0.3488)
+
+================================================================================
+OVERALL METHOD PERFORMANCE (avg rank across all metrics):
+--------------------------------------------------------------------------------
+  polyphest_p70        -> avg rank: 1.40
+  polyphest_p90        -> avg rank: 2.00
+  polyphest_p50        -> avg rank: 2.60
+  mpsugar              -> avg rank: 4.40
+  grampa               -> avg rank: 4.60
+
+================================================================================
+EASIEST NETWORKS (lowest edit_distance):
+--------------------------------------------------------------------------------
+  Zhao_2021                      -> 0.5030 (grampa)
+  Shahrestani_2015               -> 0.5926 (polyphest_p70)
+  Liang_2019                     -> 0.7328 (polyphest_p50)
+  Wisecaver_2023                 -> 0.7355 (polyphest_p50)
+  Hori_2014                      -> 0.7778 (polyphest_p50)
+
+================================================================================
+HARDEST NETWORKS (highest edit_distance):
+--------------------------------------------------------------------------------
+  Brysting_2007                  -> 0.9414 (grampa)
+  Marcussen_2012                 -> 0.9456 (grampa)
+  Diaz-Perez_2018                -> 0.9463 (grampa)
+  Soza_2014                      -> 0.9641 (grampa)
+  Marcussen_2015                 -> 0.9737 (grampa)
+
+================================================================================
+SIGNIFICANT CORRELATIONS (what makes networks harder?):
+--------------------------------------------------------------------------------
+Strong positive correlations (property increases -> worse performance):
+  mpsugar         | num_rets_diff             | num_reticulations    -> r=0.998 (p=0.0000)
+  grampa          | num_rets_diff             | num_reticulations    -> r=0.998 (p=0.0000)
+  grampa          | num_rets_diff             | num_polyploids       -> r=0.702 (p=0.0006)
+  grampa          | num_rets_diff             | num_species          -> r=0.635 (p=0.0026)
+  grampa          | num_rets_diff             | max_copies           -> r=0.548 (p=0.0124)
+  grampa          | edit_distance             | num_reticulations    -> r=0.457 (p=0.0429)

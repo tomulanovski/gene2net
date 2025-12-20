@@ -1,0 +1,6 @@
+metric,method,avg_value,num_networks
+edit_distance,polyphest_p70,0.8581344779357849,12
+num_rets_diff,polyphest_p90,2.08,15
+ploidy_diff.dist,polyphest_p70,0.0,12
+ret_leaf_jaccard.dist,polyphest_p90,0.2984826152683296,15
+ret_sisters_jaccard.dist,polyphest_p70,0.3487973067313345,12
