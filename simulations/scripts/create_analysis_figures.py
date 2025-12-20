@@ -608,9 +608,12 @@ Output structure (per configuration):
 
     parser.add_argument('--config', nargs='+', required=True,
                        help='Configuration name(s) to analyze')
+
+    # Default path relative to this script's location
+    default_stats_path = Path(__file__).parent.parent / 'networks' / 'mul_tree_final_stats.csv'
     parser.add_argument('--network-stats',
-                       default='simulations/networks/mul_tree_final_stats.csv',
-                       help='Path to network characteristics CSV (default: simulations/networks/mul_tree_final_stats.csv)')
+                       default=str(default_stats_path),
+                       help=f'Path to network characteristics CSV (default: {default_stats_path})')
 
     args = parser.parse_args()
 
