@@ -109,13 +109,14 @@ def compute_leaves_stats(sets1, sets2, row_ind, col_ind, debug=False):
     # sum up totals
     totals = {}
     totals['dist'] = sum(j_dist(inter, lenA + lenB - inter) for inter, lenA, lenB in stats)
-    totals['FP'] = sum((lenB - inter) / lenB for inter, _, lenB in stats)
-    totals['FN'] = sum((lenA - inter) / lenA for inter, lenA, _ in stats)
+    # Handle zero-division when networks have no reticulations/polyploids
+    totals['FP'] = sum((lenB - inter) / lenB if lenB > 0 else 0.0 for inter, _, lenB in stats)
+    totals['FN'] = sum((lenA - inter) / lenA if lenA > 0 else 0.0 for inter, lenA, _ in stats)
 
     if debug:
         print('dists:', [j_dist(inter, lenA + lenB - inter) for inter, lenA, lenB in stats])
-        print('FPs:', [(lenB - inter) / lenB for inter, _, lenB in stats])
-        print('FNs:', [(lenA - inter) / lenA for inter, lenA, _ in stats])
+        print('FPs:', [(lenB - inter) / lenB if lenB > 0 else 0.0 for inter, _, lenB in stats])
+        print('FNs:', [(lenA - inter) / lenA if lenA > 0 else 0.0 for inter, lenA, _ in stats])
 
     return totals
 
