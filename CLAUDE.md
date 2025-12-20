@@ -93,9 +93,11 @@ sbatch jobs/grampa_general.sh
 
 ### Polyphest
 - Creates output directories with percentile: `polyphest_p{PERCENTILE}/`
-- **When validating, always specify the percentile you used:**
+- **Must run with each percentile separately** to compare p50, p70, p90:
   ```bash
-  python scripts/check_pipeline_status.py conf_ils_low_10M --method polyphest --step run --percentile 50
+  ./submit_all_methods.sh conf_ils_low_10M --methods polyphest --polyphest-percentile 50
+  ./submit_all_methods.sh conf_ils_low_10M --methods polyphest --polyphest-percentile 70
+  ./submit_all_methods.sh conf_ils_low_10M --methods polyphest --polyphest-percentile 90
   ```
 
 ### MPSUGAR
@@ -118,6 +120,14 @@ python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step prep
 python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step run --verbose
 ```
 
+### Debugging Failed Runs
+- **`investigate_network.sh`** - Automated script to debug why specific networks failed
+- **`LOG_SEARCH_GUIDE.md`** - Complete guide for searching and navigating log files
+```bash
+# Investigate why a network failed
+simulations/scripts/investigate_network.sh Diaz-Perez_2018 conf_ils_low_10M
+```
+
 ## Environment Setup
 
 - **Cluster path:** `/groups/itay_mayrose/tomulanovski/gene2net/`
@@ -125,6 +135,15 @@ python simulations/scripts/check_pipeline_status.py conf_ils_low_10M --step run 
 - **Job scheduler:** SLURM
 
 When adapting scripts, update absolute paths in job scripts to match your directories.
+
+### Git Configuration
+Analysis outputs should be excluded from version control:
+```bash
+# Add to .gitignore if not present
+simulations/analysis/
+**/__pycache__/
+**/*.pyc
+```
 
 ## Working with Claude Code
 
