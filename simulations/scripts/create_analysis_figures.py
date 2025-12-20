@@ -7,10 +7,13 @@ Organizes outputs by configuration with proper directory structure.
 
 Usage:
     # Single configuration
-    python create_analysis_figures.py --config conf_ils_low_10M --network-stats ../networks/mul_tree_final_stats.csv
+    python create_analysis_figures.py --config conf_ils_low_10M
 
     # Multiple configurations
-    python create_analysis_figures.py --config conf_ils_low_10M conf_ils_medium_10M conf_ils_high_10M --network-stats ../networks/mul_tree_final_stats.csv
+    python create_analysis_figures.py --config conf_ils_low_10M conf_ils_medium_10M conf_ils_high_10M
+
+    # Custom network stats path (optional)
+    python create_analysis_figures.py --config conf_ils_low_10M --network-stats /custom/path/stats.csv
 """
 
 import argparse
@@ -579,11 +582,13 @@ def main():
         epilog="""
 Examples:
   # Single configuration
-  %(prog)s --config conf_ils_low_10M --network-stats ../networks/mul_tree_final_stats.csv
+  %(prog)s --config conf_ils_low_10M
 
   # Multiple configurations (processes each separately)
-  %(prog)s --config conf_ils_low_10M conf_ils_medium_10M conf_ils_high_10M \\
-           --network-stats ../networks/mul_tree_final_stats.csv
+  %(prog)s --config conf_ils_low_10M conf_ils_medium_10M conf_ils_high_10M
+
+  # Custom network stats path (if needed)
+  %(prog)s --config conf_ils_low_10M --network-stats /custom/path/stats.csv
 
 Output structure (per configuration):
   simulations/analysis/summary/{config}/
@@ -603,8 +608,9 @@ Output structure (per configuration):
 
     parser.add_argument('--config', nargs='+', required=True,
                        help='Configuration name(s) to analyze')
-    parser.add_argument('--network-stats', required=True,
-                       help='Path to network characteristics CSV')
+    parser.add_argument('--network-stats',
+                       default='simulations/networks/mul_tree_final_stats.csv',
+                       help='Path to network characteristics CSV (default: simulations/networks/mul_tree_final_stats.csv)')
 
     args = parser.parse_args()
 
