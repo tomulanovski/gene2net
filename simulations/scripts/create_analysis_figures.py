@@ -19,6 +19,8 @@ Usage:
 import argparse
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend - no X11 required
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
@@ -123,7 +125,7 @@ class ConfigurationAnalyzer:
             # Group by H_Strict
             grouped = method_inv.groupby('H_Strict').apply(
                 lambda x: pd.Series({
-                    'success_rate': (x['status'] == 'exists').sum() / len(x) * 100,
+                    'success_rate': x['inferred_exists'].sum() / len(x) * 100,
                     'num_networks': len(x['network'].unique())
                 })
             ).reset_index()
@@ -165,7 +167,7 @@ class ConfigurationAnalyzer:
 
             grouped = method_inv.groupby('Num_Polyploids').apply(
                 lambda x: pd.Series({
-                    'success_rate': (x['status'] == 'exists').sum() / len(x) * 100,
+                    'success_rate': x['inferred_exists'].sum() / len(x) * 100,
                     'num_networks': len(x['network'].unique())
                 })
             ).reset_index()
@@ -207,7 +209,7 @@ class ConfigurationAnalyzer:
 
             grouped = method_inv.groupby('Total_WGD').apply(
                 lambda x: pd.Series({
-                    'success_rate': (x['status'] == 'exists').sum() / len(x) * 100,
+                    'success_rate': x['inferred_exists'].sum() / len(x) * 100,
                     'num_networks': len(x['network'].unique())
                 })
             ).reset_index()
@@ -277,7 +279,7 @@ class ConfigurationAnalyzer:
         for method in self.inventory['method'].unique():
             method_inv = self.inventory[self.inventory['method'] == method]
             total = len(method_inv)
-            success = (method_inv['status'] == 'exists').sum()
+            success = method_inv['inferred_exists'].sum()
             success_rate = success / total * 100 if total > 0 else 0
             success_rates.append({
                 'method': method,
@@ -476,7 +478,7 @@ class ConfigurationAnalyzer:
             # Success rate
             method_inv = self.inventory[self.inventory['method'] == method]
             total = len(method_inv)
-            success = (method_inv['status'] == 'exists').sum()
+            success = method_inv['inferred_exists'].sum()
             success_rate = success / total * 100 if total > 0 else 0
 
             # Edit distance
