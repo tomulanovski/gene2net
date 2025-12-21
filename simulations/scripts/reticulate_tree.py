@@ -812,6 +812,109 @@ class ReticulateTree:
             distance /= normalization
         return distance
     
+    def get_edit_distance_multree(self, other: 'ReticulateTree', normalize=True) -> float:
+        '''
+        Compute graph edit distance on MUL-trees (before folding to networks).
+        This compares the tree structures directly without network folding.
+
+        Args:
+            other: Another ReticulateTree instance
+            normalize: If True, normalize by max tree size
+
+        Returns:
+            Edit distance between the two MUL-trees
+        '''
+        # Convert trees to graphs (without folding - just tree structure)
+        # Create a directed graph from the tree structure
+        def tree_to_simple_graph(tree_obj):
+            """Convert ete3 tree to NetworkX graph preserving tree structure"""
+            G = nx.DiGraph()
+
+            # Add all nodes with their labels
+            for node in tree_obj.tree.traverse():
+                node_id = id(node)
+                # Leaf nodes get their species name as label
+                if node.is_leaf():
+                    G.add_node(node_id, label=node.name)
+                else:
+                    # Internal nodes don't get labels (or get None)
+                    G.add_node(node_id, label=None)
+
+                # Add edge from parent to this node
+                if not node.is_root():
+                    parent_id = id(node.up)
+                    G.add_edge(parent_id, node_id)
+
+            return G
+
+        # Get graphs for both trees
+        graph1 = tree_to_simple_graph(self)
+        graph2 = tree_to_simple_graph(other)
+
+        # Compute edit distance with node matching based on labels
+        distance = next(nx.optimize_graph_edit_distance(
+            graph1, graph2,
+            node_match=lambda u, v: u.get('label') == v.get('label')
+        ))
+
+        if normalize:
+            normalization = max(
+                len(graph1.nodes) + len(graph1.edges),
+                len(graph2.nodes) + len(graph2.edges)
+            )
+            if normalization > 0:
+                distance /= normalization
+
+        return distance
+
+    def get_rf_distance(self, other: 'ReticulateTree', normalize=True) -> float:
+        '''
+        Compute Robinson-Foulds distance for MUL-trees.
+
+        RF distance counts bipartitions (splits) that differ between trees.
+        Works correctly with duplicated leaf labels (polyploid species).
+
+        Args:
+            other: Another ReticulateTree instance
+            normalize: If True, normalize by maximum possible RF distance
+
+        Returns:
+            RF distance between the two MUL-trees
+        '''
+        def get_bipartitions(tree_obj):
+            """
+            Extract all bipartitions from a tree.
+            Each bipartition is a frozenset of leaf names on one side of an edge.
+            """
+            bipartitions = set()
+
+            for node in tree_obj.tree.traverse():
+                if not node.is_leaf() and not node.is_root():
+                    # Get all leaf names in this subtree
+                    leaves = frozenset(leaf.name for leaf in node.get_leaves())
+                    # Only add non-trivial bipartitions (more than 1 leaf)
+                    if len(leaves) > 1:
+                        bipartitions.add(leaves)
+
+            return bipartitions
+
+        # Get bipartitions from both trees
+        bp1 = get_bipartitions(self)
+        bp2 = get_bipartitions(other)
+
+        # RF distance = symmetric difference (splits unique to each tree)
+        unique_to_1 = bp1 - bp2
+        unique_to_2 = bp2 - bp1
+        rf_distance = len(unique_to_1) + len(unique_to_2)
+
+        if normalize:
+            # Maximum possible RF = sum of all bipartitions in both trees
+            max_rf = len(bp1) + len(bp2)
+            if max_rf > 0:
+                rf_distance = rf_distance / max_rf
+
+        return rf_distance
+
     def __sub__(self, other: 'ReticulateTree') -> float:
         '''
         Overriding the minus operator to compute the edit distance between two ReticulateTree instances.
@@ -819,4 +922,4 @@ class ReticulateTree:
         if not isinstance(other, ReticulateTree):
             raise TypeError('Subtraction is only supported between ReticulateTree instances.')
         return self.get_edit_distance(other)
-        
+

@@ -135,7 +135,7 @@ class ConfigurationAnalyzer:
         print(f"Output: {self.base_dir}")
         print(f"{'='*80}\n")
 
-        total_plots = 34
+        total_plots = 36  # Updated: added 2 new distribution plots
         plot_num = 0
 
         # ========================================================================
@@ -321,8 +321,20 @@ class ConfigurationAnalyzer:
         self.plot_reticulation_error_distribution()
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Edit Distance Distribution...")
+        print(f"[{plot_num}/{total_plots}] Edit Distance Distribution (Network)...")
         self.plot_edit_distance_distribution()
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Edit Distance MUL-tree Distribution...")
+        self.plot_metric_distribution('edit_distance_multree',
+                                      'Edit Distance (MUL-tree)',
+                                      '08b_edit_distance_multree_distribution')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] RF Distance Distribution...")
+        self.plot_metric_distribution('rf_distance',
+                                      'Robinson-Foulds Distance (MUL-tree)',
+                                      '08c_rf_distance_distribution')
 
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Per-Network Completion Breakdown...")
@@ -734,6 +746,54 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "08_edit_distance_boxplot.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "08_edit_distance_boxplot.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_metric_distribution(self, metric_name: str, metric_label: str, filename_prefix: str):
+        """Generic method to plot distribution of any metric as box plots"""
+        if self.metrics is None:
+            print(f"  WARNING: No metrics data, skipping {metric_label}")
+            return
+
+        # Filter for this metric
+        metric_data = self.metrics[self.metrics['metric'] == metric_name]
+
+        if len(metric_data) == 0:
+            print(f"  WARNING: No data for metric '{metric_name}', skipping")
+            return
+
+        methods = sorted(metric_data['method'].unique())
+
+        # Prepare data for box plots
+        plot_data = []
+        for method in methods:
+            method_data = metric_data[metric_data['method'] == method]
+            plot_data.append(method_data['mean'].values)
+
+        fig, ax = plt.subplots(figsize=(12, 7))
+
+        # Create box plots
+        bp = ax.boxplot(plot_data, labels=methods, patch_artist=True,
+                       widths=0.6,
+                       boxprops=dict(linewidth=1.5, edgecolor='black'),
+                       whiskerprops=dict(linewidth=1.5),
+                       capprops=dict(linewidth=1.5),
+                       medianprops=dict(linewidth=2, color='red'))
+
+        # Color boxes
+        for patch, method in zip(bp['boxes'], methods):
+            patch.set_facecolor(METHOD_COLORS.get(method, '#CCCCCC'))
+            patch.set_alpha(0.7)
+
+        ax.set_ylabel(metric_label, fontsize=14, fontweight='bold')
+        ax.set_xlabel('Method', fontsize=14, fontweight='bold')
+        ax.set_title(f'{metric_label} Distribution (ILS {self.ils_level})',
+                    fontsize=15, fontweight='bold', pad=20)
+        ax.grid(True, alpha=0.25, axis='y', linestyle='--')
+        plt.xticks(rotation=0, fontsize=12)
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / f"{filename_prefix}.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / f"{filename_prefix}.png", bbox_inches='tight', dpi=300)
         plt.close()
 
     def plot_per_network_breakdown(self):

@@ -223,18 +223,22 @@ def pairwise_compare(obj1, obj2, df=None):
         precomputed = run_hungarian_on_groups(row1['reticulation_leaves'].values(),
                                                             row2['reticulation_leaves'].values())
         return {
-            'edit_distance':        row1['object'] - row2['object'],
-            'num_rets_diff':        compare_num_rets(row1['reticulation_count'], row2['reticulation_count']),
-            'ploidy_diff':          compare_ploidy_diff(row1['leaf_counts'], row2['leaf_counts']),
-            'ret_leaf_jaccard':     match_and_compare(row1['reticulation_leaves'], row2['reticulation_leaves'],
+            'edit_distance':            row1['object'] - row2['object'],  # Old: on folded networks
+            'edit_distance_multree':    row1['object'].get_edit_distance_multree(row2['object']),  # NEW: on MUL-trees
+            'rf_distance':              row1['object'].get_rf_distance(row2['object']),  # NEW: RF on MUL-trees
+            'num_rets_diff':            compare_num_rets(row1['reticulation_count'], row2['reticulation_count']),
+            'ploidy_diff':              compare_ploidy_diff(row1['leaf_counts'], row2['leaf_counts']),
+            'ret_leaf_jaccard':         match_and_compare(row1['reticulation_leaves'], row2['reticulation_leaves'],
                                         precomputed_match = precomputed),
-            'ret_sisters_jaccard':  match_and_compare(row1['reticulation_leaves'], row2['reticulation_leaves'],
+            'ret_sisters_jaccard':      match_and_compare(row1['reticulation_leaves'], row2['reticulation_leaves'],
                                         row1['reticulation_sisters'], row2['reticulation_sisters'], precomputed),
         }
     # object-based comparison
     precomputed = run_hungarian_on_groups(obj1.get_reticulation_leaves().values(), obj2.get_reticulation_leaves().values())
     return {
-        'edit_distance':            obj1 - obj2,
+        'edit_distance':            obj1 - obj2,  # Old: edit distance on folded networks (kept for compatibility)
+        'edit_distance_multree':    obj1.get_edit_distance_multree(obj2),  # NEW: edit distance on MUL-trees
+        'rf_distance':              obj1.get_rf_distance(obj2),  # NEW: Robinson-Foulds on MUL-trees
         'num_rets_diff':            compare_num_rets(obj1.get_reticulation_count(), obj2.get_reticulation_count()),
         'ploidy_diff':              compare_ploidy_diff(obj1.get_leaf_counts(), obj2.get_leaf_counts()),
         'ret_leaf_jaccard':         match_and_compare(obj1.get_reticulation_leaves(), obj2.get_reticulation_leaves(),
