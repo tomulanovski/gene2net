@@ -100,6 +100,7 @@ class MultiLevelSummary:
         metrics_to_pivot = {
             'edit_distance': 'edit_distance',
             'num_rets_diff': 'num_rets_diff',
+            'num_rets_bias': 'num_rets_bias',  # NEW: Signed difference (bias)
             'ploidy_diff.dist': 'ploidy_diff',
             'ret_leaf_jaccard.dist': 'ret_leaf_jaccard',
             'ret_sisters_jaccard.dist': 'ret_sisters_jaccard'
@@ -147,6 +148,7 @@ class MultiLevelSummary:
         Output columns: method, metric, avg_value, avg_rank, num_best, num_worst
         """
         # Metrics to rank (lower is better for distances)
+        # Note: num_rets_bias is NOT ranked (it's signed, not an error magnitude)
         distance_metrics = ['edit_distance', 'num_rets_diff', 'ploidy_diff.dist',
                            'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist']
 
@@ -254,8 +256,8 @@ class MultiLevelSummary:
         # Compute correlations for each (method, metric, property) combination
         correlations = []
 
-        # Focus on main distance metrics
-        main_metrics = ['edit_distance', 'num_rets_diff']
+        # Focus on main distance metrics (bias is signed, not a distance metric for correlation)
+        main_metrics = ['edit_distance', 'num_rets_diff', 'num_rets_bias']
 
         for method in merged['method'].unique():
             for metric in main_metrics:

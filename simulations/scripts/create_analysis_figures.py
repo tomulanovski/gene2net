@@ -598,19 +598,23 @@ class ConfigurationAnalyzer:
         plt.close()
 
     def plot_folding_accuracy_comparison(self):
-        """Compare folding methods: which produces more accurate reticulation counts?"""
+        """Compare folding methods: which produces more accurate reticulation counts? Shows bias."""
         if self.metrics is None:
             print("  WARNING: No metrics data, skipping folding accuracy comparison")
             return
 
-        # Get reticulation error data
-        ret_error = self.metrics[self.metrics['metric'] == 'num_rets_diff'].copy()
+        # Get reticulation bias data (signed errors)
+        ret_bias = self.metrics[self.metrics['metric'] == 'num_rets_bias'].copy()
 
-        if len(ret_error) == 0:
-            print("  WARNING: No num_rets_diff data found")
-            return
+        if len(ret_bias) == 0:
+            # Fall back to num_rets_diff for backward compatibility
+            print("  WARNING: No num_rets_bias data found, falling back to num_rets_diff")
+            ret_bias = self.metrics[self.metrics['metric'] == 'num_rets_diff'].copy()
+            if len(ret_bias) == 0:
+                print("  WARNING: No num_rets_diff data found")
+                return
 
-        methods = sorted(ret_error['method'].unique())
+        methods = sorted(ret_bias['method'].unique())
         n_methods = len(methods)
 
         ncols = min(3, n_methods)
@@ -620,20 +624,25 @@ class ConfigurationAnalyzer:
 
         for idx, method in enumerate(methods):
             ax = axes[idx]
-            method_data = ret_error[ret_error['method'] == method]
+            method_data = ret_bias[ret_bias['method'] == method]
 
-            # Get absolute mean error
-            abs_errors = method_data['mean'].abs()
+            # Get signed errors (bias)
+            biases = method_data['mean']
 
-            ax.hist(abs_errors, bins=20, color=METHOD_COLORS.get(method, '#000000'),
+            # Create histogram
+            ax.hist(biases, bins=20, color=METHOD_COLORS.get(method, '#000000'),
                    alpha=0.7, edgecolor='black')
 
-            mean_error = abs_errors.mean()
-            ax.axvline(mean_error, color='red', linestyle='--', linewidth=2.5,
-                      label=f'Mean = {mean_error:.2f}')
+            mean_bias = biases.mean()
+            mae = biases.abs().mean()
+            
+            # Show both mean bias and MAE
+            ax.axvline(mean_bias, color='red', linestyle='--', linewidth=2.5,
+                      label=f'Mean bias = {mean_bias:+.2f}')
+            ax.axvline(0, color='black', linestyle='-', linewidth=1.5, alpha=0.5)
 
-            ax.set_xlabel('Absolute Reticulation Count Error', fontsize=11, fontweight='bold')
-            ax.set_title(method, fontsize=12, fontweight='bold')
+            ax.set_xlabel('Reticulation Count Bias\n(+ = Over-estimation)', fontsize=11, fontweight='bold')
+            ax.set_title(f'{method}\nMAE = {mae:.2f}', fontsize=12, fontweight='bold')
             ax.legend(fontsize=10)
             ax.grid(True, alpha=0.25, axis='y')
 
@@ -642,38 +651,47 @@ class ConfigurationAnalyzer:
             axes[idx].set_visible(False)
 
         axes[0].set_ylabel('Frequency', fontsize=11, fontweight='bold')
-        fig.suptitle(f'Reticulation Count Accuracy by Method (ILS {self.ils_level})',
+        fig.suptitle(f'Reticulation Count Bias by Method (ILS {self.ils_level})',
                     fontsize=15, fontweight='bold', y=0.995)
 
         plt.tight_layout()
-        fig.savefig(self.plots_dir / "06_reticulation_accuracy.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "06_reticulation_accuracy.png", bbox_inches='tight', dpi=300)
+        fig.savefig(self.plots_dir / "06_reticulation_bias_histogram.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "06_reticulation_bias_histogram.png", bbox_inches='tight', dpi=300)
         plt.close()
 
     def plot_reticulation_error_distribution(self):
-        """Boxplot of reticulation count errors"""
+        """Boxplot of reticulation count errors - now shows BIAS (signed differences)"""
         if self.metrics is None:
             return
 
-        ret_error = self.metrics[self.metrics['metric'] == 'num_rets_diff'].copy()
+        # Use num_rets_bias (signed) instead of num_rets_diff (absolute)
+        ret_bias = self.metrics[self.metrics['metric'] == 'num_rets_bias'].copy()
 
-        if len(ret_error) == 0:
-            return
+        if len(ret_bias) == 0:
+            # Fall back to num_rets_diff for backward compatibility
+            ret_bias = self.metrics[self.metrics['metric'] == 'num_rets_diff'].copy()
+            if len(ret_bias) == 0:
+                return
+            metric_name = 'num_rets_diff'
+        else:
+            metric_name = 'num_rets_bias'
 
-        methods = sorted(ret_error['method'].unique())
+        methods = sorted(ret_bias['method'].unique())
 
         fig, ax = plt.subplots(figsize=(12, 7))
 
         data_by_method = []
         labels = []
         colors = []
+        mean_biases = []
 
         for method in methods:
-            method_data = ret_error[ret_error['method'] == method]['mean'].dropna()
+            method_data = ret_bias[ret_bias['method'] == method]['mean'].dropna()
             if len(method_data) > 0:
                 data_by_method.append(method_data)
                 labels.append(method)
                 colors.append(METHOD_COLORS.get(method, '#000000'))
+                mean_biases.append(method_data.mean())
 
         bp = ax.boxplot(data_by_method, labels=labels, patch_artist=True,
                        widths=0.6, showfliers=True,
@@ -686,18 +704,26 @@ class ConfigurationAnalyzer:
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
 
-        ax.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.5, label='Perfect accuracy')
-        ax.set_ylabel('Reticulation Count Difference\n(Inferred - True)', fontsize=14, fontweight='bold')
+        # Add mean bias annotations
+        for i, (method, mean_bias) in enumerate(zip(labels, mean_biases), 1):
+            sign = '+' if mean_bias >= 0 else ''
+            ax.text(i, ax.get_ylim()[1] * 0.95, f'{sign}{mean_bias:.2f}',
+                   ha='center', va='top', fontsize=10, fontweight='bold',
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='gray', alpha=0.8))
+
+        ax.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.5, label='Perfect accuracy (bias=0)')
+        ax.set_ylabel('Reticulation Count Bias\n(Inferred - True)\n[Positive = Over-estimation]', 
+                     fontsize=14, fontweight='bold')
         ax.set_xlabel('Method', fontsize=14, fontweight='bold')
-        ax.set_title(f'Reticulation Count Error Distribution (ILS {self.ils_level})',
+        ax.set_title(f'Reticulation Count Bias Distribution (ILS {self.ils_level})\nMean bias shown above each box',
                     fontsize=15, fontweight='bold', pad=20)
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
         ax.legend(fontsize=11)
         plt.xticks(rotation=0, fontsize=12)
 
         plt.tight_layout()
-        fig.savefig(self.plots_dir / "07_reticulation_error_boxplot.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "07_reticulation_error_boxplot.png", bbox_inches='tight', dpi=300)
+        fig.savefig(self.plots_dir / "07_reticulation_bias_boxplot.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "07_reticulation_bias_boxplot.png", bbox_inches='tight', dpi=300)
         plt.close()
 
     def plot_edit_distance_distribution(self):
@@ -858,7 +884,7 @@ class ConfigurationAnalyzer:
         plt.close()
 
     def plot_method_summary(self):
-        """Summary bar plot: completion rate, edit distance, and reticulation error"""
+        """Summary bar plot: completion rate, edit distance, and reticulation error with bias"""
         if self.inventory is None or self.metrics is None:
             return
 
@@ -867,6 +893,7 @@ class ConfigurationAnalyzer:
         completion_rates = []
         edit_distances = []
         ret_errors = []
+        ret_biases = []  # NEW: track bias
 
         for method in methods:
             method_inv = self.inventory[self.inventory['method'] == method]
@@ -882,16 +909,27 @@ class ConfigurationAnalyzer:
             else:
                 edit_distances.append(np.nan)
 
+            # Absolute error (MAE)
             method_ret = self.metrics[
                 (self.metrics['method'] == method) &
                 (self.metrics['metric'] == 'num_rets_diff')
             ]
             if len(method_ret) > 0:
-                ret_errors.append(method_ret['mean'].abs().mean())
+                ret_errors.append(method_ret['mean'].mean())  # Already absolute
             else:
                 ret_errors.append(np.nan)
+            
+            # Bias (signed error)
+            method_bias = self.metrics[
+                (self.metrics['method'] == method) &
+                (self.metrics['metric'] == 'num_rets_bias')
+            ]
+            if len(method_bias) > 0:
+                ret_biases.append(method_bias['mean'].mean())
+            else:
+                ret_biases.append(np.nan)
 
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 6))
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
 
         colors = [METHOD_COLORS.get(m, '#000000') for m in methods]
 
@@ -923,11 +961,11 @@ class ConfigurationAnalyzer:
                 ax2.text(bar.get_x() + bar.get_width()/2., height,
                         f'{val:.3f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
 
-        # Reticulation error
+        # Reticulation absolute error (MAE)
         bars3 = ax3.bar(methods, ret_errors, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
-        ax3.set_ylabel('Mean Absolute Reticulation Error', fontsize=13, fontweight='bold')
+        ax3.set_ylabel('Mean Absolute Error (MAE)', fontsize=13, fontweight='bold')
         ax3.set_xlabel('Method', fontsize=13, fontweight='bold')
-        ax3.set_title('Reticulation Accuracy (lower = better)', fontsize=14, fontweight='bold', pad=15)
+        ax3.set_title('Reticulation Count: Absolute Error', fontsize=14, fontweight='bold', pad=15)
         ax3.grid(True, alpha=0.25, axis='y', linestyle='--')
         ax3.tick_params(axis='x', rotation=0)
 
@@ -935,10 +973,40 @@ class ConfigurationAnalyzer:
             if not np.isnan(val):
                 height = bar.get_height()
                 ax3.text(bar.get_x() + bar.get_width()/2., height,
-                        f'{val:.2f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
+                        f'{val:.2f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+        # Reticulation bias (signed error)
+        # Color bars based on bias direction: red for over-estimation, blue for under-estimation
+        bias_colors = []
+        for bias in ret_biases:
+            if np.isnan(bias):
+                bias_colors.append('#CCCCCC')
+            elif bias > 0:
+                bias_colors.append('#D62728')  # Red for over-estimation
+            else:
+                bias_colors.append('#1F77B4')  # Blue for under-estimation
+        
+        bars4 = ax4.bar(methods, ret_biases, color=bias_colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+        ax4.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.5, label='No bias')
+        ax4.set_ylabel('Mean Bias (Signed Error)', fontsize=13, fontweight='bold')
+        ax4.set_xlabel('Method', fontsize=13, fontweight='bold')
+        ax4.set_title('Reticulation Count: Bias\n[+ = Over-estimation, - = Under-estimation]', 
+                     fontsize=14, fontweight='bold', pad=15)
+        ax4.grid(True, alpha=0.25, axis='y', linestyle='--')
+        ax4.tick_params(axis='x', rotation=0)
+        ax4.legend(fontsize=11)
+
+        for bar, val in zip(bars4, ret_biases):
+            if not np.isnan(val):
+                height = bar.get_height()
+                sign = '+' if val >= 0 else ''
+                va = 'bottom' if val >= 0 else 'top'
+                offset = 0.05 if val >= 0 else -0.05
+                ax4.text(bar.get_x() + bar.get_width()/2., height + offset * (ax4.get_ylim()[1] - ax4.get_ylim()[0]),
+                        f'{sign}{val:.2f}', ha='center', va=va, fontsize=9, fontweight='bold')
 
         fig.suptitle(f'Method Performance Summary (ILS {self.ils_level})',
-                    fontsize=16, fontweight='bold', y=1.00)
+                    fontsize=16, fontweight='bold', y=0.995)
 
         plt.tight_layout()
         fig.savefig(self.plots_dir / "10_method_summary.pdf", bbox_inches='tight')
@@ -1399,16 +1467,29 @@ class ConfigurationAnalyzer:
             else:
                 mean_ed = std_ed = median_ed = np.nan
 
+            # Reticulation absolute error (MAE)
             method_ret = self.metrics[
                 (self.metrics['method'] == method) &
                 (self.metrics['metric'] == 'num_rets_diff')
             ]
 
             if len(method_ret) > 0:
-                mean_ret_err = method_ret['mean'].abs().mean()
-                median_ret_err = method_ret['mean'].abs().median()
+                mean_ret_err = method_ret['mean'].mean()  # Already absolute
+                median_ret_err = method_ret['mean'].median()
             else:
                 mean_ret_err = median_ret_err = np.nan
+            
+            # Reticulation bias (signed error)
+            method_bias = self.metrics[
+                (self.metrics['method'] == method) &
+                (self.metrics['metric'] == 'num_rets_bias')
+            ]
+
+            if len(method_bias) > 0:
+                mean_ret_bias = method_bias['mean'].mean()
+                median_ret_bias = method_bias['mean'].median()
+            else:
+                mean_ret_bias = median_ret_bias = np.nan
 
             summary_data.append({
                 'Method': method,
@@ -1418,8 +1499,10 @@ class ConfigurationAnalyzer:
                 'Mean_Edit_Distance': mean_ed,
                 'Median_Edit_Distance': median_ed,
                 'Std_Edit_Distance': std_ed,
-                'Mean_Reticulation_Error': mean_ret_err,
-                'Median_Reticulation_Error': median_ret_err
+                'Mean_Reticulation_MAE': mean_ret_err,
+                'Median_Reticulation_MAE': median_ret_err,
+                'Mean_Reticulation_Bias': mean_ret_bias,
+                'Median_Reticulation_Bias': median_ret_bias
             })
 
         df = pd.DataFrame(summary_data)

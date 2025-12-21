@@ -12,7 +12,14 @@ must check that the GED for the polyphest's mul2net is OK...
 '''
 
 def compare_num_rets(ret_count_A, ret_count_B):
-    return abs(ret_count_A - ret_count_B)
+    """
+    Return signed difference: ret_count_B - ret_count_A (predicted - truth).
+    Positive = over-estimation, Negative = under-estimation.
+    Also returns absolute difference for backward compatibility.
+    """
+    signed_diff = ret_count_B - ret_count_A
+    abs_diff = abs(signed_diff)
+    return {'signed': signed_diff, 'abs': abs_diff}
 
 def j_dist(intersect, union):
     return 0.0 if union == 0 else 1.0 - (intersect / union)
@@ -222,11 +229,16 @@ def pairwise_compare(obj1, obj2, df=None):
         row1, row2 = df.loc[obj1], df.loc[obj2]
         precomputed = run_hungarian_on_groups(row1['reticulation_leaves'].values(),
                                                             row2['reticulation_leaves'].values())
+        
+        # Get reticulation count comparison (returns dict with 'signed' and 'abs')
+        num_rets_comparison = compare_num_rets(row1['reticulation_count'], row2['reticulation_count'])
+        
         return {
             'edit_distance':            row1['object'] - row2['object'],  # Old: on folded networks
             'edit_distance_multree':    row1['object'].get_edit_distance_multree(row2['object']),  # NEW: on MUL-trees
             'rf_distance':              row1['object'].get_rf_distance(row2['object']),  # NEW: RF on MUL-trees
-            'num_rets_diff':            compare_num_rets(row1['reticulation_count'], row2['reticulation_count']),
+            'num_rets_diff':            num_rets_comparison['abs'],  # Absolute difference (backward compatible)
+            'num_rets_bias':            num_rets_comparison['signed'],  # NEW: Signed difference (bias)
             'ploidy_diff':              compare_ploidy_diff(row1['leaf_counts'], row2['leaf_counts']),
             'ret_leaf_jaccard':         match_and_compare(row1['reticulation_leaves'], row2['reticulation_leaves'],
                                         precomputed_match = precomputed),
@@ -235,11 +247,16 @@ def pairwise_compare(obj1, obj2, df=None):
         }
     # object-based comparison
     precomputed = run_hungarian_on_groups(obj1.get_reticulation_leaves().values(), obj2.get_reticulation_leaves().values())
+    
+    # Get reticulation count comparison (returns dict with 'signed' and 'abs')
+    num_rets_comparison = compare_num_rets(obj1.get_reticulation_count(), obj2.get_reticulation_count())
+    
     return {
         'edit_distance':            obj1 - obj2,  # Old: edit distance on folded networks (kept for compatibility)
         'edit_distance_multree':    obj1.get_edit_distance_multree(obj2),  # NEW: edit distance on MUL-trees
         'rf_distance':              obj1.get_rf_distance(obj2),  # NEW: Robinson-Foulds on MUL-trees
-        'num_rets_diff':            compare_num_rets(obj1.get_reticulation_count(), obj2.get_reticulation_count()),
+        'num_rets_diff':            num_rets_comparison['abs'],  # Absolute difference (backward compatible)
+        'num_rets_bias':            num_rets_comparison['signed'],  # NEW: Signed difference (bias)
         'ploidy_diff':              compare_ploidy_diff(obj1.get_leaf_counts(), obj2.get_leaf_counts()),
         'ret_leaf_jaccard':         match_and_compare(obj1.get_reticulation_leaves(), obj2.get_reticulation_leaves(),
                                         precomputed_match = precomputed),
@@ -251,12 +268,14 @@ def are_identical(obj1, obj2):
     '''
     Check if two ReticulateTree objects are identical by comparing the measurements.
     '''
-    # Compare all 6 measurements
+    # Compare all measurements
     comp = pairwise_compare(obj1, obj2)
     print(f'Comparison vector: {comp.values()}')
     # Edit distancd is bugged probably due to internal nodes being unmatched...
+    # num_rets_diff now returns absolute difference, num_rets_bias returns signed difference
     return (#comp['edit_distance'] == 0 and
             comp['num_rets_diff'] == 0 and
+            comp['num_rets_bias'] == 0 and
             comp['ploidy_diff']['dist'] == 0.0 and
             comp['ret_leaf_jaccard']['dist'] == 0.0 and
             comp['ret_sisters_jaccard']['dist'] == 0.0)
