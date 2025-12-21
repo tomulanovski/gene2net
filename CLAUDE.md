@@ -96,22 +96,32 @@ python create_analysis_figures.py --config conf_ils_low_10M conf_ils_medium_10M 
 ```
 simulations/analysis/summary/{config}/
 ├── plots/
-│   ├── 01_success_vs_reticulations.pdf/png  # Success rate vs H_Strict
-│   ├── 02_success_vs_polyploids.pdf/png     # Success rate vs Num_Polyploids
-│   ├── 03_success_vs_wgd.pdf/png            # Success rate vs Total_WGD
-│   ├── 04_method_performance_overview.pdf/png
-│   ├── 05_method_network_heatmap.pdf/png
-│   ├── 06_reticulation_accuracy.pdf/png
-│   └── 07_difficulty_correlations.pdf/png
+│   ├── 01_combined_completion_vs_H_Strict.pdf/png        # Completion rate vs Holm Fold
+│   ├── 02_combined_completion_vs_H_Relaxed.pdf/png       # Completion rate vs Polyphest Fold
+│   ├── 03_combined_completion_vs_Num_Polyploids.pdf/png
+│   ├── 04_combined_completion_vs_Total_WGD.pdf/png
+│   ├── 05_folding_comparison.pdf/png                     # Holm vs Polyphest comparison
+│   ├── 06_folding_accuracy_comparison.pdf/png
+│   ├── 07_reticulation_error_distribution.pdf/png
+│   ├── 08_edit_distance_distribution.pdf/png
+│   ├── 09_per_network_breakdown.pdf/png
+│   ├── 10_method_summary.pdf/png
+│   └── individual_methods/                                # Faceted per-method views
+│       ├── 01_faceted_completion_vs_H_Strict.pdf/png
+│       ├── 02_faceted_completion_vs_H_Relaxed.pdf/png
+│       ├── 03_faceted_completion_vs_Num_Polyploids.pdf/png
+│       └── 04_faceted_completion_vs_Total_WGD.pdf/png
 └── tables/
-    ├── summary_table.csv
-    └── summary_simple.csv
+    ├── 01_method_performance_summary.csv
+    └── 02_per_network_performance.csv
 ```
 
 **Key features:**
 - Non-interactive matplotlib backend (no X11 required)
 - Per-configuration organization for easy comparison across ILS levels
-- Comprehensive evaluation: success rates, reticulation accuracy, polyploid identification
+- Both combined plots (all methods) and faceted plots (per-method subplots)
+- Error bars showing variability across networks
+- Completion rate analysis with Holm Fold and Polyphest Fold comparisons
 - Network characteristics from `simulations/networks/mul_tree_final_stats.csv`
 
 ### Running Analyses on Real Data
@@ -247,15 +257,21 @@ Created `create_analysis_figures.py` for comprehensive method evaluation:
 - Non-interactive matplotlib backend (no X11 required for cluster use)
 - Automatic path resolution relative to script location
 - Uses `inferred_exists` boolean column from inventory CSV
+- Both combined plots (all methods) and faceted plots (per-method subplots)
+- Error bars showing variability across networks
+- Smart network count annotations (only when multiple networks aggregate)
 
-**Core plots:**
-1. Success rate vs. number of reticulations (H_Strict)
-2. Success rate vs. number of polyploids
-3. Success rate vs. total WGD events
-4. Method performance overview
-5. Method-network heatmap
-6. Reticulation accuracy scatter plot
-7. Difficulty correlation matrix
+**Generated figures (14 total):**
+1. Completion rate vs. reticulations (Holm Fold) - combined & faceted
+2. Completion rate vs. reticulations (Polyphest Fold) - combined & faceted
+3. Completion rate vs. number of polyploids - combined & faceted
+4. Completion rate vs. total WGD events - combined & faceted
+5. Folding method comparison (Holm vs Polyphest)
+6. Folding accuracy comparison
+7. Reticulation error distribution
+8. Edit distance distribution
+9. Per-network completion breakdown
+10. Method performance summary
 
 **Usage:**
 ```bash

@@ -3,7 +3,7 @@
 create_analysis_figures.py - Publication-Quality Analysis Figures
 
 Generates comprehensive, clean visualizations for phylogenetic network inference methods.
-Creates combined plots, per-method plots, and folding method comparisons.
+Creates combined plots and faceted per-method views.
 
 Usage:
     # Single configuration
@@ -107,82 +107,248 @@ class ConfigurationAnalyzer:
         comparisons_file = self.base_dir / "comparisons_raw.csv"
         self.comparisons = pd.read_csv(comparisons_file) if comparisons_file.exists() else None
 
+        # Enrich network stats with derived metrics
+        self._prepare_enriched_stats()
+
         print(f"\nLoaded data for {config}:")
         print(f"  Networks: {len(self.network_stats)}")
         print(f"  Inventory: {len(self.inventory) if self.inventory is not None else 0}")
         print(f"  Metrics: {len(self.metrics) if self.metrics is not None else 0}")
 
+    def _prepare_enriched_stats(self):
+        """Add derived columns to network_stats for additional analyses"""
+        # Polyploid ratio: proportion of species that are polyploid
+        self.network_stats['Polyploid_Ratio'] = (
+            self.network_stats['Num_Polyploids'] / self.network_stats['Num_Species']
+        ).fillna(0)
+
+        # Reticulation density: reticulations per species
+        self.network_stats['Ret_Density'] = (
+            self.network_stats['H_Strict'] / self.network_stats['Num_Species']
+        ).fillna(0)
+
     def generate_all_figures(self):
-        """Generate all analysis figures"""
+        """Generate all analysis figures - comprehensive suite"""
         print(f"\n{'='*80}")
-        print(f"Generating Analysis for: {self.config}")
+        print(f"Generating COMPREHENSIVE Analysis for: {self.config}")
         print(f"ILS Level: {self.ils_level}")
         print(f"Output: {self.base_dir}")
         print(f"{'='*80}\n")
 
-        # Core completion rate plots - combined and per-method
-        print("[1/15] Completion Rate vs Holm Fold (combined)...")
+        total_plots = 34
+        plot_num = 0
+
+        # ========================================================================
+        # CATEGORY 1: COMPLETION RATE vs NETWORK CHARACTERISTICS
+        # ========================================================================
+        print("\n" + "="*80)
+        print("CATEGORY 1: Completion Rate vs Network Characteristics")
+        print("="*80)
+
+        # Original characteristics
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Completion Rate vs Holm Fold (combined)...")
         self.plot_completion_vs_characteristic_combined(
-            'H_Strict', 'Number of Reticulations (Holm Fold)', '01_combined')
+            'H_Strict', 'Number of Reticulations (Holm Fold)', '01_combined_completion_vs_h_strict')
 
-        print("[2/15] Completion Rate vs Holm Fold (per method)...")
-        self.plot_completion_vs_characteristic_individual(
-            'H_Strict', 'Number of Reticulations (Holm Fold)', '01_individual')
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Completion Rate vs Holm Fold (faceted)...")
+        self.plot_completion_vs_characteristic_faceted(
+            'H_Strict', 'Number of Reticulations (Holm Fold)', '01_faceted_completion_vs_h_strict')
 
-        print("[3/15] Completion Rate vs Polyphest Fold (combined)...")
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Completion Rate vs Polyphest Fold (combined)...")
         self.plot_completion_vs_characteristic_combined(
-            'H_Relaxed', 'Number of Reticulations (Polyphest Fold)', '02_combined')
+            'H_Relaxed', 'Number of Reticulations (Polyphest Fold)', '02_combined_completion_vs_h_relaxed')
 
-        print("[4/15] Completion Rate vs Polyphest Fold (per method)...")
-        self.plot_completion_vs_characteristic_individual(
-            'H_Relaxed', 'Number of Reticulations (Polyphest Fold)', '02_individual')
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Completion Rate vs Polyphest Fold (faceted)...")
+        self.plot_completion_vs_characteristic_faceted(
+            'H_Relaxed', 'Number of Reticulations (Polyphest Fold)', '02_faceted_completion_vs_h_relaxed')
 
-        print("[5/15] Folding Method Comparison (completion rates)...")
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Completion Rate vs Polyploids (combined)...")
+        self.plot_completion_vs_characteristic_combined(
+            'Num_Polyploids', 'Number of Polyploid Species', '03_combined_completion_vs_polyploids')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Completion Rate vs Polyploids (faceted)...")
+        self.plot_completion_vs_characteristic_faceted(
+            'Num_Polyploids', 'Number of Polyploid Species', '03_faceted_completion_vs_polyploids')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Completion Rate vs Total WGD (combined)...")
+        self.plot_completion_vs_characteristic_combined(
+            'Total_WGD', 'Total WGD Events', '04_combined_completion_vs_total_wgd')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Completion Rate vs Total WGD (faceted)...")
+        self.plot_completion_vs_characteristic_faceted(
+            'Total_WGD', 'Total WGD Events', '04_faceted_completion_vs_total_wgd')
+
+        # NEW: Additional network characteristics
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Completion Rate vs Num Species (combined)...")
+        self.plot_completion_vs_characteristic_combined(
+            'Num_Species', 'Number of Species', '05_combined_completion_vs_num_species')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Completion Rate vs Num Species (faceted)...")
+        self.plot_completion_vs_characteristic_faceted(
+            'Num_Species', 'Number of Species', '05_faceted_completion_vs_num_species')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Completion Rate vs Max Copies (combined)...")
+        self.plot_completion_vs_characteristic_combined(
+            'Max_Copies', 'Maximum Copies per Species', '06_combined_completion_vs_max_copies')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Completion Rate vs Max Copies (faceted)...")
+        self.plot_completion_vs_characteristic_faceted(
+            'Max_Copies', 'Maximum Copies per Species', '06_faceted_completion_vs_max_copies')
+
+        # ========================================================================
+        # CATEGORY 2: EDIT DISTANCE (ACCURACY) vs NETWORK CHARACTERISTICS
+        # ========================================================================
+        print("\n" + "="*80)
+        print("CATEGORY 2: Edit Distance (Accuracy) vs Network Characteristics")
+        print("="*80)
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs Num Species (combined)...")
+        self.plot_accuracy_vs_characteristic_combined(
+            'Num_Species', 'Number of Species', 'edit_distance',
+            'Normalized Edit Distance', '11_combined_editdist_vs_num_species')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs Num Species (faceted)...")
+        self.plot_accuracy_vs_characteristic_faceted(
+            'Num_Species', 'Number of Species', 'edit_distance',
+            'Normalized Edit Distance', '11_faceted_editdist_vs_num_species')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs H_Strict (combined)...")
+        self.plot_accuracy_vs_characteristic_combined(
+            'H_Strict', 'Number of Reticulations (Holm Fold)', 'edit_distance',
+            'Normalized Edit Distance', '12_combined_editdist_vs_h_strict')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs H_Strict (faceted)...")
+        self.plot_accuracy_vs_characteristic_faceted(
+            'H_Strict', 'Number of Reticulations (Holm Fold)', 'edit_distance',
+            'Normalized Edit Distance', '12_faceted_editdist_vs_h_strict')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs Num Polyploids (combined)...")
+        self.plot_accuracy_vs_characteristic_combined(
+            'Num_Polyploids', 'Number of Polyploid Species', 'edit_distance',
+            'Normalized Edit Distance', '13_combined_editdist_vs_polyploids')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs Num Polyploids (faceted)...")
+        self.plot_accuracy_vs_characteristic_faceted(
+            'Num_Polyploids', 'Number of Polyploid Species', 'edit_distance',
+            'Normalized Edit Distance', '13_faceted_editdist_vs_polyploids')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs Max Copies (combined)...")
+        self.plot_accuracy_vs_characteristic_combined(
+            'Max_Copies', 'Maximum Copies per Species', 'edit_distance',
+            'Normalized Edit Distance', '14_combined_editdist_vs_max_copies')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs Max Copies (faceted)...")
+        self.plot_accuracy_vs_characteristic_faceted(
+            'Max_Copies', 'Maximum Copies per Species', 'edit_distance',
+            'Normalized Edit Distance', '14_faceted_editdist_vs_max_copies')
+
+        # ========================================================================
+        # CATEGORY 3: ADVANCED METRICS (Jaccard, Polyploid F1)
+        # ========================================================================
+        print("\n" + "="*80)
+        print("CATEGORY 3: Advanced Performance Metrics")
+        print("="*80)
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Reticulation Leaf Jaccard vs H_Strict (combined)...")
+        self.plot_jaccard_vs_characteristic_combined(
+            'H_Strict', 'Number of Reticulations (Holm Fold)',
+            'ret_leaf_jaccard', 'Reticulation Leaf Set Jaccard',
+            '21_combined_ret_leaf_jaccard_vs_h_strict')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Reticulation Leaf Jaccard vs H_Strict (faceted)...")
+        self.plot_jaccard_vs_characteristic_faceted(
+            'H_Strict', 'Number of Reticulations (Holm Fold)',
+            'ret_leaf_jaccard', 'Reticulation Leaf Set Jaccard',
+            '21_faceted_ret_leaf_jaccard_vs_h_strict')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Sister Relationship Jaccard vs H_Strict (combined)...")
+        self.plot_jaccard_vs_characteristic_combined(
+            'H_Strict', 'Number of Reticulations (Holm Fold)',
+            'ret_sisters_jaccard', 'Sister Relationship Jaccard',
+            '22_combined_ret_sisters_jaccard_vs_h_strict')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Sister Relationship Jaccard vs H_Strict (faceted)...")
+        self.plot_jaccard_vs_characteristic_faceted(
+            'H_Strict', 'Number of Reticulations (Holm Fold)',
+            'ret_sisters_jaccard', 'Sister Relationship Jaccard',
+            '22_faceted_ret_sisters_jaccard_vs_h_strict')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Polyploid Identification F1 Score...")
+        self.plot_polyploid_f1_performance()
+
+        # ========================================================================
+        # CATEGORY 4: DISTRIBUTIONS, COMPARISONS, AND SUMMARIES
+        # ========================================================================
+        print("\n" + "="*80)
+        print("CATEGORY 4: Distributions, Comparisons, and Summary Plots")
+        print("="*80)
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Folding Method Comparison (completion rates)...")
         self.plot_folding_comparison()
 
-        print("[6/15] Folding Method Accuracy Comparison...")
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Folding Method Accuracy Comparison...")
         self.plot_folding_accuracy_comparison()
 
-        print("[7/15] Completion Rate vs Polyploids (combined)...")
-        self.plot_completion_vs_characteristic_combined(
-            'Num_Polyploids', 'Number of Polyploid Species', '03_combined')
-
-        print("[8/15] Completion Rate vs Polyploids (per method)...")
-        self.plot_completion_vs_characteristic_individual(
-            'Num_Polyploids', 'Number of Polyploid Species', '03_individual')
-
-        print("[9/15] Completion Rate vs Total WGD (combined)...")
-        self.plot_completion_vs_characteristic_combined(
-            'Total_WGD', 'Total WGD Events', '04_combined')
-
-        print("[10/15] Completion Rate vs Total WGD (per method)...")
-        self.plot_completion_vs_characteristic_individual(
-            'Total_WGD', 'Total WGD Events', '04_individual')
-
-        # Performance and accuracy plots
-        print("[11/15] Reticulation Error Distribution...")
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Reticulation Error Distribution...")
         self.plot_reticulation_error_distribution()
 
-        print("[12/15] Edit Distance Distribution...")
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Edit Distance Distribution...")
         self.plot_edit_distance_distribution()
 
-        print("[13/15] Accuracy Heatmap...")
-        self.plot_accuracy_heatmap()
-
-        print("[14/15] Per-Network Completion Breakdown...")
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Per-Network Completion Breakdown...")
         self.plot_per_network_breakdown()
 
-        print("[15/15] Method Performance Summary...")
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Method Performance Summary...")
         self.plot_method_summary()
 
-        # Generate summary table
-        print("[Tables] Generating summary tables...")
-        self.generate_summary_table()
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Comprehensive Correlation Heatmap...")
+        self.plot_comprehensive_correlation_heatmap()
+
+        # ========================================================================
+        # TABLES
+        # ========================================================================
+        print("\n" + "="*80)
+        print("Generating Summary Tables")
+        print("="*80)
+        self.generate_summary_tables()
 
         print(f"\n{'='*80}")
-        print(f"✓ Analysis complete! Outputs in:")
-        print(f"  Combined plots: {self.plots_dir}")
-        print(f"  Individual plots: {self.plots_individual_dir}")
+        print(f"✓ COMPREHENSIVE ANALYSIS COMPLETE!")
+        print(f"  Generated {plot_num} plots across 4 categories")
+        print(f"  Plots: {self.plots_dir}")
+        print(f"  Faceted plots: {self.plots_individual_dir}")
         print(f"  Tables: {self.tables_dir}")
         print(f"{'='*80}\n")
 
@@ -263,8 +429,8 @@ class ConfigurationAnalyzer:
         fig.savefig(self.plots_dir / f"{fig_prefix}_{char_col.lower()}.png", bbox_inches='tight', dpi=300)
         plt.close()
 
-    def plot_completion_vs_characteristic_individual(self, char_col: str, char_label: str, fig_prefix: str):
-        """Plot completion rate vs characteristic - one file per method"""
+    def plot_completion_vs_characteristic_faceted(self, char_col: str, char_label: str, fig_prefix: str):
+        """Plot completion rate vs characteristic - faceted subplots, one per method"""
         if self.inventory is None:
             return
 
@@ -278,10 +444,16 @@ class ConfigurationAnalyzer:
         inv = inv.dropna(subset=[char_col])
 
         methods = sorted(inv['method'].unique())
+        n_methods = len(methods)
 
-        for method in methods:
-            fig, ax = plt.subplots(figsize=(10, 6))
+        # Create faceted plot
+        ncols = min(3, n_methods)
+        nrows = (n_methods + ncols - 1) // ncols
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6*ncols, 5*nrows), squeeze=False)
+        axes = axes.flatten()
 
+        for idx, method in enumerate(methods):
+            ax = axes[idx]
             method_inv = inv[inv['method'] == method]
 
             # Calculate stats per characteristic value
@@ -316,28 +488,36 @@ class ConfigurationAnalyzer:
                            markeredgewidth=2,
                            markeredgecolor='white')
 
-                # Add network count annotations
+                # Only show network count if multiple networks contribute to same point
                 for _, row in grouped_df.iterrows():
-                    ax.annotate(f"n={int(row['n_networks'])}",
-                               xy=(row[char_col], row['completion_rate']),
-                               xytext=(0, 10), textcoords='offset points',
-                               ha='center', fontsize=9, color='gray')
+                    if row['n_networks'] > 1:
+                        ax.annotate(f"n={int(row['n_networks'])}",
+                                   xy=(row[char_col], row['completion_rate']),
+                                   xytext=(0, 10), textcoords='offset points',
+                                   ha='center', fontsize=9, color='dimgray',
+                                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='gray', alpha=0.7))
 
-            ax.set_xlabel(char_label, fontsize=13, fontweight='bold')
-            ax.set_ylabel('Completion Rate (%)', fontsize=13, fontweight='bold')
-            ax.set_title(f'{method}\nCompletion Rate vs {char_label} (ILS {self.ils_level})',
-                        fontsize=14, fontweight='bold', pad=15)
+            ax.set_xlabel(char_label, fontsize=12, fontweight='bold')
+            ax.set_ylabel('Completion Rate (%)', fontsize=12, fontweight='bold')
+            ax.set_title(f'{method}',
+                        fontsize=13, fontweight='bold', pad=10)
             ax.grid(True, alpha=0.25, linestyle='--')
             ax.set_ylim(-5, 105)
 
             if inv[char_col].dtype in ['int64', 'int32']:
                 ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
 
-            plt.tight_layout()
-            safe_method = method.replace('_', '-')
-            fig.savefig(self.plots_individual_dir / f"{fig_prefix}_{char_col.lower()}_{safe_method}.pdf", bbox_inches='tight')
-            fig.savefig(self.plots_individual_dir / f"{fig_prefix}_{char_col.lower()}_{safe_method}.png", bbox_inches='tight', dpi=300)
-            plt.close()
+        # Hide unused subplots
+        for idx in range(n_methods, len(axes)):
+            axes[idx].set_visible(False)
+
+        fig.suptitle(f'Completion Rate vs {char_label} (ILS {self.ils_level})',
+                    fontsize=16, fontweight='bold', y=0.995)
+
+        plt.tight_layout()
+        fig.savefig(self.plots_individual_dir / f"{fig_prefix}_{char_col.lower()}.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_individual_dir / f"{fig_prefix}_{char_col.lower()}.png", bbox_inches='tight', dpi=300)
+        plt.close()
 
     def plot_folding_comparison(self):
         """Compare Holm Fold vs Polyphest Fold - completion rates"""
@@ -356,11 +536,13 @@ class ConfigurationAnalyzer:
         methods = sorted(inv['method'].unique())
         n_methods = len(methods)
 
-        fig, axes = plt.subplots(1, n_methods, figsize=(5*n_methods, 5), sharey=True)
-        if n_methods == 1:
-            axes = [axes]
+        ncols = min(3, n_methods)
+        nrows = (n_methods + ncols - 1) // ncols
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6*ncols, 5*nrows), squeeze=False, sharey=True)
+        axes = axes.flatten()
 
-        for ax, method in zip(axes, methods):
+        for idx, method in enumerate(methods):
+            ax = axes[idx]
             method_inv = inv[inv['method'] == method]
 
             # Holm Fold
@@ -383,16 +565,20 @@ class ConfigurationAnalyzer:
                        's--', label='Polyphest Fold (θ=0.2)', color='#DE8F05', linewidth=2.5, markersize=8,
                        markeredgewidth=1.5, markeredgecolor='white')
 
-            ax.set_xlabel('Number of Reticulations', fontsize=13, fontweight='bold')
-            ax.set_title(method, fontsize=14, fontweight='bold', pad=10)
+            ax.set_xlabel('Number of Reticulations', fontsize=12, fontweight='bold')
+            ax.set_title(method, fontsize=13, fontweight='bold', pad=10)
             ax.grid(True, alpha=0.25, linestyle='--')
             ax.set_ylim(-5, 105)
             ax.legend(fontsize=10, framealpha=0.9)
             ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
 
-        axes[0].set_ylabel('Completion Rate (%)', fontsize=13, fontweight='bold')
+        # Hide unused subplots
+        for idx in range(n_methods, len(axes)):
+            axes[idx].set_visible(False)
+
+        axes[0].set_ylabel('Completion Rate (%)', fontsize=12, fontweight='bold')
         fig.suptitle(f'Folding Method Comparison: Completion Rates (ILS {self.ils_level})',
-                    fontsize=16, fontweight='bold', y=1.02)
+                    fontsize=16, fontweight='bold', y=0.995)
 
         plt.tight_layout()
         fig.savefig(self.plots_dir / "05_folding_completion_comparison.pdf", bbox_inches='tight')
@@ -412,18 +598,16 @@ class ConfigurationAnalyzer:
             print("  WARNING: No num_rets_diff data found")
             return
 
-        # We need to determine which folding was used for each method's output
-        # This requires knowing the folding method used in network comparison
-        # For now, we'll show absolute reticulation error by method
-
         methods = sorted(ret_error['method'].unique())
         n_methods = len(methods)
 
-        fig, axes = plt.subplots(1, n_methods, figsize=(5*n_methods, 5), sharey=True)
-        if n_methods == 1:
-            axes = [axes]
+        ncols = min(3, n_methods)
+        nrows = (n_methods + ncols - 1) // ncols
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6*ncols, 5*nrows), squeeze=False, sharey=True)
+        axes = axes.flatten()
 
-        for ax, method in zip(axes, methods):
+        for idx, method in enumerate(methods):
+            ax = axes[idx]
             method_data = ret_error[ret_error['method'] == method]
 
             # Get absolute mean error
@@ -436,14 +620,18 @@ class ConfigurationAnalyzer:
             ax.axvline(mean_error, color='red', linestyle='--', linewidth=2.5,
                       label=f'Mean = {mean_error:.2f}')
 
-            ax.set_xlabel('Absolute Reticulation Count Error', fontsize=12, fontweight='bold')
-            ax.set_title(method, fontsize=13, fontweight='bold')
+            ax.set_xlabel('Absolute Reticulation Count Error', fontsize=11, fontweight='bold')
+            ax.set_title(method, fontsize=12, fontweight='bold')
             ax.legend(fontsize=10)
             ax.grid(True, alpha=0.25, axis='y')
 
-        axes[0].set_ylabel('Frequency', fontsize=12, fontweight='bold')
+        # Hide unused subplots
+        for idx in range(n_methods, len(axes)):
+            axes[idx].set_visible(False)
+
+        axes[0].set_ylabel('Frequency', fontsize=11, fontweight='bold')
         fig.suptitle(f'Reticulation Count Accuracy by Method (ILS {self.ils_level})',
-                    fontsize=15, fontweight='bold', y=1.02)
+                    fontsize=15, fontweight='bold', y=0.995)
 
         plt.tight_layout()
         fig.savefig(self.plots_dir / "06_reticulation_accuracy.pdf", bbox_inches='tight')
@@ -536,7 +724,7 @@ class ConfigurationAnalyzer:
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
 
-        ax.set_ylabel('Edit Distance', fontsize=14, fontweight='bold')
+        ax.set_ylabel('Normalized Edit Distance\n(0 = identical, 1 = very different)', fontsize=14, fontweight='bold')
         ax.set_xlabel('Method', fontsize=14, fontweight='bold')
         ax.set_title(f'Edit Distance Distribution (ILS {self.ils_level})',
                     fontsize=15, fontweight='bold', pad=20)
@@ -546,41 +734,6 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "08_edit_distance_boxplot.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "08_edit_distance_boxplot.png", bbox_inches='tight', dpi=300)
-        plt.close()
-
-    def plot_accuracy_heatmap(self):
-        """Plot heatmap of edit distance for each method × network"""
-        if self.metrics is None:
-            return
-
-        edit_data = self.metrics[self.metrics['metric'] == 'edit_distance'].copy()
-
-        if len(edit_data) == 0:
-            return
-
-        pivot = edit_data.pivot(index='method', columns='network', values='mean')
-
-        network_order = self.network_stats.sort_values('H_Strict')['network'].tolist()
-        pivot = pivot[[col for col in network_order if col in pivot.columns]]
-
-        fig, ax = plt.subplots(figsize=(18, 6))
-
-        sns.heatmap(pivot, annot=False, cmap='RdYlGn_r', center=0.5,
-                   cbar_kws={'label': 'Edit Distance'},
-                   linewidths=0.5, linecolor='gray',
-                   ax=ax, vmin=0, vmax=1)
-
-        ax.set_xlabel('Network (sorted by H_Strict)', fontsize=13, fontweight='bold')
-        ax.set_ylabel('Method', fontsize=13, fontweight='bold')
-        ax.set_title(f'Edit Distance Heatmap (ILS {self.ils_level})',
-                    fontsize=15, fontweight='bold', pad=20)
-
-        plt.xticks(rotation=90, fontsize=8)
-        plt.yticks(rotation=0, fontsize=11)
-
-        plt.tight_layout()
-        fig.savefig(self.plots_dir / "09_accuracy_heatmap.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "09_accuracy_heatmap.png", bbox_inches='tight', dpi=300)
         plt.close()
 
     def plot_per_network_breakdown(self):
@@ -640,12 +793,12 @@ class ConfigurationAnalyzer:
         ax.set_ylim(0, 105)
 
         plt.tight_layout()
-        fig.savefig(self.plots_dir / "10_per_network_breakdown.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "10_per_network_breakdown.png", bbox_inches='tight', dpi=300)
+        fig.savefig(self.plots_dir / "09_per_network_breakdown.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "09_per_network_breakdown.png", bbox_inches='tight', dpi=300)
         plt.close()
 
     def plot_method_summary(self):
-        """Summary bar plot: completion rate and mean edit distance"""
+        """Summary bar plot: completion rate, edit distance, and reticulation error"""
         if self.inventory is None or self.metrics is None:
             return
 
@@ -698,9 +851,9 @@ class ConfigurationAnalyzer:
 
         # Edit distance
         bars2 = ax2.bar(methods, edit_distances, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
-        ax2.set_ylabel('Mean Edit Distance', fontsize=13, fontweight='bold')
+        ax2.set_ylabel('Mean Normalized Edit Distance', fontsize=13, fontweight='bold')
         ax2.set_xlabel('Method', fontsize=13, fontweight='bold')
-        ax2.set_title('Edit Distance (lower = better)', fontsize=14, fontweight='bold', pad=15)
+        ax2.set_title('Network Accuracy (lower = better)', fontsize=14, fontweight='bold', pad=15)
         ax2.grid(True, alpha=0.25, axis='y', linestyle='--')
         ax2.tick_params(axis='x', rotation=0)
 
@@ -728,17 +881,445 @@ class ConfigurationAnalyzer:
                     fontsize=16, fontweight='bold', y=1.00)
 
         plt.tight_layout()
-        fig.savefig(self.plots_dir / "11_method_summary.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "11_method_summary.png", bbox_inches='tight', dpi=300)
+        fig.savefig(self.plots_dir / "10_method_summary.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "10_method_summary.png", bbox_inches='tight', dpi=300)
         plt.close()
 
-    def generate_summary_table(self):
-        """Generate summary statistics table"""
+    def plot_accuracy_vs_characteristic_combined(self, char_col: str, char_label: str,
+                                                  metric_name: str, metric_label: str, fig_prefix: str):
+        """Plot accuracy metric vs network characteristic (all methods combined)"""
+        if self.metrics is None:
+            print(f"  WARNING: No metrics data, skipping {metric_label}")
+            return
+
+        if char_col not in self.network_stats.columns:
+            print(f"  WARNING: Column {char_col} not found, skipping")
+            return
+
+        fig, ax = plt.subplots(figsize=(12, 7))
+
+        # Merge metrics with network stats
+        metrics_with_stats = self.metrics[self.metrics['metric'] == metric_name].merge(
+            self.network_stats[['network', char_col]],
+            on='network', how='left'
+        )
+        metrics_with_stats = metrics_with_stats.dropna(subset=[char_col, 'mean'])
+
+        # Plot each method
+        for method in sorted(metrics_with_stats['method'].unique()):
+            method_data = metrics_with_stats[metrics_with_stats['method'] == method]
+
+            # Calculate mean and std error per characteristic value
+            grouped = method_data.groupby(char_col).agg({
+                'mean': ['mean', 'std', 'count']
+            }).reset_index()
+            grouped.columns = [char_col, 'metric_mean', 'metric_std', 'n']
+            grouped['std_err'] = grouped['metric_std'] / np.sqrt(grouped['n'])
+
+            if len(grouped) > 0:
+                ax.errorbar(grouped[char_col], grouped['metric_mean'],
+                           yerr=grouped['std_err'],
+                           marker=METHOD_MARKERS.get(method, 'o'),
+                           label=method,
+                           color=METHOD_COLORS.get(method, '#000000'),
+                           linewidth=2.5,
+                           markersize=9,
+                           capsize=5,
+                           capthick=2,
+                           alpha=0.85,
+                           markeredgewidth=1.5,
+                           markeredgecolor='white')
+
+        ax.set_xlabel(char_label, fontsize=14, fontweight='bold')
+        ax.set_ylabel(metric_label, fontsize=14, fontweight='bold')
+        ax.set_title(f'{metric_label} vs {char_label}\nILS {self.ils_level}',
+                    fontsize=15, fontweight='bold', pad=20)
+        ax.legend(frameon=True, loc='best', fontsize=12, framealpha=0.9)
+        ax.grid(True, alpha=0.25, linestyle='--', linewidth=0.8)
+
+        if metrics_with_stats[char_col].dtype in ['int64', 'int32']:
+            ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / f"{fig_prefix}.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / f"{fig_prefix}.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_accuracy_vs_characteristic_faceted(self, char_col: str, char_label: str,
+                                                 metric_name: str, metric_label: str, fig_prefix: str):
+        """Plot accuracy metric vs characteristic - faceted subplots, one per method"""
+        if self.metrics is None:
+            return
+
+        if char_col not in self.network_stats.columns:
+            return
+
+        metrics_with_stats = self.metrics[self.metrics['metric'] == metric_name].merge(
+            self.network_stats[['network', char_col]],
+            on='network', how='left'
+        )
+        metrics_with_stats = metrics_with_stats.dropna(subset=[char_col, 'mean'])
+
+        methods = sorted(metrics_with_stats['method'].unique())
+        n_methods = len(methods)
+
+        ncols = min(3, n_methods)
+        nrows = (n_methods + ncols - 1) // ncols
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6*ncols, 5*nrows), squeeze=False)
+        axes = axes.flatten()
+
+        for idx, method in enumerate(methods):
+            ax = axes[idx]
+            method_data = metrics_with_stats[metrics_with_stats['method'] == method]
+
+            grouped = method_data.groupby(char_col).agg({
+                'mean': ['mean', 'std', 'count']
+            }).reset_index()
+            grouped.columns = [char_col, 'metric_mean', 'metric_std', 'n']
+            grouped['std_err'] = grouped['metric_std'] / np.sqrt(grouped['n'])
+
+            if len(grouped) > 0:
+                ax.errorbar(grouped[char_col], grouped['metric_mean'],
+                           yerr=grouped['std_err'],
+                           marker=METHOD_MARKERS.get(method, 'o'),
+                           color=METHOD_COLORS.get(method, '#000000'),
+                           linewidth=2.5,
+                           markersize=9,
+                           capsize=5,
+                           capthick=2,
+                           alpha=0.85,
+                           markeredgewidth=1.5,
+                           markeredgecolor='white')
+
+            ax.set_xlabel(char_label, fontsize=12, fontweight='bold')
+            ax.set_ylabel(metric_label, fontsize=12, fontweight='bold')
+            ax.set_title(f'{method}', fontsize=13, fontweight='bold', pad=10)
+            ax.grid(True, alpha=0.25, linestyle='--')
+
+            if metrics_with_stats[char_col].dtype in ['int64', 'int32']:
+                ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+        # Hide unused subplots
+        for idx in range(n_methods, len(axes)):
+            axes[idx].axis('off')
+
+        fig.suptitle(f'{metric_label} vs {char_label} (ILS {self.ils_level})',
+                    fontsize=16, fontweight='bold', y=1.00)
+        plt.tight_layout()
+        fig.savefig(self.plots_individual_dir / f"{fig_prefix}.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_individual_dir / f"{fig_prefix}.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_jaccard_vs_characteristic_combined(self, char_col: str, char_label: str,
+                                                 jaccard_metric: str, jaccard_label: str, fig_prefix: str):
+        """Plot Jaccard similarity (distance metric) vs network characteristic"""
+        if self.metrics is None:
+            print(f"  WARNING: No metrics data, skipping {jaccard_label}")
+            return
+
+        if char_col not in self.network_stats.columns:
+            print(f"  WARNING: Column {char_col} not found, skipping")
+            return
+
+        # Use the .dist variant which is 1 - Jaccard similarity
+        metric_name = f"{jaccard_metric}.dist"
+
+        fig, ax = plt.subplots(figsize=(12, 7))
+
+        metrics_with_stats = self.metrics[self.metrics['metric'] == metric_name].merge(
+            self.network_stats[['network', char_col]],
+            on='network', how='left'
+        )
+        metrics_with_stats = metrics_with_stats.dropna(subset=[char_col, 'mean'])
+
+        if len(metrics_with_stats) == 0:
+            print(f"  WARNING: No data for {metric_name}, skipping")
+            plt.close()
+            return
+
+        for method in sorted(metrics_with_stats['method'].unique()):
+            method_data = metrics_with_stats[metrics_with_stats['method'] == method]
+
+            grouped = method_data.groupby(char_col).agg({
+                'mean': ['mean', 'std', 'count']
+            }).reset_index()
+            grouped.columns = [char_col, 'metric_mean', 'metric_std', 'n']
+            grouped['std_err'] = grouped['metric_std'] / np.sqrt(grouped['n'])
+
+            if len(grouped) > 0:
+                # Convert distance to similarity for plotting (1 - distance)
+                jaccard_sim = 1 - grouped['metric_mean']
+                ax.errorbar(grouped[char_col], jaccard_sim,
+                           yerr=grouped['std_err'],
+                           marker=METHOD_MARKERS.get(method, 'o'),
+                           label=method,
+                           color=METHOD_COLORS.get(method, '#000000'),
+                           linewidth=2.5,
+                           markersize=9,
+                           capsize=5,
+                           capthick=2,
+                           alpha=0.85,
+                           markeredgewidth=1.5,
+                           markeredgecolor='white')
+
+        ax.set_xlabel(char_label, fontsize=14, fontweight='bold')
+        ax.set_ylabel(f'{jaccard_label}\n(1 = perfect match, 0 = no match)', fontsize=14, fontweight='bold')
+        ax.set_title(f'{jaccard_label} vs {char_label}\nILS {self.ils_level}',
+                    fontsize=15, fontweight='bold', pad=20)
+        ax.legend(frameon=True, loc='best', fontsize=12, framealpha=0.9)
+        ax.grid(True, alpha=0.25, linestyle='--', linewidth=0.8)
+        ax.set_ylim(-0.05, 1.05)
+
+        if metrics_with_stats[char_col].dtype in ['int64', 'int32']:
+            ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / f"{fig_prefix}.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / f"{fig_prefix}.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_jaccard_vs_characteristic_faceted(self, char_col: str, char_label: str,
+                                                jaccard_metric: str, jaccard_label: str, fig_prefix: str):
+        """Plot Jaccard similarity vs characteristic - faceted subplots"""
+        if self.metrics is None:
+            return
+
+        if char_col not in self.network_stats.columns:
+            return
+
+        metric_name = f"{jaccard_metric}.dist"
+
+        metrics_with_stats = self.metrics[self.metrics['metric'] == metric_name].merge(
+            self.network_stats[['network', char_col]],
+            on='network', how='left'
+        )
+        metrics_with_stats = metrics_with_stats.dropna(subset=[char_col, 'mean'])
+
+        if len(metrics_with_stats) == 0:
+            return
+
+        methods = sorted(metrics_with_stats['method'].unique())
+        n_methods = len(methods)
+
+        ncols = min(3, n_methods)
+        nrows = (n_methods + ncols - 1) // ncols
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6*ncols, 5*nrows), squeeze=False)
+        axes = axes.flatten()
+
+        for idx, method in enumerate(methods):
+            ax = axes[idx]
+            method_data = metrics_with_stats[metrics_with_stats['method'] == method]
+
+            grouped = method_data.groupby(char_col).agg({
+                'mean': ['mean', 'std', 'count']
+            }).reset_index()
+            grouped.columns = [char_col, 'metric_mean', 'metric_std', 'n']
+            grouped['std_err'] = grouped['metric_std'] / np.sqrt(grouped['n'])
+
+            if len(grouped) > 0:
+                jaccard_sim = 1 - grouped['metric_mean']
+                ax.errorbar(grouped[char_col], jaccard_sim,
+                           yerr=grouped['std_err'],
+                           marker=METHOD_MARKERS.get(method, 'o'),
+                           color=METHOD_COLORS.get(method, '#000000'),
+                           linewidth=2.5,
+                           markersize=9,
+                           capsize=5,
+                           capthick=2,
+                           alpha=0.85,
+                           markeredgewidth=1.5,
+                           markeredgecolor='white')
+
+            ax.set_xlabel(char_label, fontsize=12, fontweight='bold')
+            ax.set_ylabel(jaccard_label, fontsize=12, fontweight='bold')
+            ax.set_title(f'{method}', fontsize=13, fontweight='bold', pad=10)
+            ax.grid(True, alpha=0.25, linestyle='--')
+            ax.set_ylim(-0.05, 1.05)
+
+            if metrics_with_stats[char_col].dtype in ['int64', 'int32']:
+                ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+        for idx in range(n_methods, len(axes)):
+            axes[idx].axis('off')
+
+        fig.suptitle(f'{jaccard_label} vs {char_label} (ILS {self.ils_level})',
+                    fontsize=16, fontweight='bold', y=1.00)
+        plt.tight_layout()
+        fig.savefig(self.plots_individual_dir / f"{fig_prefix}.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_individual_dir / f"{fig_prefix}.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_polyploid_f1_performance(self):
+        """Plot F1 score for polyploid identification per method"""
+        if self.metrics is None:
+            print("  WARNING: No metrics data, skipping Polyploid F1")
+            return
+
+        # Calculate F1 scores from TP, FP, FN
+        ploidy_metrics = self.metrics[self.metrics['metric'].str.startswith('ploidy_diff.')]
+
+        if len(ploidy_metrics) == 0:
+            print("  WARNING: No ploidy metrics found, skipping")
+            return
+
+        methods = sorted(ploidy_metrics['method'].unique())
+        f1_scores = []
+        precisions = []
+        recalls = []
+
+        for method in methods:
+            method_data = ploidy_metrics[ploidy_metrics['method'] == method]
+
+            tp = method_data[method_data['metric'] == 'ploidy_diff.TP']['mean'].sum()
+            fp = method_data[method_data['metric'] == 'ploidy_diff.FP']['mean'].sum()
+            fn = method_data[method_data['metric'] == 'ploidy_diff.FN']['mean'].sum()
+
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+
+            f1_scores.append(f1)
+            precisions.append(precision)
+            recalls.append(recall)
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+        colors = [METHOD_COLORS.get(m, '#000000') for m in methods]
+
+        # F1 scores
+        bars1 = ax1.bar(methods, f1_scores, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+        ax1.set_ylabel('F1 Score', fontsize=13, fontweight='bold')
+        ax1.set_xlabel('Method', fontsize=13, fontweight='bold')
+        ax1.set_title('Polyploid Identification F1 Score', fontsize=14, fontweight='bold', pad=15)
+        ax1.set_ylim(0, 1.05)
+        ax1.grid(True, alpha=0.25, axis='y', linestyle='--')
+        ax1.axhline(y=1.0, color='green', linestyle='--', alpha=0.5, label='Perfect (F1=1.0)')
+        ax1.legend()
+
+        for bar, val in zip(bars1, f1_scores):
+            height = bar.get_height()
+            ax1.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{val:.3f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
+
+        # Precision and Recall
+        x = np.arange(len(methods))
+        width = 0.35
+
+        bars2 = ax2.bar(x - width/2, precisions, width, label='Precision', color='#0173B2', alpha=0.8, edgecolor='black')
+        bars3 = ax2.bar(x + width/2, recalls, width, label='Recall', color='#DE8F05', alpha=0.8, edgecolor='black')
+
+        ax2.set_ylabel('Score', fontsize=13, fontweight='bold')
+        ax2.set_xlabel('Method', fontsize=13, fontweight='bold')
+        ax2.set_title('Polyploid Identification: Precision vs Recall', fontsize=14, fontweight='bold', pad=15)
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(methods)
+        ax2.set_ylim(0, 1.05)
+        ax2.grid(True, alpha=0.25, axis='y', linestyle='--')
+        ax2.legend()
+
+        fig.suptitle(f'Polyploid Identification Performance (ILS {self.ils_level})',
+                    fontsize=16, fontweight='bold', y=1.00)
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "23_polyploid_f1_performance.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "23_polyploid_f1_performance.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_comprehensive_correlation_heatmap(self):
+        """Comprehensive correlation heatmap: all network properties vs all performance metrics"""
+        if self.inventory is None or self.metrics is None:
+            print("  WARNING: Missing data for correlation heatmap")
+            return
+
+        # Prepare data: for each method and network, get all properties and metrics
+        correlation_data = []
+
+        for method in self.inventory['method'].unique():
+            method_inv = self.inventory[self.inventory['method'] == method]
+
+            for network in method_inv['network'].unique():
+                net_inv = method_inv[method_inv['network'] == network]
+
+                # Get network properties
+                net_stats = self.network_stats[self.network_stats['network'] == network]
+                if len(net_stats) == 0:
+                    continue
+
+                row = {
+                    'method': method,
+                    'network': network,
+                    'completion_rate': net_inv['inferred_exists'].sum() / len(net_inv) * 100,
+                    'Num_Species': net_stats['Num_Species'].values[0],
+                    'H_Strict': net_stats['H_Strict'].values[0],
+                    'H_Relaxed': net_stats['H_Relaxed'].values[0],
+                    'Num_Polyploids': net_stats['Num_Polyploids'].values[0],
+                    'Max_Copies': net_stats['Max_Copies'].values[0],
+                    'Total_WGD': net_stats['Total_WGD'].values[0],
+                    'Polyploid_Ratio': net_stats['Polyploid_Ratio'].values[0],
+                }
+
+                # Get performance metrics
+                net_metrics = self.metrics[
+                    (self.metrics['method'] == method) &
+                    (self.metrics['network'] == network)
+                ]
+
+                for _, metric_row in net_metrics.iterrows():
+                    metric_name = metric_row['metric']
+                    if metric_name in ['edit_distance', 'num_rets_diff']:
+                        row[metric_name] = metric_row['mean']
+
+                correlation_data.append(row)
+
+        if len(correlation_data) == 0:
+            print("  WARNING: No correlation data available")
+            return
+
+        df = pd.DataFrame(correlation_data)
+
+        # Select columns for correlation
+        property_cols = ['Num_Species', 'H_Strict', 'H_Relaxed', 'Num_Polyploids',
+                        'Max_Copies', 'Total_WGD', 'Polyploid_Ratio']
+        metric_cols = ['completion_rate', 'edit_distance', 'num_rets_diff']
+
+        # Keep only available columns
+        property_cols = [c for c in property_cols if c in df.columns]
+        metric_cols = [c for c in metric_cols if c in df.columns]
+
+        if len(property_cols) == 0 or len(metric_cols) == 0:
+            print("  WARNING: Insufficient data for correlation analysis")
+            return
+
+        # Calculate correlation matrix
+        corr_matrix = df[property_cols + metric_cols].corr()
+
+        # Extract the subset: properties vs metrics
+        corr_subset = corr_matrix.loc[property_cols, metric_cols]
+
+        fig, ax = plt.subplots(figsize=(10, 8))
+
+        sns.heatmap(corr_subset, annot=True, fmt='.3f', cmap='RdBu_r', center=0,
+                   vmin=-1, vmax=1, square=True, linewidths=1, cbar_kws={'label': 'Correlation'},
+                   ax=ax, annot_kws={'fontsize': 10, 'fontweight': 'bold'})
+
+        ax.set_xlabel('Performance Metrics', fontsize=13, fontweight='bold')
+        ax.set_ylabel('Network Properties', fontsize=13, fontweight='bold')
+        ax.set_title(f'Network Properties vs Performance Metrics Correlation\nILS {self.ils_level}',
+                    fontsize=15, fontweight='bold', pad=20)
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "31_comprehensive_correlation_heatmap.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "31_comprehensive_correlation_heatmap.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def generate_summary_tables(self):
+        """Generate comprehensive summary tables for publication"""
         if self.inventory is None or self.metrics is None:
             return
 
         methods = sorted(self.inventory['method'].unique())
 
+        # Table 1: Overall performance summary
         summary_data = []
         for method in methods:
             method_inv = self.inventory[self.inventory['method'] == method]
@@ -754,8 +1335,9 @@ class ConfigurationAnalyzer:
             if len(method_edit) > 0:
                 mean_ed = method_edit['mean'].mean()
                 std_ed = method_edit['mean'].std()
+                median_ed = method_edit['mean'].median()
             else:
-                mean_ed = std_ed = np.nan
+                mean_ed = std_ed = median_ed = np.nan
 
             method_ret = self.metrics[
                 (self.metrics['method'] == method) &
@@ -764,24 +1346,68 @@ class ConfigurationAnalyzer:
 
             if len(method_ret) > 0:
                 mean_ret_err = method_ret['mean'].abs().mean()
+                median_ret_err = method_ret['mean'].abs().median()
             else:
-                mean_ret_err = np.nan
+                mean_ret_err = median_ret_err = np.nan
 
             summary_data.append({
-                'method': method,
-                'total_runs': total,
-                'completed_runs': successful,
-                'completion_rate_%': comp_rate,
-                'mean_edit_distance': mean_ed,
-                'std_edit_distance': std_ed,
-                'mean_reticulation_error': mean_ret_err
+                'Method': method,
+                'Total_Runs': total,
+                'Completed_Runs': successful,
+                'Completion_Rate_%': comp_rate,
+                'Mean_Edit_Distance': mean_ed,
+                'Median_Edit_Distance': median_ed,
+                'Std_Edit_Distance': std_ed,
+                'Mean_Reticulation_Error': mean_ret_err,
+                'Median_Reticulation_Error': median_ret_err
             })
 
         df = pd.DataFrame(summary_data)
-        df.to_csv(self.tables_dir / "summary_table.csv", index=False, float_format='%.4f')
+        df.to_csv(self.tables_dir / "01_method_performance_summary.csv", index=False, float_format='%.4f')
 
-        print(f"\n  Summary Table:")
+        # Table 2: Per-network performance (for supplementary)
+        network_data = []
+        for network in sorted(self.network_stats['network'].unique()):
+            net_stats = self.network_stats[self.network_stats['network'] == network].iloc[0]
+            row = {
+                'Network': network,
+                'H_Strict': net_stats['H_Strict'],
+                'H_Relaxed': net_stats['H_Relaxed'],
+                'Num_Polyploids': net_stats['Num_Polyploids'],
+                'Total_WGD': net_stats['Total_WGD']
+            }
+
+            for method in methods:
+                # Completion rate
+                method_inv = self.inventory[
+                    (self.inventory['method'] == method) &
+                    (self.inventory['network'] == network)
+                ]
+                if len(method_inv) > 0:
+                    comp_rate = method_inv['inferred_exists'].sum() / len(method_inv) * 100
+                    row[f'{method}_CompRate_%'] = comp_rate
+                else:
+                    row[f'{method}_CompRate_%'] = np.nan
+
+                # Edit distance
+                method_edit = self.metrics[
+                    (self.metrics['method'] == method) &
+                    (self.metrics['network'] == network) &
+                    (self.metrics['metric'] == 'edit_distance')
+                ]
+                if len(method_edit) > 0:
+                    row[f'{method}_EditDist'] = method_edit['mean'].values[0]
+                else:
+                    row[f'{method}_EditDist'] = np.nan
+
+            network_data.append(row)
+
+        df_networks = pd.DataFrame(network_data)
+        df_networks.to_csv(self.tables_dir / "02_per_network_performance.csv", index=False, float_format='%.4f')
+
+        print(f"\n  Summary Table (Method Performance):")
         print(df.to_string(index=False))
+        print(f"\n  Per-Network Table saved to: {self.tables_dir / '02_per_network_performance.csv'}")
 
 
 def main():
@@ -792,7 +1418,7 @@ def main():
 Output structure (per configuration):
   simulations/analysis/summary/{config}/
   ├── plots/
-  │   ├── 01_combined_*.pdf/png           # All methods together
+  │   ├── 01_combined_*.pdf/png                      # All methods on one plot
   │   ├── 02_combined_*.pdf/png
   │   ├── 03_combined_*.pdf/png
   │   ├── 04_combined_*.pdf/png
@@ -800,15 +1426,16 @@ Output structure (per configuration):
   │   ├── 06_reticulation_accuracy.pdf/png
   │   ├── 07_reticulation_error_boxplot.pdf/png
   │   ├── 08_edit_distance_boxplot.pdf/png
-  │   ├── 09_accuracy_heatmap.pdf/png
-  │   ├── 10_per_network_breakdown.pdf/png
-  │   ├── 11_method_summary.pdf/png
-  │   └── individual_methods/             # Separate file per method
-  │       ├── 01_individual_*_grampa.pdf/png
-  │       ├── 01_individual_*_polyphest.pdf/png
-  │       └── ...
+  │   ├── 09_per_network_breakdown.pdf/png
+  │   ├── 10_method_summary.pdf/png
+  │   └── individual_methods/                        # Faceted plots (all methods in one file)
+  │       ├── 01_faceted_h_strict.pdf/png
+  │       ├── 02_faceted_h_relaxed.pdf/png
+  │       ├── 03_faceted_num_polyploids.pdf/png
+  │       └── 04_faceted_total_wgd.pdf/png
   └── tables/
-      └── summary_table.csv
+      ├── 01_method_performance_summary.csv           # Main results table
+      └── 02_per_network_performance.csv              # Supplementary table
         """
     )
 
