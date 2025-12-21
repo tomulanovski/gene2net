@@ -34,10 +34,14 @@ gene2net/
 - **`submit_all_methods.sh`** - Master orchestration script for running methods across multiple configs
 - **`check_pipeline_status.py`** - Validates SimPhy simulations and all method inputs/outputs
 - **`compare_nets.py`** - Network comparison pipeline (handles MUL-trees and networks)
+- **`run_reticulation_stats.py`** - Generates network statistics including WGD event detection
+- **`create_analysis_figures.py`** - Publication-quality figures and tables for method evaluation
+- **`test_autopolyploid_detection.py`** - Test script for verifying autopolyploidization event counting
 - **Full documentation:**
-  - `simulations/COMPLETE_PIPELINE_GUIDE.md` - End-to-end workflow from SimPhy to summary
-  - `simulations/METHODS_GUIDE.md` - Running phylogenetic network inference methods
-  - `simulations/PIPELINE_STATUS_GUIDE.md` - Validation and status checking
+  - `simulations/md_files/COMPLETE_PIPELINE_GUIDE.md` - End-to-end workflow from SimPhy to summary
+  - `simulations/md_files/METHODS_GUIDE.md` - Running phylogenetic network inference methods
+  - `simulations/md_files/PIPELINE_STATUS_GUIDE.md` - Validation and status checking
+  - `simulations/md_files/VISUALIZATION_GUIDE.md` - Publication figures and analysis (UPDATED 2025-12-20)
 
 ## Common Workflows
 
@@ -73,6 +77,43 @@ python run_full_summary.py conf_ils_low_10M
 
 **For complete workflow:** See `simulations/COMPLETE_PIPELINE_GUIDE.md`
 
+### Publication Analysis and Figures
+
+After completing simulations, generate comprehensive publication-quality figures and tables.
+
+**Complete guide:** See `simulations/md_files/VISUALIZATION_GUIDE.md`
+
+**Quick start:**
+```bash
+cd simulations/scripts
+
+# Generate all analysis figures for one or more configurations
+python create_analysis_figures.py --config conf_ils_low_10M
+python create_analysis_figures.py --config conf_ils_low_10M conf_ils_medium_10M conf_ils_high_10M
+```
+
+**Output structure** (per configuration):
+```
+simulations/analysis/summary/{config}/
+├── plots/
+│   ├── 01_success_vs_reticulations.pdf/png  # Success rate vs H_Strict
+│   ├── 02_success_vs_polyploids.pdf/png     # Success rate vs Num_Polyploids
+│   ├── 03_success_vs_wgd.pdf/png            # Success rate vs Total_WGD
+│   ├── 04_method_performance_overview.pdf/png
+│   ├── 05_method_network_heatmap.pdf/png
+│   ├── 06_reticulation_accuracy.pdf/png
+│   └── 07_difficulty_correlations.pdf/png
+└── tables/
+    ├── summary_table.csv
+    └── summary_simple.csv
+```
+
+**Key features:**
+- Non-interactive matplotlib backend (no X11 required)
+- Per-configuration organization for easy comparison across ILS levels
+- Comprehensive evaluation: success rates, reticulation accuracy, polyploid identification
+- Network characteristics from `simulations/networks/mul_tree_final_stats.csv`
+
 ### Running Analyses on Real Data
 
 ```bash
@@ -103,6 +144,31 @@ sbatch jobs/grampa_general.sh
 ### MPSUGAR
 - Requires NEXUS format: `mpsugar_trees.nex`
 - Requires JSON taxon map: `taxon_map.json`
+
+### Network Statistics and WGD Events
+
+**Ground truth statistics:** `simulations/networks/mul_tree_final_stats.csv`
+
+**Important distinctions:**
+- **Autopolyploidization EVENT**: A single WGD that duplicates an entire clade (creates identical sibling subtrees)
+  - Example: Ding_2023 has ONE event (Rch clade duplication) → creates 7 autopolyploid species
+  - Detected by finding identical siblings in MUL-tree before network folding
+- **Allopolyploidization/Hybridization**: Reticulation events where different lineages merge (H_Strict count)
+  - Detected as reticulations with 2+ parents after network folding
+- **Total_WGD**: Sum of autopolyploidization events + allopolyploidization events (H_Strict)
+- **Num_Polyploids**: Count of species appearing >1 time in the MUL-tree (NOT the number of events)
+
+**Key CSV columns:**
+- `H_Strict`: Number of reticulations (allopolyploidization/hybridization events)
+- `Num_Polyploids`: Number of polyploid species (species with >1 copy)
+- `Num_Autopolyploidization_Events`: Number of autopolyploidization events
+- `Total_WGD`: Total whole genome duplication events
+
+**Regenerate statistics:**
+```bash
+cd simulations/scripts
+python run_reticulation_stats.py ../networks/ ../networks/mul_tree_final_stats.csv
+```
 
 ## Pipeline Validation
 
@@ -157,3 +223,49 @@ simulations/analysis/
 - Only modify what's necessary for the task
 - Avoid adding unnecessary features or abstractions
 - Trust that the user knows their research workflow
+
+## Recent Updates (2025-12-20)
+
+### Autopolyploidization Event Detection
+**Problem:** Previous implementation counted each duplicated species as a separate autopolyploidization event, rather than counting the actual WGD events.
+
+**Solution:** Modified `run_reticulation_stats.py` with `count_autopolyploid_events()` function that:
+- Uses top-down (preorder) traversal to identify top-level duplicated clades
+- Detects identical sibling subtrees (same parent) as ONE event
+- Tracks descendants to avoid double-counting nested duplications
+- Example: Ding_2023 has ONE autopolyploidization event → creates 7 autopolyploid species
+
+**Key distinction:**
+- **Autopolyploidization** (identical siblings) → simplified away in network folding → H_Strict = 0
+- **Allopolyploidization** (identical non-siblings) → persist as reticulations → H_Strict > 0
+
+### Publication Analysis Pipeline
+Created `create_analysis_figures.py` for comprehensive method evaluation:
+
+**Features:**
+- Per-configuration output organization (`simulations/analysis/summary/{config}/plots/` and `tables/`)
+- Non-interactive matplotlib backend (no X11 required for cluster use)
+- Automatic path resolution relative to script location
+- Uses `inferred_exists` boolean column from inventory CSV
+
+**Core plots:**
+1. Success rate vs. number of reticulations (H_Strict)
+2. Success rate vs. number of polyploids
+3. Success rate vs. total WGD events
+4. Method performance overview
+5. Method-network heatmap
+6. Reticulation accuracy scatter plot
+7. Difficulty correlation matrix
+
+**Usage:**
+```bash
+cd simulations/scripts
+python create_analysis_figures.py --config conf_ils_low_10M conf_ils_medium_10M conf_ils_high_10M
+```
+
+### Files Modified/Created
+- `simulations/scripts/run_reticulation_stats.py` - Added autopolyploidization event detection
+- `simulations/scripts/create_analysis_figures.py` - New comprehensive analysis script
+- `simulations/scripts/test_autopolyploid_detection.py` - New test script for verification
+- `simulations/networks/mul_tree_final_stats.csv` - Updated with new columns
+- `simulations/md_files/VISUALIZATION_GUIDE.md` - Complete documentation for analysis workflow

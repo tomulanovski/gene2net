@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-create_analysis_figures.py - Complete Analysis Figure Generation
+create_analysis_figures.py - Publication-Quality Analysis Figures
 
-Generates comprehensive analysis for phylogenetic network inference methods.
-Organizes outputs by configuration with proper directory structure.
+Generates comprehensive, clean visualizations for phylogenetic network inference methods.
+Creates both single and faceted plots for maximum clarity.
 
 Usage:
     # Single configuration
@@ -11,9 +11,6 @@ Usage:
 
     # Multiple configurations
     python create_analysis_figures.py --config conf_ils_low_10M conf_ils_medium_10M conf_ils_high_10M
-
-    # Custom network stats path (optional)
-    python create_analysis_figures.py --config conf_ils_low_10M --network-stats /custom/path/stats.csv
 """
 
 import argparse
@@ -24,587 +21,562 @@ matplotlib.use('Agg')  # Non-interactive backend - no X11 required
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
-from scipy.stats import pearsonr
 from typing import List, Dict
 import warnings
 warnings.filterwarnings('ignore')
 
-# Publication settings
+# Publication-quality settings
 plt.rcParams['figure.dpi'] = 300
 plt.rcParams['savefig.dpi'] = 300
-plt.rcParams['font.size'] = 10
-plt.rcParams['axes.labelsize'] = 11
-plt.rcParams['axes.titlesize'] = 12
-plt.rcParams['xtick.labelsize'] = 9
-plt.rcParams['ytick.labelsize'] = 9
-plt.rcParams['legend.fontsize'] = 9
+plt.rcParams['font.size'] = 11
+plt.rcParams['axes.labelsize'] = 13
+plt.rcParams['axes.titlesize'] = 14
+plt.rcParams['xtick.labelsize'] = 11
+plt.rcParams['ytick.labelsize'] = 11
+plt.rcParams['legend.fontsize'] = 11
 plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['axes.linewidth'] = 1.2
+plt.rcParams['grid.linewidth'] = 0.8
+plt.rcParams['lines.linewidth'] = 2.0
+plt.rcParams['lines.markersize'] = 7
 
-# Color schemes
+# Enhanced color palette - distinct and colorblind-friendly
 METHOD_COLORS = {
-    'grampa': '#1f77b4',
-    'polyphest_p50': '#ff7f0e',
-    'polyphest_p70': '#2ca02c',
-    'polyphest_p90': '#d62728',
-    'mpsugar': '#9467bd',
-    'padre': '#8c564b'
+    'grampa': '#0173B2',        # Blue
+    'polyphest': '#DE8F05',     # Orange
+    'polyphest_p50': '#DE8F05', # Orange
+    'polyphest_p70': '#029E73', # Teal
+    'polyphest_p90': '#CC78BC', # Pink
+    'mpsugar': '#CA9161',       # Tan
+    'padre': '#ECE133'          # Yellow
+}
+
+# Markers for better distinction
+METHOD_MARKERS = {
+    'grampa': 'o',
+    'polyphest': 's',
+    'polyphest_p50': 's',
+    'polyphest_p70': '^',
+    'polyphest_p90': 'D',
+    'mpsugar': 'v',
+    'padre': 'P'
 }
 
 
 class ConfigurationAnalyzer:
-    """Analyze a single configuration and generate all figures"""
+    """Analyze and visualize results for a single configuration"""
 
     def __init__(self, config: str, network_stats_file: str):
         self.config = config
-        self.config_name = config  # e.g., "conf_ils_low_10M"
 
-        # Set up directories
+        # Extract ILS level from config name
+        if 'low' in config.lower():
+            self.ils_level = 'Low'
+        elif 'medium' in config.lower():
+            self.ils_level = 'Medium'
+        elif 'high' in config.lower():
+            self.ils_level = 'High'
+        else:
+            self.ils_level = 'Unknown'
+
+        self.config_name = config.replace('conf_', '').replace('_10M', '')
+
+        # Setup directories
         self.base_dir = Path(f"simulations/analysis/summary/{config}")
         self.plots_dir = self.base_dir / "plots"
         self.tables_dir = self.base_dir / "tables"
-
         self.plots_dir.mkdir(parents=True, exist_ok=True)
         self.tables_dir.mkdir(parents=True, exist_ok=True)
 
-        # Load network statistics
+        # Load data
         self.network_stats = pd.read_csv(network_stats_file)
+        # Remove .tre extension from network names if present
         self.network_stats['network'] = self.network_stats['Filename'].str.replace('.tre', '')
 
-        # Load configuration data
-        self.inventory = None
-        self.aggregated = None
-        self.comparisons = None
-        self._load_data()
-
-        # Extract ILS level
-        self.ils_level = self._extract_ils_level()
-
-    def _extract_ils_level(self) -> str:
-        """Extract ILS level from config name"""
-        if 'low' in self.config.lower():
-            return 'low'
-        elif 'medium' in self.config.lower():
-            return 'medium'
-        elif 'high' in self.config.lower():
-            return 'high'
-        return 'unknown'
-
-    def _load_data(self):
-        """Load all data for this configuration"""
-        if (self.base_dir / "inventory.csv").exists():
-            self.inventory = pd.read_csv(self.base_dir / "inventory.csv")
-
-        if (self.base_dir / "aggregated_metrics.csv").exists():
-            self.aggregated = pd.read_csv(self.base_dir / "aggregated_metrics.csv")
-
-        if (self.base_dir / "comparisons_raw.csv").exists():
-            self.comparisons = pd.read_csv(self.base_dir / "comparisons_raw.csv")
-
-    # ========================================================================
-    # CORE PLOTS: Success vs Network Characteristics
-    # ========================================================================
-
-    def plot_success_vs_reticulations(self):
-        """Plot number of successful runs as a function of number of reticulations"""
-        if self.inventory is None:
-            print("  WARNING: No inventory data, skipping success vs reticulations")
-            return
-
-        fig, ax = plt.subplots(figsize=(10, 6))
-
-        # Merge with network stats
-        inv = self.inventory.merge(
-            self.network_stats[['network', 'H_Strict']],
-            on='network', how='left'
-        )
-
-        # Calculate success rate per (H_Strict, method)
-        for method in sorted(inv['method'].unique()):
-            method_inv = inv[inv['method'] == method]
-
-            # Group by H_Strict
-            grouped = method_inv.groupby('H_Strict').apply(
-                lambda x: pd.Series({
-                    'success_rate': x['inferred_exists'].sum() / len(x) * 100,
-                    'num_networks': len(x['network'].unique())
-                })
-            ).reset_index()
-
-            ax.plot(grouped['H_Strict'], grouped['success_rate'],
-                   'o-', label=method, color=METHOD_COLORS.get(method, '#000000'),
-                   markersize=8, linewidth=2.5, alpha=0.8)
-
-        ax.set_xlabel('Number of Reticulations (H_Strict)', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Success Rate (%)', fontsize=12, fontweight='bold')
-        ax.set_title(f'Success Rate vs Number of Reticulations\n{self.config_name} (ILS {self.ils_level})',
-                    fontsize=13, fontweight='bold', pad=15)
-        ax.legend(frameon=True, loc='best', fontsize=10)
-        ax.grid(True, alpha=0.3, linestyle='--')
-        ax.set_ylim(-5, 105)
-
-        plt.tight_layout()
-        fig.savefig(self.plots_dir / "01_success_vs_reticulations.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "01_success_vs_reticulations.png", bbox_inches='tight', dpi=300)
-        plt.close()
-
-    def plot_success_vs_polyploids(self):
-        """Plot number of successful runs as a function of number of polyploids"""
-        if self.inventory is None:
-            print("  WARNING: No inventory data, skipping success vs polyploids")
-            return
-
-        fig, ax = plt.subplots(figsize=(10, 6))
-
-        # Merge with network stats
-        inv = self.inventory.merge(
-            self.network_stats[['network', 'Num_Polyploids']],
-            on='network', how='left'
-        )
-
-        # Calculate success rate per (Num_Polyploids, method)
-        for method in sorted(inv['method'].unique()):
-            method_inv = inv[inv['method'] == method]
-
-            grouped = method_inv.groupby('Num_Polyploids').apply(
-                lambda x: pd.Series({
-                    'success_rate': x['inferred_exists'].sum() / len(x) * 100,
-                    'num_networks': len(x['network'].unique())
-                })
-            ).reset_index()
-
-            ax.plot(grouped['Num_Polyploids'], grouped['success_rate'],
-                   'o-', label=method, color=METHOD_COLORS.get(method, '#000000'),
-                   markersize=8, linewidth=2.5, alpha=0.8)
-
-        ax.set_xlabel('Number of Polyploid Species', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Success Rate (%)', fontsize=12, fontweight='bold')
-        ax.set_title(f'Success Rate vs Number of Polyploids\n{self.config_name} (ILS {self.ils_level})',
-                    fontsize=13, fontweight='bold', pad=15)
-        ax.legend(frameon=True, loc='best', fontsize=10)
-        ax.grid(True, alpha=0.3, linestyle='--')
-        ax.set_ylim(-5, 105)
-
-        plt.tight_layout()
-        fig.savefig(self.plots_dir / "02_success_vs_polyploids.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "02_success_vs_polyploids.png", bbox_inches='tight', dpi=300)
-        plt.close()
-
-    def plot_success_vs_wgd(self):
-        """Plot number of successful runs as a function of total WGD events"""
-        if self.inventory is None:
-            print("  WARNING: No inventory data, skipping success vs WGD")
-            return
-
-        fig, ax = plt.subplots(figsize=(10, 6))
-
-        # Merge with network stats
-        inv = self.inventory.merge(
-            self.network_stats[['network', 'Total_WGD']],
-            on='network', how='left'
-        )
-
-        # Calculate success rate per (Total_WGD, method)
-        for method in sorted(inv['method'].unique()):
-            method_inv = inv[inv['method'] == method]
-
-            grouped = method_inv.groupby('Total_WGD').apply(
-                lambda x: pd.Series({
-                    'success_rate': x['inferred_exists'].sum() / len(x) * 100,
-                    'num_networks': len(x['network'].unique())
-                })
-            ).reset_index()
-
-            ax.plot(grouped['Total_WGD'], grouped['success_rate'],
-                   'o-', label=method, color=METHOD_COLORS.get(method, '#000000'),
-                   markersize=8, linewidth=2.5, alpha=0.8)
-
-        ax.set_xlabel('Total WGD Events (Autopolyploidization + Reticulations)', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Success Rate (%)', fontsize=12, fontweight='bold')
-        ax.set_title(f'Success Rate vs Total WGD Events\n{self.config_name} (ILS {self.ils_level})',
-                    fontsize=13, fontweight='bold', pad=15)
-        ax.legend(frameon=True, loc='best', fontsize=10)
-        ax.grid(True, alpha=0.3, linestyle='--')
-        ax.set_ylim(-5, 105)
-
-        plt.tight_layout()
-        fig.savefig(self.plots_dir / "03_success_vs_wgd.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "03_success_vs_wgd.png", bbox_inches='tight', dpi=300)
-        plt.close()
-
-    # ========================================================================
-    # ADDITIONAL ANALYSIS PLOTS
-    # ========================================================================
-
-    def plot_method_performance_overview(self):
-        """Overall method performance: edit distance and success rate"""
-        if self.aggregated is None or self.inventory is None:
-            print("  WARNING: Missing data, skipping performance overview")
-            return
-
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-
-        # Panel 1: Edit distance boxplot
-        edit_data = self.aggregated[self.aggregated['metric'] == 'edit_distance']
-
-        if not edit_data.empty:
-            methods = sorted(edit_data['method'].unique())
-            data_for_box = []
-            colors = []
-
-            for method in methods:
-                method_data = edit_data[edit_data['method'] == method]['mean'].values
-                data_for_box.append(method_data)
-                colors.append(METHOD_COLORS.get(method, '#cccccc'))
-
-            bp = ax1.boxplot(data_for_box, labels=methods, patch_artist=True,
-                            showfliers=True, widths=0.6)
-
-            for patch, color in zip(bp['boxes'], colors):
-                patch.set_facecolor(color)
-                patch.set_alpha(0.7)
-
-            # Overlay points
-            for i, (method, data) in enumerate(zip(methods, data_for_box), 1):
-                x = np.random.normal(i, 0.04, size=len(data))
-                ax1.scatter(x, data, alpha=0.4, s=30, color=colors[i-1],
-                           edgecolors='black', linewidths=0.5)
-
-        ax1.set_ylabel('Edit Distance (lower = better)', fontsize=11, fontweight='bold')
-        ax1.set_title('Edit Distance Distribution', fontsize=12, fontweight='bold')
-        ax1.grid(True, alpha=0.3, axis='y')
-        ax1.tick_params(axis='x', rotation=45)
-
-        # Panel 2: Success rate
-        success_rates = []
-        for method in self.inventory['method'].unique():
-            method_inv = self.inventory[self.inventory['method'] == method]
-            total = len(method_inv)
-            success = method_inv['inferred_exists'].sum()
-            success_rate = success / total * 100 if total > 0 else 0
-            success_rates.append({
-                'method': method,
-                'success_rate': success_rate,
-                'total': total,
-                'success': success
-            })
-
-        sr_df = pd.DataFrame(success_rates)
-        methods = sr_df['method'].values
-        rates = sr_df['success_rate'].values
-        colors = [METHOD_COLORS.get(m, '#cccccc') for m in methods]
-
-        bars = ax2.bar(range(len(methods)), rates, color=colors, alpha=0.7, edgecolor='black', linewidth=1)
-        ax2.set_xticks(range(len(methods)))
-        ax2.set_xticklabels(methods, rotation=45, ha='right')
-        ax2.set_ylabel('Success Rate (%)', fontsize=11, fontweight='bold')
-        ax2.set_title('Success Rate', fontsize=12, fontweight='bold')
-        ax2.set_ylim(0, 105)
-        ax2.grid(True, alpha=0.3, axis='y')
-
-        # Add counts on bars
-        for i, (bar, row) in enumerate(zip(bars, sr_df.itertuples())):
-            height = bar.get_height()
-            ax2.text(bar.get_x() + bar.get_width()/2., height + 2,
-                    f'{row.success}/{row.total}',
-                    ha='center', va='bottom', fontsize=8)
-
-        fig.suptitle(f'Method Performance Overview - {self.config_name} (ILS {self.ils_level})',
-                    fontsize=14, fontweight='bold', y=1.02)
-
-        plt.tight_layout()
-        fig.savefig(self.plots_dir / "04_method_performance_overview.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "04_method_performance_overview.png", bbox_inches='tight', dpi=300)
-        plt.close()
-
-    def plot_method_network_heatmap(self):
-        """Heatmap showing edit distance for each (network, method) combination"""
-        if self.aggregated is None:
-            print("  WARNING: No aggregated data, skipping heatmap")
-            return
-
-        # Filter to edit_distance metric
-        edit_data = self.aggregated[self.aggregated['metric'] == 'edit_distance']
-
-        if edit_data.empty:
-            print("  WARNING: No edit distance data, skipping heatmap")
-            return
-
-        # Pivot table
-        pivot = edit_data.pivot_table(
-            index='network',
-            columns='method',
-            values='mean',
-            aggfunc='first'
-        )
-
-        # Sort by mean difficulty
-        pivot['mean_difficulty'] = pivot.mean(axis=1)
-        pivot = pivot.sort_values('mean_difficulty')
-        pivot = pivot.drop('mean_difficulty', axis=1)
-
-        # Plot
-        fig, ax = plt.subplots(figsize=(10, 14))
-
-        sns.heatmap(pivot, cmap='RdYlGn_r', center=0.5, vmin=0, vmax=1.5,
-                   annot=False, fmt='.2f', linewidths=0.5,
-                   cbar_kws={'label': 'Edit Distance'},
-                   ax=ax)
-
-        ax.set_title(f'Method × Network Performance Heatmap\n{self.config_name} (ILS {self.ils_level})',
-                    fontsize=13, fontweight='bold', pad=15)
-        ax.set_xlabel('Method', fontsize=11, fontweight='bold')
-        ax.set_ylabel('Network (sorted by difficulty)', fontsize=11, fontweight='bold')
-
-        plt.tight_layout()
-        fig.savefig(self.plots_dir / "05_method_network_heatmap.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "05_method_network_heatmap.png", bbox_inches='tight', dpi=300)
-        plt.close()
-
-    def plot_reticulation_accuracy(self):
-        """Accuracy of reticulation count inference"""
-        if self.aggregated is None:
-            print("  WARNING: No aggregated data, skipping reticulation accuracy")
-            return
-
-        ret_data = self.aggregated[self.aggregated['metric'] == 'num_rets_diff']
-
-        if ret_data.empty:
-            print("  WARNING: No reticulation difference data, skipping")
-            return
-
-        fig, ax = plt.subplots(figsize=(10, 6))
-
-        methods = sorted(ret_data['method'].unique())
-        data_for_box = []
-        colors = []
-
-        for method in methods:
-            method_data = ret_data[ret_data['method'] == method]['mean'].values
-            data_for_box.append(method_data)
-            colors.append(METHOD_COLORS.get(method, '#cccccc'))
-
-        bp = ax.boxplot(data_for_box, labels=methods, patch_artist=True,
-                       showfliers=True, widths=0.6)
-
-        for patch, color in zip(bp['boxes'], colors):
-            patch.set_facecolor(color)
-            patch.set_alpha(0.7)
-
-        ax.axhline(y=0, color='green', linestyle='--', linewidth=2, alpha=0.7,
-                  label='Perfect inference')
-
-        ax.set_ylabel('|Inferred H - True H|', fontsize=11, fontweight='bold')
-        ax.set_title(f'Reticulation Inference Accuracy\n{self.config_name} (ILS {self.ils_level})',
-                    fontsize=13, fontweight='bold', pad=15)
-        ax.grid(True, alpha=0.3, axis='y')
-        ax.tick_params(axis='x', rotation=45)
-        ax.legend(fontsize=10)
-
-        plt.tight_layout()
-        fig.savefig(self.plots_dir / "06_reticulation_accuracy.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "06_reticulation_accuracy.png", bbox_inches='tight', dpi=300)
-        plt.close()
-
-    def plot_difficulty_correlations(self):
-        """Correlation between network characteristics and edit distance"""
-        if self.aggregated is None:
-            print("  WARNING: No aggregated data, skipping correlations")
-            return
-
-        # Get edit distance data
-        edit_data = self.aggregated[self.aggregated['metric'] == 'edit_distance']
-
-        if edit_data.empty:
-            return
-
-        # Merge with network stats
-        edit_with_stats = edit_data.merge(
-            self.network_stats[['network', 'Num_Species', 'Num_Polyploids', 'Max_Copies',
-                               'H_Strict', 'Num_Autopolyploidization_Events', 'Total_WGD']],
-            on='network', how='left'
-        )
-
-        network_props = ['Num_Species', 'Num_Polyploids', 'Max_Copies', 'H_Strict',
-                        'Num_Autopolyploidization_Events', 'Total_WGD']
-
-        methods = sorted(edit_with_stats['method'].unique())
-
-        # Build correlation matrix
-        corr_matrix = pd.DataFrame(index=methods, columns=network_props)
-
-        for method in methods:
-            method_data = edit_with_stats[edit_with_stats['method'] == method]
-            for prop in network_props:
-                valid = method_data[[prop, 'mean']].dropna()
-                if len(valid) > 3:
-                    corr, _ = pearsonr(valid[prop], valid['mean'])
-                    corr_matrix.loc[method, prop] = corr
-                else:
-                    corr_matrix.loc[method, prop] = np.nan
-
-        corr_matrix = corr_matrix.astype(float)
-
-        # Plot
-        fig, ax = plt.subplots(figsize=(10, 7))
-
-        sns.heatmap(corr_matrix, annot=True, cmap='RdYlGn_r', center=0,
-                   vmin=-1, vmax=1, fmt='.2f', linewidths=0.5,
-                   cbar_kws={'label': 'Pearson Correlation'},
-                   ax=ax, annot_kws={'size': 9})
-
-        ax.set_title(f'Network Characteristics vs Edit Distance\n{self.config_name} (ILS {self.ils_level})\n(Red = harder with more, Green = easier with more)',
-                    fontsize=13, fontweight='bold', pad=15)
-        ax.set_xlabel('Network Characteristics', fontsize=11, fontweight='bold')
-        ax.set_ylabel('Method', fontsize=11, fontweight='bold')
-
-        plt.tight_layout()
-        fig.savefig(self.plots_dir / "07_difficulty_correlations.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "07_difficulty_correlations.png", bbox_inches='tight', dpi=300)
-        plt.close()
-
-    # ========================================================================
-    # SUMMARY TABLE
-    # ========================================================================
-
-    def create_summary_table(self):
-        """Create comprehensive summary table for this configuration"""
-        if self.inventory is None or self.aggregated is None:
-            print("  WARNING: Missing data, skipping summary table")
-            return
-
-        rows = []
-
-        for method in self.inventory['method'].unique():
-            # Success rate
-            method_inv = self.inventory[self.inventory['method'] == method]
-            total = len(method_inv)
-            success = method_inv['inferred_exists'].sum()
-            success_rate = success / total * 100 if total > 0 else 0
-
-            # Edit distance
-            method_edit = self.aggregated[
-                (self.aggregated['method'] == method) &
-                (self.aggregated['metric'] == 'edit_distance')
-            ]
-
-            if not method_edit.empty:
-                mean_edit = method_edit['mean'].mean()
-                std_edit = method_edit['std'].mean()
-                min_edit = method_edit['mean'].min()
-                max_edit = method_edit['mean'].max()
-            else:
-                mean_edit = std_edit = min_edit = max_edit = np.nan
-
-            # Reticulation error
-            method_ret = self.aggregated[
-                (self.aggregated['method'] == method) &
-                (self.aggregated['metric'] == 'num_rets_diff')
-            ]
-
-            if not method_ret.empty:
-                mean_ret_error = method_ret['mean'].mean()
-            else:
-                mean_ret_error = np.nan
-
-            rows.append({
-                'Configuration': self.config_name,
-                'ILS_Level': self.ils_level,
-                'Method': method,
-                'Total_Runs': total,
-                'Successful_Runs': success,
-                'Success_Rate_%': success_rate,
-                'Mean_Edit_Distance': mean_edit,
-                'Std_Edit_Distance': std_edit,
-                'Min_Edit_Distance': min_edit,
-                'Max_Edit_Distance': max_edit,
-                'Mean_Reticulation_Error': mean_ret_error
-            })
-
-        summary_df = pd.DataFrame(rows)
-
-        # Save
-        summary_df.to_csv(self.tables_dir / "summary_table.csv",
-                         index=False, float_format='%.4f')
-
-        # Also create a simplified version for quick viewing
-        simple_df = summary_df[['Method', 'Success_Rate_%', 'Mean_Edit_Distance',
-                                'Mean_Reticulation_Error']].copy()
-        simple_df.to_csv(self.tables_dir / "summary_simple.csv",
-                        index=False, float_format='%.2f')
-
-        return summary_df
-
-    # ========================================================================
-    # MAIN GENERATION
-    # ========================================================================
+        # Load inventory
+        inventory_file = self.base_dir / "inventory.csv"
+        self.inventory = pd.read_csv(inventory_file) if inventory_file.exists() else None
+
+        # Load aggregated metrics
+        metrics_file = self.base_dir / "aggregated_metrics.csv"
+        self.metrics = pd.read_csv(metrics_file) if metrics_file.exists() else None
+
+        # Load comparisons
+        comparisons_file = self.base_dir / "comparisons_raw.csv"
+        self.comparisons = pd.read_csv(comparisons_file) if comparisons_file.exists() else None
+
+        print(f"\nLoaded data for {config}:")
+        print(f"  Networks: {len(self.network_stats)}")
+        print(f"  Inventory: {len(self.inventory) if self.inventory is not None else 0}")
+        print(f"  Metrics: {len(self.metrics) if self.metrics is not None else 0}")
 
     def generate_all_figures(self):
-        """Generate all figures for this configuration"""
+        """Generate all analysis figures"""
         print(f"\n{'='*80}")
-        print(f"Generating Analysis for: {self.config_name}")
+        print(f"Generating Analysis for: {self.config}")
         print(f"ILS Level: {self.ils_level}")
         print(f"Output: {self.base_dir}")
         print(f"{'='*80}\n")
 
-        print("[1/8] Success vs Reticulations...")
-        self.plot_success_vs_reticulations()
+        # Core completion rate plots (both single and faceted)
+        print("[1/12] Completion Rate vs Holm Fold (single)...")
+        self.plot_completion_vs_characteristic('H_Strict', 'Holm Fold', '01a')
 
-        print("[2/8] Success vs Polyploids...")
-        self.plot_success_vs_polyploids()
+        print("[2/12] Completion Rate vs Holm Fold (faceted)...")
+        self.plot_completion_vs_characteristic_faceted('H_Strict', 'Holm Fold', '01b')
 
-        print("[3/8] Success vs WGD Events...")
-        self.plot_success_vs_wgd()
+        print("[3/12] Completion Rate vs Polyphest Fold (single)...")
+        self.plot_completion_vs_characteristic('H_Relaxed', 'Polyphest Fold (threshold=0.2)', '02a')
 
-        print("[4/8] Method Performance Overview...")
-        self.plot_method_performance_overview()
+        print("[4/12] Completion Rate vs Polyphest Fold (faceted)...")
+        self.plot_completion_vs_characteristic_faceted('H_Relaxed', 'Polyphest Fold (threshold=0.2)', '02b')
 
-        print("[5/8] Method × Network Heatmap...")
-        self.plot_method_network_heatmap()
+        print("[5/12] Folding Method Comparison...")
+        self.plot_folding_comparison()
 
-        print("[6/8] Reticulation Accuracy...")
-        self.plot_reticulation_accuracy()
+        print("[6/12] Completion Rate vs Polyploids (single)...")
+        self.plot_completion_vs_characteristic('Num_Polyploids', 'Number of Polyploid Species', '03a')
 
-        print("[7/8] Difficulty Correlations...")
-        self.plot_difficulty_correlations()
+        print("[7/12] Completion Rate vs Polyploids (faceted)...")
+        self.plot_completion_vs_characteristic_faceted('Num_Polyploids', 'Number of Polyploid Species', '03b')
 
-        print("[8/8] Summary Tables...")
-        self.create_summary_table()
+        print("[8/12] Completion Rate vs Total WGD (single)...")
+        self.plot_completion_vs_characteristic('Total_WGD', 'Total WGD Events', '04a')
+
+        print("[9/12] Completion Rate vs Total WGD (faceted)...")
+        self.plot_completion_vs_characteristic_faceted('Total_WGD', 'Total WGD Events', '04b')
+
+        # Performance and accuracy plots
+        print("[10/12] Edit Distance Distribution...")
+        self.plot_edit_distance_distribution()
+
+        print("[11/12] Accuracy Metrics Heatmap...")
+        self.plot_accuracy_heatmap()
+
+        print("[12/12] Method Performance Summary...")
+        self.plot_method_summary()
+
+        # Generate summary table
+        print("[Tables] Generating summary tables...")
+        self.generate_summary_table()
 
         print(f"\n{'='*80}")
-        print(f"Complete! All outputs saved to:")
-        print(f"  Plots:  {self.plots_dir}")
+        print(f"✓ Analysis complete! Outputs in:")
+        print(f"  Plots: {self.plots_dir}")
         print(f"  Tables: {self.tables_dir}")
         print(f"{'='*80}\n")
+
+    def plot_completion_vs_characteristic(self, char_col: str, char_label: str, fig_num: str):
+        """Plot completion rate vs network characteristic (single plot, all methods)"""
+        if self.inventory is None:
+            print(f"  WARNING: No inventory data, skipping {char_label}")
+            return
+
+        # Check if column exists
+        if char_col not in self.network_stats.columns:
+            print(f"  WARNING: Column {char_col} not found, skipping")
+            return
+
+        fig, ax = plt.subplots(figsize=(12, 7))
+
+        # Merge with network stats
+        inv = self.inventory.merge(
+            self.network_stats[['network', char_col]],
+            on='network', how='left'
+        )
+
+        # Remove NaN values
+        inv = inv.dropna(subset=[char_col])
+
+        # Calculate completion rate per characteristic value per method
+        for method in sorted(inv['method'].unique()):
+            method_inv = inv[inv['method'] == method]
+
+            grouped = method_inv.groupby(char_col).apply(
+                lambda x: pd.Series({
+                    'completion_rate': x['inferred_exists'].sum() / len(x) * 100,
+                    'n_runs': len(x)
+                })
+            ).reset_index()
+
+            # Only plot if we have data
+            if len(grouped) > 0:
+                ax.plot(grouped[char_col], grouped['completion_rate'],
+                       marker=METHOD_MARKERS.get(method, 'o'),
+                       label=method,
+                       color=METHOD_COLORS.get(method, '#000000'),
+                       linewidth=2.5,
+                       markersize=8,
+                       alpha=0.85,
+                       markeredgewidth=1.5,
+                       markeredgecolor='white')
+
+        ax.set_xlabel(f'{char_label}', fontsize=14, fontweight='bold')
+        ax.set_ylabel('Completion Rate (%)', fontsize=14, fontweight='bold')
+        ax.set_title(f'Completion Rate vs {char_label}\nILS {self.ils_level}',
+                    fontsize=15, fontweight='bold', pad=20)
+        ax.legend(frameon=True, loc='best', fontsize=12, framealpha=0.9)
+        ax.grid(True, alpha=0.25, linestyle='--', linewidth=0.8)
+        ax.set_ylim(-5, 105)
+
+        # Integer x-axis if characteristic is integer
+        if inv[char_col].dtype in ['int64', 'int32']:
+            ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / f"{fig_num}_completion_vs_{char_col.lower()}.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / f"{fig_num}_completion_vs_{char_col.lower()}.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_completion_vs_characteristic_faceted(self, char_col: str, char_label: str, fig_num: str):
+        """Plot completion rate vs characteristic (faceted by method)"""
+        if self.inventory is None:
+            return
+
+        if char_col not in self.network_stats.columns:
+            return
+
+        # Merge with network stats
+        inv = self.inventory.merge(
+            self.network_stats[['network', char_col]],
+            on='network', how='left'
+        )
+        inv = inv.dropna(subset=[char_col])
+
+        methods = sorted(inv['method'].unique())
+        n_methods = len(methods)
+
+        # Create subplots
+        fig, axes = plt.subplots(1, n_methods, figsize=(5*n_methods, 5), sharey=True)
+        if n_methods == 1:
+            axes = [axes]
+
+        for ax, method in zip(axes, methods):
+            method_inv = inv[inv['method'] == method]
+
+            grouped = method_inv.groupby(char_col).apply(
+                lambda x: pd.Series({
+                    'completion_rate': x['inferred_exists'].sum() / len(x) * 100,
+                    'n_runs': len(x)
+                })
+            ).reset_index()
+
+            if len(grouped) > 0:
+                ax.plot(grouped[char_col], grouped['completion_rate'],
+                       marker=METHOD_MARKERS.get(method, 'o'),
+                       color=METHOD_COLORS.get(method, '#000000'),
+                       linewidth=3,
+                       markersize=10,
+                       markeredgewidth=1.5,
+                       markeredgecolor='white')
+
+                ax.set_xlabel(f'{char_label}', fontsize=13, fontweight='bold')
+                ax.set_title(method, fontsize=14, fontweight='bold', pad=10)
+                ax.grid(True, alpha=0.25, linestyle='--')
+                ax.set_ylim(-5, 105)
+
+                if inv[char_col].dtype in ['int64', 'int32']:
+                    ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+        axes[0].set_ylabel('Completion Rate (%)', fontsize=13, fontweight='bold')
+        fig.suptitle(f'Completion Rate vs {char_label} (ILS {self.ils_level})',
+                    fontsize=16, fontweight='bold', y=1.02)
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / f"{fig_num}_completion_vs_{char_col.lower()}_faceted.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / f"{fig_num}_completion_vs_{char_col.lower()}_faceted.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_folding_comparison(self):
+        """Compare Holm Fold vs Polyphest Fold"""
+        if self.inventory is None:
+            return
+
+        # Check both columns exist
+        if 'H_Strict' not in self.network_stats.columns or 'H_Relaxed' not in self.network_stats.columns:
+            print("  WARNING: Missing H_Strict or H_Relaxed, skipping folding comparison")
+            return
+
+        inv = self.inventory.merge(
+            self.network_stats[['network', 'H_Strict', 'H_Relaxed']],
+            on='network', how='left'
+        )
+
+        methods = sorted(inv['method'].unique())
+        n_methods = len(methods)
+
+        fig, axes = plt.subplots(1, n_methods, figsize=(5*n_methods, 5), sharey=True)
+        if n_methods == 1:
+            axes = [axes]
+
+        for ax, method in zip(axes, methods):
+            method_inv = inv[inv['method'] == method]
+
+            # Holm Fold
+            grouped_strict = method_inv.groupby('H_Strict').apply(
+                lambda x: pd.Series({'completion_rate': x['inferred_exists'].sum() / len(x) * 100})
+            ).reset_index()
+
+            # Polyphest Fold
+            grouped_relaxed = method_inv.groupby('H_Relaxed').apply(
+                lambda x: pd.Series({'completion_rate': x['inferred_exists'].sum() / len(x) * 100})
+            ).reset_index()
+
+            if len(grouped_strict) > 0:
+                ax.plot(grouped_strict['H_Strict'], grouped_strict['completion_rate'],
+                       'o-', label='Holm Fold', color='#0173B2', linewidth=2.5, markersize=8,
+                       markeredgewidth=1.5, markeredgecolor='white')
+
+            if len(grouped_relaxed) > 0:
+                ax.plot(grouped_relaxed['H_Relaxed'], grouped_relaxed['completion_rate'],
+                       's--', label='Polyphest Fold (θ=0.2)', color='#DE8F05', linewidth=2.5, markersize=8,
+                       markeredgewidth=1.5, markeredgecolor='white')
+
+            ax.set_xlabel('Number of Reticulations', fontsize=13, fontweight='bold')
+            ax.set_title(method, fontsize=14, fontweight='bold', pad=10)
+            ax.grid(True, alpha=0.25, linestyle='--')
+            ax.set_ylim(-5, 105)
+            ax.legend(fontsize=11, framealpha=0.9)
+            ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+        axes[0].set_ylabel('Completion Rate (%)', fontsize=13, fontweight='bold')
+        fig.suptitle(f'Folding Method Comparison (ILS {self.ils_level})',
+                    fontsize=16, fontweight='bold', y=1.02)
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "05_folding_comparison.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "05_folding_comparison.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_edit_distance_distribution(self):
+        """Plot edit distance distribution for each method"""
+        if self.metrics is None:
+            print("  WARNING: No metrics data, skipping edit distance")
+            return
+
+        # Filter to edit_distance metric
+        edit_data = self.metrics[self.metrics['metric'] == 'edit_distance'].copy()
+
+        if len(edit_data) == 0:
+            print("  WARNING: No edit_distance data found")
+            return
+
+        methods = sorted(edit_data['method'].unique())
+
+        fig, ax = plt.subplots(figsize=(12, 7))
+
+        # Prepare data for boxplot
+        data_by_method = []
+        labels = []
+        colors = []
+
+        for method in methods:
+            method_data = edit_data[edit_data['method'] == method]['mean'].dropna()
+            if len(method_data) > 0:
+                data_by_method.append(method_data)
+                labels.append(method)
+                colors.append(METHOD_COLORS.get(method, '#000000'))
+
+        # Create boxplot
+        bp = ax.boxplot(data_by_method, labels=labels, patch_artist=True,
+                       widths=0.6, showfliers=True,
+                       boxprops=dict(linewidth=1.5),
+                       whiskerprops=dict(linewidth=1.5),
+                       capprops=dict(linewidth=1.5),
+                       medianprops=dict(linewidth=2.5, color='red'))
+
+        # Color boxes
+        for patch, color in zip(bp['boxes'], colors):
+            patch.set_facecolor(color)
+            patch.set_alpha(0.7)
+
+        ax.set_ylabel('Edit Distance', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Method', fontsize=14, fontweight='bold')
+        ax.set_title(f'Edit Distance Distribution (ILS {self.ils_level})',
+                    fontsize=15, fontweight='bold', pad=20)
+        ax.grid(True, alpha=0.25, axis='y', linestyle='--')
+        plt.xticks(rotation=0, fontsize=12)
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "06_edit_distance_distribution.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "06_edit_distance_distribution.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_accuracy_heatmap(self):
+        """Plot heatmap of edit distance for each method × network"""
+        if self.metrics is None:
+            return
+
+        edit_data = self.metrics[self.metrics['metric'] == 'edit_distance'].copy()
+
+        if len(edit_data) == 0:
+            return
+
+        # Pivot to method × network matrix
+        pivot = edit_data.pivot(index='method', columns='network', values='mean')
+
+        # Sort networks by H_Strict for better visualization
+        network_order = self.network_stats.sort_values('H_Strict')['network'].tolist()
+        pivot = pivot[[col for col in network_order if col in pivot.columns]]
+
+        fig, ax = plt.subplots(figsize=(16, 6))
+
+        # Create heatmap
+        sns.heatmap(pivot, annot=False, cmap='RdYlGn_r', center=0.5,
+                   cbar_kws={'label': 'Edit Distance'},
+                   linewidths=0.5, linecolor='gray',
+                   ax=ax, vmin=0, vmax=1)
+
+        ax.set_xlabel('Network', fontsize=13, fontweight='bold')
+        ax.set_ylabel('Method', fontsize=13, fontweight='bold')
+        ax.set_title(f'Edit Distance Heatmap (ILS {self.ils_level})',
+                    fontsize=15, fontweight='bold', pad=20)
+
+        plt.xticks(rotation=90, fontsize=9)
+        plt.yticks(rotation=0, fontsize=11)
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "07_accuracy_heatmap.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "07_accuracy_heatmap.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_method_summary(self):
+        """Summary bar plot: completion rate and mean edit distance"""
+        if self.inventory is None or self.metrics is None:
+            return
+
+        methods = sorted(self.inventory['method'].unique())
+
+        # Calculate completion rates
+        completion_rates = []
+        edit_distances = []
+
+        for method in methods:
+            method_inv = self.inventory[self.inventory['method'] == method]
+            comp_rate = method_inv['inferred_exists'].sum() / len(method_inv) * 100
+            completion_rates.append(comp_rate)
+
+            # Get mean edit distance
+            method_edit = self.metrics[
+                (self.metrics['method'] == method) &
+                (self.metrics['metric'] == 'edit_distance')
+            ]
+            if len(method_edit) > 0:
+                edit_distances.append(method_edit['mean'].mean())
+            else:
+                edit_distances.append(np.nan)
+
+        # Create figure with two subplots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+        # Completion rate bars
+        colors1 = [METHOD_COLORS.get(m, '#000000') for m in methods]
+        bars1 = ax1.bar(methods, completion_rates, color=colors1, alpha=0.8, edgecolor='black', linewidth=1.5)
+        ax1.set_ylabel('Completion Rate (%)', fontsize=13, fontweight='bold')
+        ax1.set_xlabel('Method', fontsize=13, fontweight='bold')
+        ax1.set_title('Completion Rate by Method', fontsize=14, fontweight='bold', pad=15)
+        ax1.set_ylim(0, 105)
+        ax1.grid(True, alpha=0.25, axis='y', linestyle='--')
+        ax1.tick_params(axis='x', rotation=0)
+
+        # Add value labels on bars
+        for bar, val in zip(bars1, completion_rates):
+            height = bar.get_height()
+            ax1.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{val:.1f}%', ha='center', va='bottom', fontsize=10, fontweight='bold')
+
+        # Edit distance bars
+        colors2 = [METHOD_COLORS.get(m, '#000000') for m in methods]
+        bars2 = ax2.bar(methods, edit_distances, color=colors2, alpha=0.8, edgecolor='black', linewidth=1.5)
+        ax2.set_ylabel('Mean Edit Distance', fontsize=13, fontweight='bold')
+        ax2.set_xlabel('Method', fontsize=13, fontweight='bold')
+        ax2.set_title('Accuracy by Method (lower is better)', fontsize=14, fontweight='bold', pad=15)
+        ax2.grid(True, alpha=0.25, axis='y', linestyle='--')
+        ax2.tick_params(axis='x', rotation=0)
+
+        # Add value labels on bars
+        for bar, val in zip(bars2, edit_distances):
+            if not np.isnan(val):
+                height = bar.get_height()
+                ax2.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{val:.3f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
+
+        fig.suptitle(f'Method Performance Summary (ILS {self.ils_level})',
+                    fontsize=16, fontweight='bold', y=1.00)
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "08_method_summary.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "08_method_summary.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def generate_summary_table(self):
+        """Generate summary statistics table"""
+        if self.inventory is None or self.metrics is None:
+            return
+
+        methods = sorted(self.inventory['method'].unique())
+
+        summary_data = []
+        for method in methods:
+            method_inv = self.inventory[self.inventory['method'] == method]
+            total = len(method_inv)
+            successful = method_inv['inferred_exists'].sum()
+            comp_rate = successful / total * 100 if total > 0 else 0
+
+            # Edit distance stats
+            method_edit = self.metrics[
+                (self.metrics['method'] == method) &
+                (self.metrics['metric'] == 'edit_distance')
+            ]
+
+            if len(method_edit) > 0:
+                mean_ed = method_edit['mean'].mean()
+                std_ed = method_edit['mean'].std()
+                min_ed = method_edit['mean'].min()
+                max_ed = method_edit['mean'].max()
+            else:
+                mean_ed = std_ed = min_ed = max_ed = np.nan
+
+            summary_data.append({
+                'method': method,
+                'total_runs': total,
+                'completed_runs': successful,
+                'completion_rate_%': comp_rate,
+                'mean_edit_distance': mean_ed,
+                'std_edit_distance': std_ed,
+                'min_edit_distance': min_ed,
+                'max_edit_distance': max_ed
+            })
+
+        df = pd.DataFrame(summary_data)
+        df.to_csv(self.tables_dir / "summary_table.csv", index=False, float_format='%.4f')
+
+        print(f"\n  Summary Table:")
+        print(df.to_string(index=False))
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Generate comprehensive analysis figures for phylogenetic network inference',
+        description='Generate publication-quality analysis figures',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Single configuration
-  %(prog)s --config conf_ils_low_10M
-
-  # Multiple configurations (processes each separately)
-  %(prog)s --config conf_ils_low_10M conf_ils_medium_10M conf_ils_high_10M
-
-  # Custom network stats path (if needed)
-  %(prog)s --config conf_ils_low_10M --network-stats /custom/path/stats.csv
-
 Output structure (per configuration):
   simulations/analysis/summary/{config}/
   ├── plots/
-  │   ├── 01_success_vs_reticulations.pdf/png
-  │   ├── 02_success_vs_polyploids.pdf/png
-  │   ├── 03_success_vs_wgd.pdf/png
-  │   ├── 04_method_performance_overview.pdf/png
-  │   ├── 05_method_network_heatmap.pdf/png
-  │   ├── 06_reticulation_accuracy.pdf/png
-  │   └── 07_difficulty_correlations.pdf/png
+  │   ├── 01a_completion_vs_h_strict.pdf/png       # Single plot
+  │   ├── 01b_completion_vs_h_strict_faceted.pdf/png
+  │   ├── 02a_completion_vs_h_relaxed.pdf/png
+  │   ├── 02b_completion_vs_h_relaxed_faceted.pdf/png
+  │   ├── 03a_completion_vs_num_polyploids.pdf/png
+  │   ├── 03b_completion_vs_num_polyploids_faceted.pdf/png
+  │   ├── 04a_completion_vs_total_wgd.pdf/png
+  │   ├── 04b_completion_vs_total_wgd_faceted.pdf/png
+  │   ├── 05_folding_comparison.pdf/png
+  │   ├── 06_edit_distance_distribution.pdf/png
+  │   ├── 07_accuracy_heatmap.pdf/png
+  │   └── 08_method_summary.pdf/png
   └── tables/
-      ├── summary_table.csv
-      └── summary_simple.csv
+      └── summary_table.csv
         """
     )
 
