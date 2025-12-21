@@ -1,8 +1,0 @@
-Method,Success_Rate_%,Mean_Edit_Distance,Mean_Reticulation_Error
-grampa,95.24,0.91,7.51
-polyphest_p50,76.19,0.82,0.10
-polyphest_p70,77.14,0.81,0.00
-polyphest_p90,80.95,0.82,0.14
-mpsugar,27.62,1.17,3.65
-padre,9.52,0.62,0.25
-alloppnet,0.00,,
