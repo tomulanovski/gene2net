@@ -1,8 +1,0 @@
-Method,Total_Runs,Completed_Runs,Completion_Rate_%,Mean_Edit_Distance,Median_Edit_Distance,Std_Edit_Distance,Mean_Reticulation_Error,Median_Reticulation_Error
-alloppnet,105,0,0.0000,,,,,
-grampa,105,100,95.2381,0.8980,0.9321,0.1082,7.3400,5.0000
-mpsugar,105,29,27.6190,1.1835,1.1871,0.0580,3.5333,3.7000
-padre,105,0,0.0000,,,,,
-polyphest_p50,105,59,56.1905,0.8608,0.8723,0.1025,2.2308,0.0000
-polyphest_p70,105,66,62.8571,0.8612,0.8867,0.1231,2.0714,0.0000
-polyphest_p90,105,85,80.9524,0.8759,0.8975,0.0993,1.8353,0.0000
