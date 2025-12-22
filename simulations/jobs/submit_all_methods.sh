@@ -412,9 +412,13 @@ build_submit_command() {
     local cmd="${submit_script} ${config}"
 
     # Add common parameters
-    # Generate comma-separated list of replicates (1,2,3,4,5)
-    local replicate_list=$(seq -s ',' 1 ${NUM_REPLICATES})
-    cmd="${cmd} --replicates ${replicate_list}"
+    # AlloppNET expects comma-separated list, others expect a single number
+    if [ "$method" = "alloppnet" ]; then
+        local replicate_list=$(seq -s ',' 1 ${NUM_REPLICATES})
+        cmd="${cmd} --replicates ${replicate_list}"
+    else
+        cmd="${cmd} --replicates ${NUM_REPLICATES}"
+    fi
 
     # Add step control flags
     if [ "$PREP_ONLY" = true ]; then
