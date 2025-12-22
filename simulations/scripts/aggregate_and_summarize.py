@@ -97,13 +97,16 @@ class MultiLevelSummary:
         level1_dir.mkdir(parents=True, exist_ok=True)
 
         # Define metrics to generate pivot tables for
+        # PRIMARY METRICS (MUL-tree based)
         metrics_to_pivot = {
-            'edit_distance': 'edit_distance',
+            'edit_distance_multree': 'edit_distance_multree',  # PRIMARY: MUL-tree edit distance
+            'rf_distance': 'rf_distance',  # PRIMARY: RF distance on MUL-trees
             'num_rets_diff': 'num_rets_diff',
-            'num_rets_bias': 'num_rets_bias',  # NEW: Signed difference (bias)
+            'num_rets_bias': 'num_rets_bias',  # Signed difference (bias)
             'ploidy_diff.dist': 'ploidy_diff',
             'ret_leaf_jaccard.dist': 'ret_leaf_jaccard',
-            'ret_sisters_jaccard.dist': 'ret_sisters_jaccard'
+            'ret_sisters_jaccard.dist': 'ret_sisters_jaccard',
+            'edit_distance': 'edit_distance_network'  # LEGACY: Network edit distance (for comparison)
         }
 
         for metric_name, output_name in metrics_to_pivot.items():
@@ -148,9 +151,12 @@ class MultiLevelSummary:
         Output columns: method, metric, avg_value, avg_rank, num_best, num_worst
         """
         # Metrics to rank (lower is better for distances)
+        # PRIMARY METRICS first, then secondary
         # Note: num_rets_bias is NOT ranked (it's signed, not an error magnitude)
-        distance_metrics = ['edit_distance', 'num_rets_diff', 'ploidy_diff.dist',
-                           'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist']
+        distance_metrics = ['edit_distance_multree', 'rf_distance',  # PRIMARY MUL-tree metrics
+                           'num_rets_diff', 'ploidy_diff.dist',
+                           'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist',
+                           'edit_distance']  # LEGACY network edit distance
 
         rankings = []
 
@@ -257,7 +263,9 @@ class MultiLevelSummary:
         correlations = []
 
         # Focus on main distance metrics (bias is signed, not a distance metric for correlation)
-        main_metrics = ['edit_distance', 'num_rets_diff', 'num_rets_bias']
+        # PRIMARY METRICS first
+        main_metrics = ['edit_distance_multree', 'rf_distance',  # PRIMARY MUL-tree metrics
+                       'num_rets_diff', 'num_rets_bias']
 
         for method in merged['method'].unique():
             for metric in main_metrics:
