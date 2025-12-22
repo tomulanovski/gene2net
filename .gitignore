@@ -13,6 +13,7 @@
 !simulations/jobs/**
 !simulations/analysis/
 !simulations/analysis/**
+simulations/analysis/**/cache/
 !simulations/scripts/
 !simulations/scripts/**
 !simulations/networks/
