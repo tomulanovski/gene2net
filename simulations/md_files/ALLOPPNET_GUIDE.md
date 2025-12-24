@@ -245,7 +245,7 @@ tail -100 ../logs/alloppnet_*_rep1_*.err
 
 ### Step 4: Post-Process Results
 
-**Script:** `postprocess_results.py`
+**Script:** `submit_alloppnet_postprocess.sh` (sbatch job)
 
 **What it does:**
 1. Runs TreeAnnotator on `sampledmultrees.txt` (10% burnin, mean heights)
@@ -264,16 +264,32 @@ Burnin: 9,999 trees (10%)
 
 **Usage:**
 ```bash
-# Post-process AlloppNET results
+# Option 1: Use postprocess_results.py (automatically submits sbatch jobs on cluster)
 python simulations/scripts/postprocess_results.py conf_ils_low_10M --methods alloppnet
 
-# Or post-process all methods including AlloppNET
-python simulations/scripts/postprocess_results.py conf_ils_low_10M
+# Option 2: Manually submit sbatch jobs
+cd simulations/jobs
+./submit_alloppnet_postprocess.sh conf_ils_low_10M
+
+# Post-process specific replicates (manual only)
+./submit_alloppnet_postprocess.sh conf_ils_low_10M --replicates 1,3,5
+
+# Dry run (preview commands)
+./submit_alloppnet_postprocess.sh conf_ils_low_10M --dry-run
 ```
+
+**Why sbatch?**
+- TreeAnnotator processing 100K+ trees is CPU/memory intensive
+- Requires proper resource allocation (16GB RAM, 2 hours)
+- Runs in parallel (8 networks × 5 replicates = 40 jobs)
+- Better error handling and logging
+
+**Note:** `postprocess_results.py` automatically detects if you're on the cluster and submits sbatch jobs for AlloppNET. If you're not on the cluster, it will show instructions to run manually.
 
 **Benefits:**
 - Can run post-processing even if BEAST job times out
-- Consistent workflow with other methods
+- Proper resource allocation via SLURM
+- Parallel processing (faster than sequential)
 - Can re-run post-processing without re-running BEAST
 
 ---
@@ -682,10 +698,12 @@ squeue -u $USER | grep alloppnet
 tail -f ../logs/alloppnet_run_*.out
 
 # 6. Post-process results (after BEAST completes or times out)
-python ../scripts/postprocess_results.py conf_ils_low_10M --methods alloppnet
+cd ../jobs
+./submit_alloppnet_postprocess.sh conf_ils_low_10M
 
-# 7. Validate final results
-python ../scripts/check_pipeline_status.py conf_ils_low_10M --method alloppnet --step run --verbose
+# 7. Wait for post-processing jobs to complete, then validate
+cd ../scripts
+python check_pipeline_status.py conf_ils_low_10M --method alloppnet --step run --verbose
 ```
 
 **Expected timeline (three-step workflow):**

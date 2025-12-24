@@ -18,9 +18,11 @@ Each program outputs results in different formats:
 | **GRAMPA** | `grampa-scores.txt` | `results/grampa/replicate_N/` | TSV with multiple ranked trees | Best tree (first row, last column) |
 | **MPSUGAR** | `mpsugar_results.txt` | `results/mpsugar/replicate_N/` | Detailed report with "Newick:" line | Newick tree from "Newick:" line |
 | **PADRE** | `padre_trees-result.tre` | `processed/padre_input/replicate_N/` ⚠️ | Already clean MUL-tree | Copy to results directory |
-| **AlloppNET** | `sampledmultrees.txt` | `results/alloppnet/replicate_N/` | BEAST MCMC output (NEXUS trees) | TreeAnnotator consensus + copy number removal |
+| **AlloppNET** | `sampledmultrees.txt` | `results/alloppnet/replicate_N/` | BEAST MCMC output (NEXUS trees) | **Run via sbatch** (TreeAnnotator + copy number removal) |
 
 All programs output standardized `{program}_result.tre` files after post-processing.
+
+**Note:** AlloppNET post-processing automatically submits sbatch jobs when run via `postprocess_results.py` on the cluster. The script detects if you're on the cluster and submits jobs automatically. You can also run it manually using `submit_alloppnet_postprocess.sh`.
 
 ---
 
@@ -180,8 +182,12 @@ python simulations/scripts/postprocess_results.py conf_ils_low_10M --methods gra
 # GRAMPA and Polyphest p50
 python simulations/scripts/postprocess_results.py conf_ils_low_10M --methods grampa polyphest_p50
 
-# AlloppNET (only runs on 8 compatible networks)
+# AlloppNET (automatically submits sbatch jobs on cluster)
 python simulations/scripts/postprocess_results.py conf_ils_low_10M --methods alloppnet
+
+# Or manually submit sbatch jobs
+cd simulations/jobs
+./submit_alloppnet_postprocess.sh conf_ils_low_10M
 
 # All Polyphest variants
 python simulations/scripts/postprocess_results.py conf_ils_low_10M \
@@ -403,6 +409,12 @@ Score: -12345
 
 ### AlloppNET Extraction
 
+**⚠️ IMPORTANT: AlloppNET post-processing must be run via sbatch, not via `postprocess_results.py`**
+
+**Submission Script**: `simulations/jobs/submit_alloppnet_postprocess.sh`
+
+**Array Script**: `simulations/jobs/alloppnet_postprocess_array.sh`
+
 **Input Location**: `results/{config}/alloppnet/replicate_{N}/sampledmultrees.txt`
 
 **Output Location**: `results/{config}/alloppnet/replicate_{N}/alloppnet_result.tre`
@@ -417,7 +429,7 @@ tree STATE_1000 = [tree];
 END;
 ```
 
-**Extraction Logic**:
+**Extraction Logic** (runs in sbatch job):
 1. Count trees in `sampledmultrees.txt` (count "tree STATE_" occurrences)
 2. Calculate 10% burnin: `(total_trees - 1) // 10` (exclude STATE_0)
 3. Run TreeAnnotator with burnin and mean heights:
@@ -426,12 +438,29 @@ END;
 4. Remove copy number suffixes (`_0`, `_1`) from tip labels using `remove_copy_numbers.py`
 5. Write cleaned tree to `alloppnet_result.tre`
 
-**Requirements**:
+**SLURM Requirements**:
+- Time: 2 hours per job
+- Memory: 16GB
+- CPUs: 1
 - Conda environment `alloppnet` (for TreeAnnotator)
 - Conda environment `gene2net` (for Python/Biopython)
-- `remove_copy_numbers.py` script in `scripts/alloppnet/`
+
+**Usage**:
+```bash
+# Submit post-processing jobs
+cd simulations/jobs
+./submit_alloppnet_postprocess.sh conf_ils_low_10M
+
+# Monitor jobs
+squeue -u $USER | grep alloppnet_postprocess
+
+# Check logs
+tail -f ../logs/alloppnet_postprocess_*.out
+```
 
 **Note**: Works even if BEAST job timed out (uses whatever trees were sampled)
+
+**Why sbatch?** TreeAnnotator processing 100K+ trees requires significant CPU and memory resources, so it must run on compute nodes with proper resource allocation.
 
 ---
 

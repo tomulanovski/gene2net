@@ -16,7 +16,6 @@ import sys
 import argparse
 import re
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
 import yaml
@@ -49,6 +48,11 @@ class ResultPostprocessor:
             'failed': 0,
             'errors': []
         }
+        
+        # Paths for cluster operations
+        self.scripts_dir = Path(__file__).parent
+        self.jobs_dir = self.scripts_dir.parent / "jobs"
+        self.submit_script = self.jobs_dir / "submit_alloppnet_postprocess.sh"
 
     def extract_polyphest_multree(self, input_file: Path) -> Optional[str]:
         """
@@ -204,134 +208,98 @@ class ResultPostprocessor:
         except Exception as e:
             return None
 
-    def extract_alloppnet_multree(self, input_file: Path, output_dir: Path) -> Optional[str]:
+    def _is_on_cluster(self) -> bool:
         """
-        Extract MUL-tree from AlloppNET BEAST output
-
-        Steps:
-        1. Run TreeAnnotator on sampledmultrees.txt → alloppnet_consensus.tre
-        2. Run remove_copy_numbers.py → clean tree string
-
-        Args:
-            input_file: Path to sampledmultrees.txt
-            output_dir: Directory where output files will be created
-
+        Check if we're running on the cluster (has sbatch command)
+        
         Returns:
-            Clean MUL-tree string or None if failed
+            True if sbatch command is available, False otherwise
         """
         try:
-            # Count trees and calculate 10% burnin
-            with open(input_file, 'r') as f:
-                content = f.read()
-                tree_count = content.count('tree STATE_')
-
-            if tree_count == 0:
-                return None
-
-            usable_trees = tree_count - 1  # Exclude STATE_0
-            if usable_trees < 1:
-                return None
-
-            burnin = usable_trees // 10
-
-            # Create temporary consensus tree file
-            consensus_file = output_dir / "alloppnet_consensus.tre"
-
-            # Run TreeAnnotator using conda environment
-            # Paths for cluster
-            conda_path = "/groups/itay_mayrose/tomulanovski/miniconda3"
-            conda_sh = f"{conda_path}/etc/profile.d/conda.sh"
-
-            # Build command to activate conda and run TreeAnnotator
-            treeannotator_cmd = f"""
-            source {conda_sh} && \
-            conda activate alloppnet && \
-            treeannotator -burninTrees {burnin} -heights mean \
-                "{input_file}" \
-                "{consensus_file}"
-            """
-
-            # Run TreeAnnotator
             result = subprocess.run(
-                treeannotator_cmd,
-                shell=True,
-                executable='/bin/bash',
+                ['which', 'sbatch'],
                 capture_output=True,
                 text=True,
-                cwd=str(output_dir)
+                timeout=2
             )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            return False
 
-            if result.returncode != 0:
-                return None
-
-            if not consensus_file.exists():
-                return None
-
-            # Now remove copy numbers using Python function directly
-            # Import the function from remove_copy_numbers.py
-            scripts_dir = Path(__file__).parent / "alloppnet"
-            sys.path.insert(0, str(scripts_dir))
+    def _submit_alloppnet_jobs(self) -> bool:
+        """
+        Submit AlloppNET post-processing jobs via sbatch
+        
+        Returns:
+            True if jobs were submitted successfully, False otherwise
+        """
+        if not self._is_on_cluster():
+            print(f"\n  ERROR: Cannot submit AlloppNET post-processing jobs")
+            print(f"         sbatch command not found. Are you on the cluster?")
+            print(f"         Please run manually:")
+            print(f"         ./simulations/jobs/submit_alloppnet_postprocess.sh {self.config}")
+            return False
+        
+        if not self.submit_script.exists():
+            print(f"\n  ERROR: Submission script not found: {self.submit_script}")
+            print(f"         Please run manually:")
+            print(f"         ./simulations/jobs/submit_alloppnet_postprocess.sh {self.config}")
+            return False
+        
+        if not os.access(self.submit_script, os.X_OK):
+            print(f"\n  WARNING: Submission script not executable: {self.submit_script}")
+            print(f"           Attempting to submit anyway...")
+        
+        try:
+            # Change to jobs directory for submission
+            original_cwd = os.getcwd()
+            jobs_dir = str(self.jobs_dir)
             
-            try:
-                from remove_copy_numbers import remove_copy_suffixes
-                from Bio import Phylo
+            if self.dry_run:
+                print(f"\n  [DRY RUN] Would submit AlloppNET post-processing jobs:")
+                print(f"            cd {jobs_dir}")
+                print(f"            ./submit_alloppnet_postprocess.sh {self.config}")
+                return True
+            
+            # Submit jobs
+            os.chdir(jobs_dir)
+            cmd = ["./submit_alloppnet_postprocess.sh", self.config]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            os.chdir(original_cwd)
+            
+            if result.returncode == 0:
+                print(f"\n  ✓ AlloppNET post-processing jobs submitted successfully")
+                print(f"    Check status: squeue -u $USER | grep alloppnet_postprocess")
+                return True
+            else:
+                print(f"\n  ERROR: Failed to submit AlloppNET post-processing jobs")
+                print(f"         Exit code: {result.returncode}")
+                if result.stderr:
+                    print(f"         Error: {result.stderr}")
+                print(f"         Please run manually:")
+                print(f"         cd {jobs_dir}")
+                print(f"         ./submit_alloppnet_postprocess.sh {self.config}")
+                return False
                 
-                # Read consensus tree
-                tree = Phylo.read(str(consensus_file), 'newick')
-                
-                # Remove copy number suffixes
-                tree = remove_copy_suffixes(tree)
-                
-                # Write to temporary file to get Newick string
-                temp_output = output_dir / "alloppnet_temp_clean.tre"
-                Phylo.write(tree, str(temp_output), 'newick')
-                
-                # Read cleaned tree
-                with open(temp_output, 'r') as f:
-                    tree_string = f.read().strip()
-                
-                # Clean up temp file
-                temp_output.unlink()
-                
-            except (ImportError, Exception) as e:
-                # Fallback: use subprocess to call script
-                remove_copy_script = scripts_dir / "remove_copy_numbers.py"
-                temp_clean_file = output_dir / "alloppnet_temp_clean.tre"
-                
-                remove_copy_cmd = f"""
-                source {conda_sh} && \
-                conda activate gene2net && \
-                python3 "{remove_copy_script}" \
-                    "{consensus_file}" \
-                    "{temp_clean_file}"
-                """
-
-                result = subprocess.run(
-                    remove_copy_cmd,
-                    shell=True,
-                    executable='/bin/bash',
-                    capture_output=True,
-                    text=True
-                )
-
-                if result.returncode != 0 or not temp_clean_file.exists():
-                    return None
-
-                # Read cleaned tree
-                with open(temp_clean_file, 'r') as f:
-                    tree_string = f.read().strip()
-
-                # Clean up temp file
-                temp_clean_file.unlink()
-
-            # Ensure it ends with semicolon
-            if tree_string and not tree_string.endswith(';'):
-                tree_string += ';'
-
-            return tree_string
-
+        except subprocess.TimeoutExpired:
+            print(f"\n  ERROR: Submission timed out")
+            print(f"         Please run manually:")
+            print(f"         cd {jobs_dir}")
+            print(f"         ./submit_alloppnet_postprocess.sh {self.config}")
+            return False
         except Exception as e:
-            return None
+            print(f"\n  ERROR: Exception while submitting jobs: {e}")
+            print(f"         Please run manually:")
+            print(f"         cd {jobs_dir}")
+            print(f"         ./submit_alloppnet_postprocess.sh {self.config}")
+            return False
 
     def process_file(self, method: str, network: str, replicate: int) -> bool:
         """
@@ -404,7 +372,10 @@ class ResultPostprocessor:
         elif method == 'padre':
             tree_string = self.copy_padre_result(input_file)
         elif method == 'alloppnet':
-            tree_string = self.extract_alloppnet_multree(input_file, result_dir)
+            # AlloppNET post-processing runs via sbatch (handled in process_all)
+            # This method is called per file but we handle AlloppNET at method level
+            self.stats['skipped'] += 1
+            return False
 
         if tree_string is None:
             self.stats['failed'] += 1
@@ -449,24 +420,66 @@ class ResultPostprocessor:
         Args:
             methods_filter: List of methods to process (None = all)
         """
-        methods_to_process = self.methods.keys()
+        methods_to_process = list(self.methods.keys())
         if methods_filter:
             methods_to_process = [m for m in methods_to_process if m in methods_filter]
+
+        # Track per-method statistics
+        method_stats = {}
+
+        # Handle AlloppNET separately (submit sbatch jobs)
+        alloppnet_requested = 'alloppnet' in methods_to_process
+        methods_for_processing = [m for m in methods_to_process if m != 'alloppnet'] if alloppnet_requested else methods_to_process
 
         print(f"\n{'='*80}")
         print(f"Post-processing Results: {self.config}")
         print(f"{'='*80}")
         print(f"Methods: {', '.join(methods_to_process)}")
+        if alloppnet_requested:
+            print(f"  Note: AlloppNET will submit sbatch jobs automatically")
         print(f"Networks: {len(self.networks)}")
         print(f"Replicates: {self.num_replicates}")
         print(f"Dry run: {self.dry_run}")
         print(f"{'='*80}\n")
 
-        # Track per-method statistics
-        method_stats = {}
+        # Handle AlloppNET separately (submit sbatch jobs)
+        if alloppnet_requested:
+            print(f"\nProcessing alloppnet...")
+            print(f"  AlloppNET post-processing requires sbatch (TreeAnnotator processing large files)")
+            
+            # Count AlloppNET-compatible networks (8 networks)
+            alloppnet_networks = [
+                'Bendiksby_2011', 'Ding_2023', 'Koenen_2020', 'Liu_2023',
+                'Shahrestani_2015', 'Wisecaver_2023', 'Wu_2015', 'Zhao_2021'
+            ]
+            alloppnet_total = len(alloppnet_networks) * self.num_replicates
+            
+            # Submit jobs
+            if self._submit_alloppnet_jobs():
+                # Mark as success (jobs submitted)
+                method_stats['alloppnet'] = {
+                    'success': alloppnet_total,
+                    'skipped': 0,
+                    'failed': 0,
+                    'total': alloppnet_total
+                }
+                self.stats['total'] += alloppnet_total
+                self.stats['success'] += alloppnet_total
+                print(f"  ✓ alloppnet: {alloppnet_total} jobs submitted (out of {alloppnet_total})")
+            else:
+                # Mark as failed
+                method_stats['alloppnet'] = {
+                    'success': 0,
+                    'skipped': 0,
+                    'failed': alloppnet_total,
+                    'total': alloppnet_total
+                }
+                self.stats['total'] += alloppnet_total
+                self.stats['failed'] += alloppnet_total
+                print(f"  ✗ alloppnet: Failed to submit jobs (out of {alloppnet_total})")
 
         # Process each combination
-        for method in methods_to_process:
+        for method in methods_for_processing:
             print(f"\nProcessing {method}...")
 
             # Initialize per-method stats
@@ -577,7 +590,7 @@ Output files:
   - GRAMPA: grampa_result.tre (best tree from grampa-scores.txt)
   - MPSUGAR: mpsugar_result.tre (extracted from mpsugar_results.txt)
   - PADRE: padre_result.tre (copied from padre_tree-result.tre)
-  - AlloppNET: alloppnet_result.tre (TreeAnnotator consensus + copy number removal from sampledmultrees.txt)
+  - AlloppNET: alloppnet_result.tre (automatically submits sbatch jobs on cluster)
         """
     )
 
