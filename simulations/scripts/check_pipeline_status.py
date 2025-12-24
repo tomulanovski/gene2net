@@ -93,7 +93,7 @@ METHOD_FILES = {
     },
     'alloppnet': {
         'prep': ['taxa_table.txt', 'ploidy_level.json'],  # Also has ~1000 .nex files
-        'run': ['alloppnet_final.tre', 'sampledmultrees.txt', 'alloppnet.XML']
+        'run': ['alloppnet_result.tre', 'sampledmultrees.txt', 'alloppnet.XML']  # alloppnet_result.tre created by postprocess_results.py
     }
 }
 

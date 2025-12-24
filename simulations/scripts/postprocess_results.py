@@ -15,6 +15,8 @@ import os
 import sys
 import argparse
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
 import yaml
@@ -202,6 +204,135 @@ class ResultPostprocessor:
         except Exception as e:
             return None
 
+    def extract_alloppnet_multree(self, input_file: Path, output_dir: Path) -> Optional[str]:
+        """
+        Extract MUL-tree from AlloppNET BEAST output
+
+        Steps:
+        1. Run TreeAnnotator on sampledmultrees.txt → alloppnet_consensus.tre
+        2. Run remove_copy_numbers.py → clean tree string
+
+        Args:
+            input_file: Path to sampledmultrees.txt
+            output_dir: Directory where output files will be created
+
+        Returns:
+            Clean MUL-tree string or None if failed
+        """
+        try:
+            # Count trees and calculate 10% burnin
+            with open(input_file, 'r') as f:
+                content = f.read()
+                tree_count = content.count('tree STATE_')
+
+            if tree_count == 0:
+                return None
+
+            usable_trees = tree_count - 1  # Exclude STATE_0
+            if usable_trees < 1:
+                return None
+
+            burnin = usable_trees // 10
+
+            # Create temporary consensus tree file
+            consensus_file = output_dir / "alloppnet_consensus.tre"
+
+            # Run TreeAnnotator using conda environment
+            # Paths for cluster
+            conda_path = "/groups/itay_mayrose/tomulanovski/miniconda3"
+            conda_sh = f"{conda_path}/etc/profile.d/conda.sh"
+
+            # Build command to activate conda and run TreeAnnotator
+            treeannotator_cmd = f"""
+            source {conda_sh} && \
+            conda activate alloppnet && \
+            treeannotator -burninTrees {burnin} -heights mean \
+                "{input_file}" \
+                "{consensus_file}"
+            """
+
+            # Run TreeAnnotator
+            result = subprocess.run(
+                treeannotator_cmd,
+                shell=True,
+                executable='/bin/bash',
+                capture_output=True,
+                text=True,
+                cwd=str(output_dir)
+            )
+
+            if result.returncode != 0:
+                return None
+
+            if not consensus_file.exists():
+                return None
+
+            # Now remove copy numbers using Python function directly
+            # Import the function from remove_copy_numbers.py
+            scripts_dir = Path(__file__).parent / "alloppnet"
+            sys.path.insert(0, str(scripts_dir))
+            
+            try:
+                from remove_copy_numbers import remove_copy_suffixes
+                from Bio import Phylo
+                
+                # Read consensus tree
+                tree = Phylo.read(str(consensus_file), 'newick')
+                
+                # Remove copy number suffixes
+                tree = remove_copy_suffixes(tree)
+                
+                # Write to temporary file to get Newick string
+                temp_output = output_dir / "alloppnet_temp_clean.tre"
+                Phylo.write(tree, str(temp_output), 'newick')
+                
+                # Read cleaned tree
+                with open(temp_output, 'r') as f:
+                    tree_string = f.read().strip()
+                
+                # Clean up temp file
+                temp_output.unlink()
+                
+            except (ImportError, Exception) as e:
+                # Fallback: use subprocess to call script
+                remove_copy_script = scripts_dir / "remove_copy_numbers.py"
+                temp_clean_file = output_dir / "alloppnet_temp_clean.tre"
+                
+                remove_copy_cmd = f"""
+                source {conda_sh} && \
+                conda activate gene2net && \
+                python3 "{remove_copy_script}" \
+                    "{consensus_file}" \
+                    "{temp_clean_file}"
+                """
+
+                result = subprocess.run(
+                    remove_copy_cmd,
+                    shell=True,
+                    executable='/bin/bash',
+                    capture_output=True,
+                    text=True
+                )
+
+                if result.returncode != 0 or not temp_clean_file.exists():
+                    return None
+
+                # Read cleaned tree
+                with open(temp_clean_file, 'r') as f:
+                    tree_string = f.read().strip()
+
+                # Clean up temp file
+                temp_clean_file.unlink()
+
+            # Ensure it ends with semicolon
+            if tree_string and not tree_string.endswith(';'):
+                tree_string += ';'
+
+            return tree_string
+
+        except Exception as e:
+            return None
+
     def process_file(self, method: str, network: str, replicate: int) -> bool:
         """
         Process one result file
@@ -242,6 +373,8 @@ class ResultPostprocessor:
                 input_file = result_dir / "grampa-scores.txt"
             elif method == 'mpsugar':
                 input_file = result_dir / "mpsugar_results.txt"
+            elif method == 'alloppnet':
+                input_file = result_dir / "sampledmultrees.txt"
             else:
                 print(f"  ERROR: Unknown method '{method}'")
                 return False
@@ -270,6 +403,8 @@ class ResultPostprocessor:
             tree_string = self.extract_mpsugar_newick(input_file)
         elif method == 'padre':
             tree_string = self.copy_padre_result(input_file)
+        elif method == 'alloppnet':
+            tree_string = self.extract_alloppnet_multree(input_file, result_dir)
 
         if tree_string is None:
             self.stats['failed'] += 1
@@ -442,6 +577,7 @@ Output files:
   - GRAMPA: grampa_result.tre (best tree from grampa-scores.txt)
   - MPSUGAR: mpsugar_result.tre (extracted from mpsugar_results.txt)
   - PADRE: padre_result.tre (copied from padre_tree-result.tre)
+  - AlloppNET: alloppnet_result.tre (TreeAnnotator consensus + copy number removal from sampledmultrees.txt)
         """
     )
 

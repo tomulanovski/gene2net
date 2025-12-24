@@ -18,6 +18,7 @@ Each program outputs results in different formats:
 | **GRAMPA** | `grampa-scores.txt` | `results/grampa/replicate_N/` | TSV with multiple ranked trees | Best tree (first row, last column) |
 | **MPSUGAR** | `mpsugar_results.txt` | `results/mpsugar/replicate_N/` | Detailed report with "Newick:" line | Newick tree from "Newick:" line |
 | **PADRE** | `padre_trees-result.tre` | `processed/padre_input/replicate_N/` ⚠️ | Already clean MUL-tree | Copy to results directory |
+| **AlloppNET** | `sampledmultrees.txt` | `results/alloppnet/replicate_N/` | BEAST MCMC output (NEXUS trees) | TreeAnnotator consensus + copy number removal |
 
 All programs output standardized `{program}_result.tre` files after post-processing.
 
@@ -58,11 +59,18 @@ All programs output standardized `{program}_result.tre` files after post-process
             │   ├── replicate_2/
             │   └── ... (replicates 3-5)
             │
-            └── padre/
+            ├── padre/
+            │   ├── replicate_1/
+            │   │   └── padre_result.tre               # Created by post-processing
+            │   ├── replicate_2/
+            │   └── ... (replicates 3-5)
+            │
+            └── alloppnet/
                 ├── replicate_1/
-                │   └── padre_result.tre               # Created by post-processing
+                │   ├── sampledmultrees.txt            # Raw BEAST output
+                │   └── alloppnet_result.tre           # Created by post-processing
                 ├── replicate_2/
-                └── ... (replicates 3-5)
+                └── ... (replicates 3-5, only 8 compatible networks)
 ```
 
 **Note**: PADRE uniquely writes output to its input directory (`processed/padre_input/`), not the results directory. Post-processing copies it to `results/padre/` where the summary pipeline expects it.
@@ -117,6 +125,33 @@ Score: -80228
 
 **Extracted**: Same (already clean), but **copied to results directory**
 
+#### AlloppNET Output (`sampledmultrees.txt`)
+
+**Location**: `results/conf_ils_low_10M/alloppnet/replicate_1/sampledmultrees.txt`
+
+**Note**: AlloppNET post-processing runs TreeAnnotator and removes copy number suffixes.
+
+```
+#NEXUS
+
+BEGIN TREES;
+tree STATE_0 = [initial tree];
+tree STATE_1000 = [sampled tree];
+tree STATE_2000 = [sampled tree];
+...
+tree STATE_100000000 = [final sampled tree];
+END;
+```
+
+**Extraction Process**:
+1. Count trees in `sampledmultrees.txt`
+2. Calculate 10% burnin (exclude STATE_0)
+3. Run TreeAnnotator to create consensus tree
+4. Remove `_0` and `_1` suffixes from tip labels
+5. Write to `alloppnet_result.tre`
+
+**Extracted**: Clean MUL-tree without copy number suffixes
+
 ---
 
 ## Usage
@@ -132,7 +167,7 @@ python simulations/scripts/postprocess_results.py conf_ils_low_10M
 ```
 
 **Expected Output**:
-- Processes 630 files (21 networks × 6 methods × 5 replicates)
+- Processes files for all methods (varies by method - AlloppNET only runs on 8 networks)
 - Creates `{program}_result.tre` in each replicate directory
 - Shows success/failure statistics
 
@@ -144,6 +179,9 @@ python simulations/scripts/postprocess_results.py conf_ils_low_10M --methods gra
 
 # GRAMPA and Polyphest p50
 python simulations/scripts/postprocess_results.py conf_ils_low_10M --methods grampa polyphest_p50
+
+# AlloppNET (only runs on 8 compatible networks)
+python simulations/scripts/postprocess_results.py conf_ils_low_10M --methods alloppnet
 
 # All Polyphest variants
 python simulations/scripts/postprocess_results.py conf_ils_low_10M \
@@ -201,6 +239,11 @@ results/conf_ils_low_10M/mpsugar/replicate_1/
 results/conf_ils_low_10M/padre/replicate_1/
 ├── padre_tree-result.tre       # Original (1 line)
 └── padre_result.tre            # Copy (1 line)
+
+# AlloppNET
+results/conf_ils_low_10M/alloppnet/replicate_1/
+├── sampledmultrees.txt         # Original (BEAST MCMC output, 100K+ trees)
+└── alloppnet_result.tre        # Extracted consensus tree (1 line)
 ```
 
 ---
@@ -358,6 +401,38 @@ Score: -12345
 
 **Why copy?** PADRE writes output to input directory, but summary pipeline expects results in standard location.
 
+### AlloppNET Extraction
+
+**Input Location**: `results/{config}/alloppnet/replicate_{N}/sampledmultrees.txt`
+
+**Output Location**: `results/{config}/alloppnet/replicate_{N}/alloppnet_result.tre`
+
+**Input Format**: BEAST MCMC output (NEXUS format with multiple trees)
+```
+#NEXUS
+BEGIN TREES;
+tree STATE_0 = [tree];
+tree STATE_1000 = [tree];
+...
+END;
+```
+
+**Extraction Logic**:
+1. Count trees in `sampledmultrees.txt` (count "tree STATE_" occurrences)
+2. Calculate 10% burnin: `(total_trees - 1) // 10` (exclude STATE_0)
+3. Run TreeAnnotator with burnin and mean heights:
+   - Input: `sampledmultrees.txt`
+   - Output: `alloppnet_consensus.tre` (temporary)
+4. Remove copy number suffixes (`_0`, `_1`) from tip labels using `remove_copy_numbers.py`
+5. Write cleaned tree to `alloppnet_result.tre`
+
+**Requirements**:
+- Conda environment `alloppnet` (for TreeAnnotator)
+- Conda environment `gene2net` (for Python/Biopython)
+- `remove_copy_numbers.py` script in `scripts/alloppnet/`
+
+**Note**: Works even if BEAST job timed out (uses whatever trees were sampled)
+
 ---
 
 ## Troubleshooting
@@ -478,7 +553,7 @@ python simulations/scripts/postprocess_results.py --help
 
 **When to use**: After methods complete, before running summary pipeline
 
-**Input**: Raw output files (`grampa-scores.txt`, `polyphest_trees-polyphest.txt`, etc.)
+**Input**: Raw output files (`grampa-scores.txt`, `polyphest_trees-polyphest.txt`, `sampledmultrees.txt`, etc.)
 
 **Output**: Standardized `{program}_result.tre` files
 

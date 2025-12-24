@@ -13,13 +13,14 @@
 # ============================================================================
 # ALLOPPNET_RUN_ARRAY.SH
 # ============================================================================
-# Runs BEAST MCMC inference and post-processes AlloppNET results.
+# Runs BEAST MCMC inference for AlloppNET.
 # Array job for 8 AlloppNET-compatible networks.
 #
 # Run steps:
 #   1. Run BEAST (100M iterations, ~5 days)
-#   2. Summarize with TreeAnnotator (10% burnin)
-#   3. Post-process (remove copy number suffixes)
+#
+# Post-processing (TreeAnnotator + copy number removal) is handled separately
+# by postprocess_results.py after BEAST completes or times out.
 #
 # Prerequisites:
 #   - alloppnet_prep_array.sh must be completed first
@@ -100,7 +101,7 @@ OUTPUT_DIR="${BASE_DIR}/${network}/results/${CONFIG}/alloppnet/replicate_${REPLI
 # ============================================================================
 
 echo "============================================================================"
-echo "AlloppNET RUN (BEAST + Summarize)"
+echo "AlloppNET RUN (BEAST Execution)"
 echo "============================================================================"
 echo "Network: ${network} (index: ${network_idx})"
 echo "Replicate: ${REPLICATE}"
@@ -139,7 +140,7 @@ echo ""
 # ============================================================================
 
 echo "============================================================================"
-echo "[Step 1/3] Running BEAST"
+echo "[Step 1/1] Running BEAST"
 echo "============================================================================"
 echo "  - 100M iterations (~5 days)"
 echo "  - Output: sampledmultrees.txt, sampledgtrees*.txt, sampledparams.txt"
@@ -183,88 +184,8 @@ fi
 echo ""
 echo "✓ BEAST run complete (${duration}s = ${hours} hours)"
 echo ""
-
-# ============================================================================
-# STEP 2: SUMMARIZE WITH TREEANNOTATOR
-# ============================================================================
-
-echo "============================================================================"
-echo "[Step 2/3] Summarizing with TreeAnnotator"
-echo "============================================================================"
-echo "  - 10% burnin"
-echo "  - Mean node heights"
-echo ""
-
-start_time=$(date +%s)
-
-# Check if TreeAnnotator is available
-if ! command -v treeannotator &> /dev/null; then
-    echo "ERROR: treeannotator command not found. Check if it's installed in alloppnet environment."
-    exit 1
-fi
-
-# Count trees and calculate 10% burnin
-TOTAL_TREES=$(grep -c "tree STATE_" "${OUTPUT_DIR}/sampledmultrees.txt" || echo "0")
-if [ $TOTAL_TREES -eq 0 ]; then
-    echo "ERROR: No trees found in sampledmultrees.txt"
-    exit 1
-fi
-
-USABLE_TREES=$((TOTAL_TREES - 1))  # Exclude STATE_0
-BURNIN=$((USABLE_TREES / 10))
-
-echo "  Total trees: ${TOTAL_TREES}"
-echo "  Usable trees: ${USABLE_TREES}"
-echo "  Burnin: ${BURNIN} trees (10%)"
-echo ""
-
-treeannotator -burninTrees ${BURNIN} -heights mean \
-    "${OUTPUT_DIR}/sampledmultrees.txt" \
-    "${OUTPUT_DIR}/alloppnet_consensus.tre"
-
-if [ $? -ne 0 ]; then
-    echo "ERROR: TreeAnnotator failed"
-    exit 1
-fi
-
-end_time=$(date +%s)
-duration=$((end_time - start_time))
-
-echo ""
-echo "✓ Consensus tree generated (${duration}s)"
-echo ""
-
-# ============================================================================
-# STEP 3: POST-PROCESSING
-# ============================================================================
-
-echo "============================================================================"
-echo "[Step 3/3] Post-processing consensus tree"
-echo "============================================================================"
-echo "  - Removing copy number suffixes (_0, _1)"
-echo "  - Creating final MUL-tree for comparison"
-echo ""
-
-start_time=$(date +%s)
-
-# Activate gene2net environment for Python
-conda activate gene2net
-
-python3 "${SCRIPTS_DIR}/remove_copy_numbers.py" \
-    "${OUTPUT_DIR}/alloppnet_consensus.tre" \
-    "${OUTPUT_DIR}/alloppnet_final.tre" \
-    --verbose
-
-if [ $? -ne 0 ]; then
-    echo "ERROR: Post-processing failed"
-    exit 1
-fi
-
-end_time=$(date +%s)
-duration=$((end_time - start_time))
-
-echo ""
-echo "✓ Post-processing complete (${duration}s)"
+echo "Note: Post-processing (TreeAnnotator + copy number removal) will be"
+echo "      handled by postprocess_results.py after BEAST completes."
 echo ""
 
 # ============================================================================
@@ -273,12 +194,10 @@ echo ""
 
 echo "Validating outputs..."
 
-# Check required output files
+# Check required output files (BEAST outputs only)
 required_files=(
     "${OUTPUT_DIR}/sampledmultrees.txt"
     "${OUTPUT_DIR}/sampledparams.txt"
-    "${OUTPUT_DIR}/alloppnet_consensus.tre"
-    "${OUTPUT_DIR}/alloppnet_final.tre"
 )
 
 all_present=true
@@ -294,7 +213,11 @@ if [ "$all_present" = false ]; then
     exit 1
 fi
 
+# Count trees for summary
+TOTAL_TREES=$(grep -c "tree STATE_" "${OUTPUT_DIR}/sampledmultrees.txt" || echo "0")
+
 echo "✓ All required files present"
+echo "  Found ${TOTAL_TREES} trees in sampledmultrees.txt"
 echo ""
 
 # ============================================================================
@@ -314,13 +237,12 @@ echo "  - sampledmultrees.txt (species networks, ${TOTAL_TREES} trees)"
 echo "  - sampledgtrees*.txt (gene trees, 1000 files)"
 echo "  - sampledparams.txt (MCMC parameters)"
 echo "  - DBUGTUNE.txt (debug info)"
-echo "  - alloppnet_consensus.tre (TreeAnnotator consensus)"
-echo "  - alloppnet_final.tre (final MUL-tree for comparison)"
 echo ""
-echo "Final tree: ${OUTPUT_DIR}/alloppnet_final.tre"
-echo ""
-echo "Next step:"
-echo "  Validate with: python check_pipeline_status.py ${CONFIG} --method alloppnet --step run"
+echo "Next steps:"
+echo "  1. Post-process results:"
+echo "     python simulations/scripts/postprocess_results.py ${CONFIG} --methods alloppnet"
+echo "  2. Validate final output:"
+echo "     python simulations/scripts/check_pipeline_status.py ${CONFIG} --method alloppnet --step run"
 echo "============================================================================"
 echo "Job completed: $(date)"
 echo "============================================================================"

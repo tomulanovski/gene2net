@@ -232,6 +232,8 @@ SimPhy gene tree leaves follow the naming scheme `species_locusid_individualid`:
 - `sampledparams.txt` - MCMC parameters
 - `DBUGTUNE.txt` - Debug/tuning information
 
+**Note:** Post-processing (TreeAnnotator + copy number removal) is handled separately by `postprocess_results.py` after BEAST completes or times out.
+
 **Monitoring:**
 ```bash
 # Check BEAST progress (look for "STATE_XXXXX")
@@ -241,12 +243,14 @@ grep "STATE_" results/<Network>/<config>/alloppnet/replicate_1/sampledmultrees.t
 tail -100 ../logs/alloppnet_*_rep1_*.err
 ```
 
-### Step 4: Summarize with TreeAnnotator
+### Step 4: Post-Process Results
+
+**Script:** `postprocess_results.py`
 
 **What it does:**
-1. Counts trees in `sampledmultrees.txt`
-2. Calculates 10% burnin
-3. Generates consensus network
+1. Runs TreeAnnotator on `sampledmultrees.txt` (10% burnin, mean heights)
+2. Removes `_0` and `_1` suffixes from tip labels using `remove_copy_numbers.py`
+3. Produces final MUL-tree for comparison
 
 **Burnin Calculation:**
 ```
@@ -256,19 +260,21 @@ Burnin: 9,999 trees (10%)
 ```
 
 **Output:**
-- `alloppnet_consensus.tre` - Consensus network with metadata
+- `alloppnet_result.tre` - Final consensus tree (ready for comparison)
 
-### Step 5: Post-Process
+**Usage:**
+```bash
+# Post-process AlloppNET results
+python simulations/scripts/postprocess_results.py conf_ils_low_10M --methods alloppnet
 
-**Script:** `remove_copy_numbers.py`
+# Or post-process all methods including AlloppNET
+python simulations/scripts/postprocess_results.py conf_ils_low_10M
+```
 
-**What it does:**
-- Removes `_0` and `_1` suffixes from tip labels
-- These suffixes track homeologs in tetraploids
-- Produces final MUL-tree for comparison
-
-**Output:**
-- `alloppnet_final.tre` - Final consensus tree (ready for comparison)
+**Benefits:**
+- Can run post-processing even if BEAST job times out
+- Consistent workflow with other methods
+- Can re-run post-processing without re-running BEAST
 
 ---
 
@@ -322,8 +328,7 @@ simulations/<Network>/
         ├── sampledgtrees1.txt ... sampledgtrees1000.txt
         ├── sampledparams.txt
         ├── DBUGTUNE.txt
-        ├── alloppnet_consensus.tre
-        └── alloppnet_final.tre
+        └── alloppnet_result.tre (created by postprocess_results.py)
 ```
 
 **Key Files:**
@@ -333,9 +338,8 @@ simulations/<Network>/
 | `ploidy_level.json` | Ploidy assignment for each taxon (2 or 4) |
 | `taxa_table.txt` | Maps taxa to individuals and genomes (A/B) |
 | `alloppnet.XML` | BEAST configuration file |
-| `sampledmultrees.txt` | Species networks from MCMC |
-| `alloppnet_consensus.tre` | TreeAnnotator consensus (with _0/_1 suffixes) |
-| `alloppnet_final.tre` | **Final output for comparison** |
+| `sampledmultrees.txt` | Species networks from MCMC (input for post-processing) |
+| `alloppnet_result.tre` | **Final output for comparison** (created by postprocess_results.py) |
 
 ---
 
@@ -401,7 +405,7 @@ sbatch --array=N alloppnet_array.sh conf_ils_low_10M 1
 ### Empty or Missing Output
 
 **Symptoms:**
-- `alloppnet_final.tre` not created
+- `alloppnet_result.tre` not created
 - `sampledmultrees.txt` is empty or has only STATE_0
 
 **Diagnosis:**
@@ -409,11 +413,14 @@ sbatch --array=N alloppnet_array.sh conf_ils_low_10M 1
 # Check SLURM logs for errors
 tail -200 ../logs/alloppnet_*_repN_*.err
 
-# Check if BEAST completed
-grep "Finished" ../logs/alloppnet_*_repN_*.out
+# Check if BEAST completed (may have timed out)
+grep "BEAST run complete" ../logs/alloppnet_*_repN_*.out
 
 # Count trees in MCMC output
 grep -c "tree STATE_" results/<Network>/<config>/alloppnet/replicate_N/sampledmultrees.txt
+
+# If sampledmultrees.txt exists, try post-processing manually
+python simulations/scripts/postprocess_results.py conf_ils_low_10M --methods alloppnet
 ```
 
 ### Taxa Table Format Errors
@@ -513,8 +520,11 @@ END;
 # Check input preparation
 python ../scripts/check_pipeline_status.py conf_ils_low_10M --method alloppnet --step prep
 
-# Check final outputs
+# Check BEAST outputs
 python ../scripts/check_pipeline_status.py conf_ils_low_10M --method alloppnet --step run --verbose
+
+# Post-process results (if not done automatically)
+python ../scripts/postprocess_results.py conf_ils_low_10M --methods alloppnet
 ```
 
 **Expected output:**
@@ -528,7 +538,7 @@ AlloppNET Output Validation (run):
   Total: 40
   Success: 40 (100.0%)
   Required files present:
-    - alloppnet_final.tre
+    - alloppnet_result.tre
     - sampledmultrees.txt
     - alloppnet.XML
 ```
@@ -671,22 +681,27 @@ python ../scripts/check_pipeline_status.py conf_ils_low_10M --method alloppnet -
 squeue -u $USER | grep alloppnet
 tail -f ../logs/alloppnet_run_*.out
 
-# 6. Validate final results
+# 6. Post-process results (after BEAST completes or times out)
+python ../scripts/postprocess_results.py conf_ils_low_10M --methods alloppnet
+
+# 7. Validate final results
 python ../scripts/check_pipeline_status.py conf_ils_low_10M --method alloppnet --step run --verbose
 ```
 
-**Expected timeline (two-step workflow):**
+**Expected timeline (three-step workflow):**
 - Day 0: Submit prep jobs (~minutes to complete)
 - Day 0: Validate prep → Submit run jobs
-- Day 5: First BEAST runs complete
+- Day 5: First BEAST runs complete (or timeout)
+- Day 5+: Post-process results (can run even if BEAST timed out)
 - Day 20-25: All BEAST runs complete (if running 10 parallel)
 
-**Benefits of two-step approach:**
+**Benefits of separated workflow:**
 - Validate prep outputs before expensive BEAST run
 - Catch errors early (ploidy detection, XML generation)
+- Post-processing can run independently (even if BEAST times out)
 - Consistent with other methods in the pipeline
-- Can test BEAST XML locally before submission
+- Can re-run post-processing without re-running BEAST
 
 **Final outputs:**
 - 40 consensus trees (8 networks × 5 replicates)
-- Location: `results/<Network>/<config>/alloppnet/replicate_N/alloppnet_final.tre`
+- Location: `results/<Network>/<config>/alloppnet/replicate_N/alloppnet_result.tre`
