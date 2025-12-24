@@ -234,11 +234,27 @@ conda activate gene2net || {
     exit 1
 }
 
-# Run remove_copy_numbers.py
-python3 "${SCRIPTS_DIR}/remove_copy_numbers.py" \
-    "${consensus_file}" \
-    "${OUTPUT_DIR}/alloppnet_result.tre" \
-    --verbose
+# Construct ploidy JSON path
+# Path structure: ${BASE_DIR}/${network}/processed/${CONFIG}/alloppnet_input/replicate_${REPLICATE}/ploidy_level.json
+PLOIDY_JSON="${BASE_DIR}/${network}/processed/${CONFIG}/alloppnet_input/replicate_${REPLICATE}/ploidy_level.json"
+
+if [ ! -f "${PLOIDY_JSON}" ]; then
+    echo "WARNING: Ploidy JSON not found: ${PLOIDY_JSON}"
+    echo "         Will attempt auto-detection or use fallback method"
+    # Run without --ploidy-json (will use auto-detection)
+    python3 "${SCRIPTS_DIR}/remove_copy_numbers.py" \
+        "${consensus_file}" \
+        "${OUTPUT_DIR}/alloppnet_result.tre" \
+        --verbose
+else
+    echo "  Using ploidy JSON: ${PLOIDY_JSON}"
+    # Run with --ploidy-json
+    python3 "${SCRIPTS_DIR}/remove_copy_numbers.py" \
+        "${consensus_file}" \
+        "${OUTPUT_DIR}/alloppnet_result.tre" \
+        --ploidy-json "${PLOIDY_JSON}" \
+        --verbose
+fi
 
 if [ $? -ne 0 ]; then
     echo "ERROR: Copy number removal failed"
