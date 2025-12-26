@@ -129,12 +129,12 @@ if [ ! -f "${OUTPUT_DIR}/sampledmultrees.txt" ]; then
     exit 1
 fi
 
-# Check if already processed
-if [ -f "${OUTPUT_DIR}/alloppnet_result.tre" ]; then
-    echo "WARNING: alloppnet_result.tre already exists. Skipping post-processing."
-    echo "  To reprocess, delete: ${OUTPUT_DIR}/alloppnet_result.tre"
-    exit 0
-fi
+# # Check if already processed
+# if [ -f "${OUTPUT_DIR}/alloppnet_result.tre" ]; then
+#     echo "WARNING: alloppnet_result.tre already exists. Skipping post-processing."
+#     echo "  To reprocess, delete: ${OUTPUT_DIR}/alloppnet_result.tre"
+#     exit 0
+# fi
 
 echo "✓ Validation passed"
 echo "  Found sampledmultrees.txt"
