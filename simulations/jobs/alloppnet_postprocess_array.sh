@@ -6,7 +6,7 @@
 #SBATCH --time=2:00:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=1
-#SBATCH --partition=power-general-public-pool
+#SBATCH --partition=power-general-shared-pool
 #SBATCH --qos=public
 
 # ============================================================================
