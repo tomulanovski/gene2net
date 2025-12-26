@@ -95,21 +95,23 @@ def detect_ploidy_json_path(input_tree_path, verbose=False):
 
 def remove_annotations(tree):
     """
-    Remove all annotations (comments) from tree nodes.
+    Remove all annotations (comments) and branch lengths from tree nodes.
     
     BEAST/TreeAnnotator adds annotations like [&length_range={...}, tti="X", ...]
-    This function removes all such annotations to produce a clean tree with only
-    topology, species names, and branch lengths.
+    This function removes all such annotations and branch lengths to produce a clean
+    tree with only topology and species names.
     
     Args:
         tree: Bio.Phylo tree object
         
     Returns:
-        Modified tree with annotations removed
+        Modified tree with annotations and branch lengths removed
     """
     for node in tree.find_clades():
         # Clear all comments (annotations)
         node.comment = None
+        # Clear branch lengths (keep only topology)
+        node.branch_length = None
     
     return tree
 
@@ -253,9 +255,9 @@ def process_tree_file(input_file, output_file, ploidy_json_path=None, verbose=Fa
         print("  Removing copy number suffixes...")
     tree = remove_copy_suffixes(tree, ploidy_data, verbose)
     
-    # Remove annotations (BEAST/TreeAnnotator metadata)
+    # Remove annotations and branch lengths (BEAST/TreeAnnotator metadata)
     if verbose:
-        print("  Removing annotations (BEAST metadata)...")
+        print("  Removing annotations and branch lengths (keeping only topology)...")
     tree = remove_annotations(tree)
 
     if verbose:
