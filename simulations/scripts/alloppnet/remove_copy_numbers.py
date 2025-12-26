@@ -275,12 +275,31 @@ def process_tree_file(input_file, output_file, ploidy_json_path=None, verbose=Fa
             for change in changes:
                 print(change)
 
-    # Write output
+    # Write output (topology only, no branch lengths)
     if verbose:
         print(f"Writing cleaned tree to: {output_file}")
 
     try:
-        Phylo.write(tree, output_file, 'newick')
+        # Write Newick format manually without branch lengths
+        def write_newick_no_lengths(clade, file_handle):
+            """Write Newick format without branch lengths."""
+            if clade.is_terminal():
+                # Write terminal node name
+                name = clade.name or ''
+                file_handle.write(name)
+            else:
+                # Write internal node
+                file_handle.write('(')
+                children = list(clade.clades)
+                for i, child in enumerate(children):
+                    write_newick_no_lengths(child, file_handle)
+                    if i < len(children) - 1:
+                        file_handle.write(',')
+                file_handle.write(')')
+        
+        with open(output_file, 'w') as f:
+            write_newick_no_lengths(tree.root, f)
+            f.write(';\n')
     except Exception as e:
         print(f"ERROR: Failed to write tree file: {e}")
         sys.exit(1)
