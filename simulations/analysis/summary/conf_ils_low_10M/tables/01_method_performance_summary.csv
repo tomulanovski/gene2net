@@ -1,5 +1,5 @@
 Method,Total_Runs,Completed_Runs,Completion_Rate_%,Mean_Edit_Distance_MULtree,Median_Edit_Distance_MULtree,Std_Edit_Distance_MULtree,Mean_RF_Distance,Median_RF_Distance,Mean_Reticulation_MAE,Median_Reticulation_MAE,Mean_Reticulation_Bias,Median_Reticulation_Bias
-alloppnet,105,0,0.0000,,,,,,,,,
+alloppnet,105,40,38.0952,0.7841,0.7853,0.0954,0.9353,0.9618,2.9750,1.3000,2.7250,1.1000
 grampa,105,100,95.2381,0.7929,0.8476,0.1714,0.4780,0.5356,7.5100,5.0000,-7.4700,-5.0000
 mpsugar,105,29,27.6190,0.7718,0.7553,0.1176,0.5576,0.5988,3.6500,3.7500,-3.5833,-3.7500
 padre,105,10,9.5238,0.2056,0.1415,0.2328,0.0076,0.0000,0.2500,0.0000,0.2500,0.0000
