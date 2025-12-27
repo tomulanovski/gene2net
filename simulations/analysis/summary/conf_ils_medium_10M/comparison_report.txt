@@ -3,8 +3,8 @@ Comparison Report
 ================================================================================
 
 Total comparisons: 735
-Successful:        382 (52.0%)
+Successful:        422 (57.4%)
 Failed:            0 (0.0%)
 From cache:        0
-Newly computed:    382
+Newly computed:    422
 
