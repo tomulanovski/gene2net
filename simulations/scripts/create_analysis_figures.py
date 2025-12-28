@@ -115,6 +115,36 @@ class ConfigurationAnalyzer:
         print(f"  Inventory: {len(self.inventory) if self.inventory is not None else 0}")
         print(f"  Metrics: {len(self.metrics) if self.metrics is not None else 0}")
 
+    def _clean_output_directories(self):
+        """Clean plots and tables directories before generating new figures"""
+        print("Cleaning output directories...")
+        
+        # Clean plots directory
+        if self.plots_dir.exists():
+            plot_files = list(self.plots_dir.glob("*"))
+            plot_files = [f for f in plot_files if f.is_file()]  # Only files, not subdirectories
+            for file in plot_files:
+                file.unlink()
+            print(f"  Cleaned {len(plot_files)} files from plots/")
+        
+        # Clean individual_methods subdirectory
+        if self.plots_individual_dir.exists():
+            individual_files = list(self.plots_individual_dir.glob("*"))
+            individual_files = [f for f in individual_files if f.is_file()]
+            for file in individual_files:
+                file.unlink()
+            print(f"  Cleaned {len(individual_files)} files from plots/individual_methods/")
+        
+        # Clean tables directory
+        if self.tables_dir.exists():
+            table_files = list(self.tables_dir.glob("*"))
+            table_files = [f for f in table_files if f.is_file()]
+            for file in table_files:
+                file.unlink()
+            print(f"  Cleaned {len(table_files)} files from tables/")
+        
+        print("  ✓ Output directories cleaned (preserved run_full_summary files)\n")
+
     def _prepare_enriched_stats(self):
         """Add derived columns to network_stats for additional analyses"""
         # Polyploid ratio: proportion of species that are polyploid
@@ -135,7 +165,10 @@ class ConfigurationAnalyzer:
         print(f"Output: {self.base_dir}")
         print(f"{'='*80}\n")
 
-        total_plots = 44  # Updated: added RF plots and 3-way comparison
+        # Clean old plots and tables before generating new ones
+        self._clean_output_directories()
+
+        total_plots = 47  # Updated: added Jaccard distribution boxplots and per-method correlations
         plot_num = 0
 
         # ========================================================================
@@ -327,6 +360,18 @@ class ConfigurationAnalyzer:
         print(f"[{plot_num}/{total_plots}] Polyploid Identification F1 Score...")
         self.plot_polyploid_f1_performance()
 
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Reticulation Leaf Jaccard Distribution...")
+        self.plot_metric_distribution('ret_leaf_jaccard.dist',
+                                      'Reticulation Leaf Set Distance',
+                                      '08d_ret_leaf_jaccard_distribution')
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Sister Relationship Jaccard Distribution...")
+        self.plot_metric_distribution('ret_sisters_jaccard.dist',
+                                      'Sister Relationship Distance',
+                                      '08e_ret_sisters_jaccard_distribution')
+
         # ========================================================================
         # CATEGORY 4: DISTRIBUTIONS, COMPARISONS, AND SUMMARIES
         # ========================================================================
@@ -375,8 +420,12 @@ class ConfigurationAnalyzer:
         self.plot_method_summary()
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Comprehensive Correlation Heatmap...")
+        print(f"[{plot_num}/{total_plots}] Comprehensive Correlation Heatmap (Aggregated)...")
         self.plot_comprehensive_correlation_heatmap()
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Per-Method Correlation Heatmaps...")
+        self.plot_correlation_heatmap_per_method()
 
         # ========================================================================
         # TABLES
@@ -441,13 +490,13 @@ class ConfigurationAnalyzer:
             grouped_df = pd.DataFrame(grouped)
 
             if len(grouped_df) > 0:
-                # Plot with error bars
+                # Plot with error bars (scatter plot, no connecting lines - data is discrete)
                 ax.errorbar(grouped_df[char_col], grouped_df['completion_rate'],
                            yerr=grouped_df['std_err'],
                            marker=METHOD_MARKERS.get(method, 'o'),
                            label=method,
                            color=METHOD_COLORS.get(method, '#000000'),
-                           linewidth=2.5,
+                           linestyle='None',  # No connecting lines - data is discrete
                            markersize=9,
                            capsize=5,
                            capthick=2,
@@ -523,7 +572,7 @@ class ConfigurationAnalyzer:
                            yerr=grouped_df['std_err'],
                            marker=METHOD_MARKERS.get(method, 'o'),
                            color=METHOD_COLORS.get(method, '#000000'),
-                           linewidth=3,
+                           linestyle='None',  # No connecting lines - data is discrete
                            markersize=10,
                            capsize=6,
                            capthick=2.5,
@@ -690,7 +739,7 @@ class ConfigurationAnalyzer:
         plt.close()
 
     def plot_reticulation_error_distribution(self):
-        """Boxplot of reticulation count errors - now shows BIAS (signed differences)"""
+        """Boxplot of reticulation count errors - shows percentage bias (signed)"""
         if self.metrics is None:
             return
 
@@ -703,8 +752,17 @@ class ConfigurationAnalyzer:
             if len(ret_bias) == 0:
                 return
             metric_name = 'num_rets_diff'
+            use_percentage = False
         else:
             metric_name = 'num_rets_bias'
+            use_percentage = True
+
+        # Merge with network stats to get true H_Strict for percentage calculation
+        ret_bias = ret_bias.merge(
+            self.network_stats[['network', 'H_Strict']],
+            on='network',
+            how='left'
+        )
 
         methods = sorted(ret_bias['method'].unique())
 
@@ -716,12 +774,32 @@ class ConfigurationAnalyzer:
         mean_biases = []
 
         for method in methods:
-            method_data = ret_bias[ret_bias['method'] == method]['mean'].dropna()
-            if len(method_data) > 0:
-                data_by_method.append(method_data)
+            method_data = ret_bias[ret_bias['method'] == method].copy()
+            
+            if use_percentage:
+                # Calculate percentage bias: (bias / H_Strict) * 100
+                # Handle division by zero: if H_Strict=0, use absolute bias
+                method_data['bias_pct'] = (
+                    method_data['mean'] / method_data['H_Strict'] * 100
+                ).replace([np.inf, -np.inf], np.nan)
+                
+                # For networks with H_Strict=0, use absolute bias (can't calculate percentage)
+                zero_h_mask = method_data['H_Strict'] == 0
+                if zero_h_mask.any():
+                    method_data.loc[zero_h_mask, 'bias_pct'] = method_data.loc[zero_h_mask, 'mean']
+                
+                method_values = method_data['bias_pct'].dropna()
+            else:
+                method_values = method_data['mean'].dropna()
+            
+            if len(method_values) > 0:
+                data_by_method.append(method_values)
                 labels.append(method)
                 colors.append(METHOD_COLORS.get(method, '#000000'))
-                mean_biases.append(method_data.mean())
+                mean_biases.append(method_values.mean())
+
+        if len(data_by_method) == 0:
+            return
 
         bp = ax.boxplot(data_by_method, labels=labels, patch_artist=True,
                        widths=0.6, showfliers=True,
@@ -737,16 +815,26 @@ class ConfigurationAnalyzer:
         # Add mean bias annotations
         for i, (method, mean_bias) in enumerate(zip(labels, mean_biases), 1):
             sign = '+' if mean_bias >= 0 else ''
-            ax.text(i, ax.get_ylim()[1] * 0.95, f'{sign}{mean_bias:.2f}',
+            ax.text(i, ax.get_ylim()[1] * 0.95, f'{sign}{mean_bias:.1f}%',
                    ha='center', va='top', fontsize=10, fontweight='bold',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='gray', alpha=0.8))
 
-        ax.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.5, label='Perfect accuracy (bias=0)')
-        ax.set_ylabel('Reticulation Count Bias\n(Inferred - True)\n[Positive = Over-estimation]', 
-                     fontsize=14, fontweight='bold')
+        ax.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.5, label='Perfect accuracy (0%)')
+        
+        if use_percentage:
+            ylabel = 'Reticulation Error (%)\n(Inferred - True) / True × 100\n[Positive = Over-estimation]'
+        else:
+            ylabel = 'Reticulation Count Bias\n(Inferred - True)\n[Positive = Over-estimation]'
+        
+        ax.set_ylabel(ylabel, fontsize=14, fontweight='bold')
         ax.set_xlabel('Method', fontsize=14, fontweight='bold')
-        ax.set_title(f'Reticulation Count Bias Distribution (ILS {self.ils_level})\nMean bias shown above each box',
-                    fontsize=15, fontweight='bold', pad=20)
+        
+        if use_percentage:
+            title = f'Reticulation Error Distribution - Percentage Bias (ILS {self.ils_level})\nMean percentage bias shown above each box'
+        else:
+            title = f'Reticulation Count Bias Distribution (ILS {self.ils_level})\nMean bias shown above each box'
+        
+        ax.set_title(title, fontsize=15, fontweight='bold', pad=20)
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
         ax.legend(fontsize=11)
         plt.xticks(rotation=0, fontsize=12)
@@ -1057,13 +1145,28 @@ class ConfigurationAnalyzer:
             else:
                 ret_errors.append(np.nan)
             
-            # Bias (signed error)
+            # Bias (signed error) - calculate as percentage
             method_bias = self.metrics[
                 (self.metrics['method'] == method) &
                 (self.metrics['metric'] == 'num_rets_bias')
             ]
             if len(method_bias) > 0:
-                ret_biases.append(method_bias['mean'].mean())
+                # Merge with network stats to calculate percentage bias
+                method_bias_with_stats = method_bias.merge(
+                    self.network_stats[['network', 'H_Strict']],
+                    on='network',
+                    how='left'
+                )
+                # Calculate percentage: (bias / H_Strict) * 100
+                method_bias_with_stats['bias_pct'] = (
+                    method_bias_with_stats['mean'] / method_bias_with_stats['H_Strict'] * 100
+                ).replace([np.inf, -np.inf], np.nan)
+                # For H_Strict=0, use absolute bias
+                zero_h_mask = method_bias_with_stats['H_Strict'] == 0
+                if zero_h_mask.any():
+                    method_bias_with_stats.loc[zero_h_mask, 'bias_pct'] = method_bias_with_stats.loc[zero_h_mask, 'mean']
+                
+                ret_biases.append(method_bias_with_stats['bias_pct'].mean())
             else:
                 ret_biases.append(np.nan)
 
@@ -1125,10 +1228,10 @@ class ConfigurationAnalyzer:
                 bias_colors.append('#1F77B4')  # Blue for under-estimation
         
         bars4 = ax4.bar(methods, ret_biases, color=bias_colors, alpha=0.8, edgecolor='black', linewidth=1.5)
-        ax4.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.5, label='No bias')
-        ax4.set_ylabel('Mean Bias (Signed Error)', fontsize=13, fontweight='bold')
+        ax4.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.5, label='No bias (0%)')
+        ax4.set_ylabel('Mean Bias (%)\n(Signed Error / True × 100)', fontsize=13, fontweight='bold')
         ax4.set_xlabel('Method', fontsize=13, fontweight='bold')
-        ax4.set_title('Reticulation Count: Bias\n[+ = Over-estimation, - = Under-estimation]', 
+        ax4.set_title('Reticulation Count: Percentage Bias\n[+ = Over-estimation, - = Under-estimation]', 
                      fontsize=14, fontweight='bold', pad=15)
         ax4.grid(True, alpha=0.25, axis='y', linestyle='--')
         ax4.tick_params(axis='x', rotation=0)
@@ -1139,9 +1242,9 @@ class ConfigurationAnalyzer:
                 height = bar.get_height()
                 sign = '+' if val >= 0 else ''
                 va = 'bottom' if val >= 0 else 'top'
-                offset = 0.05 if val >= 0 else -0.05
+                offset = 0.02 if val >= 0 else -0.02
                 ax4.text(bar.get_x() + bar.get_width()/2., height + offset * (ax4.get_ylim()[1] - ax4.get_ylim()[0]),
-                        f'{sign}{val:.2f}', ha='center', va=va, fontsize=9, fontweight='bold')
+                        f'{sign}{val:.1f}%', ha='center', va=va, fontsize=9, fontweight='bold')
 
         fig.suptitle(f'Method Performance Summary (ILS {self.ils_level})',
                     fontsize=16, fontweight='bold', y=0.995)
@@ -1313,9 +1416,8 @@ class ConfigurationAnalyzer:
             grouped['std_err'] = grouped['metric_std'] / np.sqrt(grouped['n'])
 
             if len(grouped) > 0:
-                # Convert distance to similarity for plotting (1 - distance)
-                jaccard_sim = 1 - grouped['metric_mean']
-                ax.errorbar(grouped[char_col], jaccard_sim,
+                # Plot distance directly (don't convert to similarity)
+                ax.errorbar(grouped[char_col], grouped['metric_mean'],
                            yerr=grouped['std_err'],
                            marker=METHOD_MARKERS.get(method, 'o'),
                            label=method,
@@ -1329,7 +1431,7 @@ class ConfigurationAnalyzer:
                            markeredgecolor='white')
 
         ax.set_xlabel(char_label, fontsize=14, fontweight='bold')
-        ax.set_ylabel(f'{jaccard_label}\n(1 = perfect match, 0 = no match)', fontsize=14, fontweight='bold')
+        ax.set_ylabel(f'{jaccard_label}\n(0 = perfect match, 1 = no match)', fontsize=14, fontweight='bold')
         ax.set_title(f'{jaccard_label} vs {char_label}\nILS {self.ils_level}',
                     fontsize=15, fontweight='bold', pad=20)
         ax.legend(frameon=True, loc='best', fontsize=12, framealpha=0.9)
@@ -1383,8 +1485,8 @@ class ConfigurationAnalyzer:
             grouped['std_err'] = grouped['metric_std'] / np.sqrt(grouped['n'])
 
             if len(grouped) > 0:
-                jaccard_sim = 1 - grouped['metric_mean']
-                ax.errorbar(grouped[char_col], jaccard_sim,
+                # Plot distance directly (don't convert to similarity)
+                ax.errorbar(grouped[char_col], grouped['metric_mean'],
                            yerr=grouped['std_err'],
                            marker=METHOD_MARKERS.get(method, 'o'),
                            color=METHOD_COLORS.get(method, '#000000'),
@@ -1397,7 +1499,7 @@ class ConfigurationAnalyzer:
                            markeredgecolor='white')
 
             ax.set_xlabel(char_label, fontsize=12, fontweight='bold')
-            ax.set_ylabel(jaccard_label, fontsize=12, fontweight='bold')
+            ax.set_ylabel(f'{jaccard_label}\n(0 = perfect, 1 = no match)', fontsize=12, fontweight='bold')
             ax.set_title(f'{method}', fontsize=13, fontweight='bold', pad=10)
             ax.grid(True, alpha=0.25, linestyle='--')
             ax.set_ylim(-0.05, 1.05)
@@ -1459,8 +1561,9 @@ class ConfigurationAnalyzer:
         ax1.set_title('Polyploid Identification F1 Score', fontsize=14, fontweight='bold', pad=15)
         ax1.set_ylim(0, 1.05)
         ax1.grid(True, alpha=0.25, axis='y', linestyle='--')
-        ax1.axhline(y=1.0, color='green', linestyle='--', alpha=0.5, label='Perfect (F1=1.0)')
-        ax1.legend()
+        # Add reference line for perfect score only
+        ax1.axhline(y=1.0, color='green', linestyle='--', linewidth=1.5, alpha=0.5, label='Perfect (F1=1.0)')
+        ax1.legend(fontsize=9)
 
         for bar, val in zip(bars1, f1_scores):
             height = bar.get_height()
@@ -1481,7 +1584,15 @@ class ConfigurationAnalyzer:
         ax2.set_xticklabels(methods)
         ax2.set_ylim(0, 1.05)
         ax2.grid(True, alpha=0.25, axis='y', linestyle='--')
-        ax2.legend()
+        ax2.legend(fontsize=9)
+        
+        # Add value labels on bars
+        for bars, values in [(bars2, precisions), (bars3, recalls)]:
+            for bar, val in zip(bars, values):
+                if not np.isnan(val):
+                    height = bar.get_height()
+                    ax2.text(bar.get_x() + bar.get_width()/2., height,
+                            f'{val:.2f}', ha='center', va='bottom', fontsize=8, fontweight='bold')
 
         fig.suptitle(f'Polyploid Identification Performance (ILS {self.ils_level})',
                     fontsize=16, fontweight='bold', y=1.00)
@@ -1570,12 +1681,127 @@ class ConfigurationAnalyzer:
 
         ax.set_xlabel('Performance Metrics', fontsize=13, fontweight='bold')
         ax.set_ylabel('Network Properties', fontsize=13, fontweight='bold')
-        ax.set_title(f'Network Properties vs Performance Metrics Correlation\nILS {self.ils_level}',
+        ax.set_title(f'Network Properties vs Performance Metrics Correlation (Aggregated Across All Methods)\nILS {self.ils_level}',
                     fontsize=15, fontweight='bold', pad=20)
 
         plt.tight_layout()
         fig.savefig(self.plots_dir / "31_comprehensive_correlation_heatmap.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "31_comprehensive_correlation_heatmap.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_correlation_heatmap_per_method(self):
+        """Create per-method correlation heatmaps showing which network properties affect each method"""
+        if self.inventory is None or self.metrics is None:
+            print("  WARNING: Missing data for per-method correlation heatmap")
+            return
+
+        # Prepare data: for each method and network, get all properties and metrics
+        correlation_data = []
+
+        for method in self.inventory['method'].unique():
+            method_inv = self.inventory[self.inventory['method'] == method]
+
+            for network in method_inv['network'].unique():
+                net_inv = method_inv[method_inv['network'] == network]
+
+                # Get network properties
+                net_stats = self.network_stats[self.network_stats['network'] == network]
+                if len(net_stats) == 0:
+                    continue
+
+                row = {
+                    'method': method,
+                    'network': network,
+                    'completion_rate': net_inv['inferred_exists'].sum() / len(net_inv) * 100,
+                    'Num_Species': net_stats['Num_Species'].values[0],
+                    'H_Strict': net_stats['H_Strict'].values[0],
+                    'H_Relaxed': net_stats['H_Relaxed'].values[0],
+                    'Num_Polyploids': net_stats['Num_Polyploids'].values[0],
+                    'Max_Copies': net_stats['Max_Copies'].values[0],
+                    'Total_WGD': net_stats['Total_WGD'].values[0],
+                    'Polyploid_Ratio': net_stats['Polyploid_Ratio'].values[0],
+                }
+
+                # Get performance metrics
+                net_metrics = self.metrics[
+                    (self.metrics['method'] == method) &
+                    (self.metrics['network'] == network)
+                ]
+
+                for _, metric_row in net_metrics.iterrows():
+                    metric_name = metric_row['metric']
+                    if metric_name in ['edit_distance_multree', 'edit_distance', 'num_rets_diff']:
+                        row[metric_name] = metric_row['mean']
+
+                correlation_data.append(row)
+
+        if len(correlation_data) == 0:
+            print("  WARNING: No correlation data available")
+            return
+
+        df = pd.DataFrame(correlation_data)
+
+        # Select columns for correlation
+        property_cols = ['Num_Species', 'H_Strict', 'H_Relaxed', 'Num_Polyploids',
+                        'Max_Copies', 'Total_WGD', 'Polyploid_Ratio']
+        metric_cols = ['completion_rate', 'edit_distance_multree', 'edit_distance', 'num_rets_diff']
+
+        # Keep only available columns
+        property_cols = [c for c in property_cols if c in df.columns]
+        metric_cols = [c for c in metric_cols if c in df.columns]
+
+        if len(property_cols) == 0 or len(metric_cols) == 0:
+            print("  WARNING: Insufficient data for correlation analysis")
+            return
+
+        methods = sorted(df['method'].unique())
+        n_methods = len(methods)
+
+        # Create faceted subplots - one per method
+        ncols = min(3, n_methods)
+        nrows = (n_methods + ncols - 1) // ncols
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6*ncols, 5*nrows), squeeze=False)
+        axes = axes.flatten()
+
+        for idx, method in enumerate(methods):
+            ax = axes[idx]
+            method_df = df[df['method'] == method]
+
+            # Calculate correlation matrix for this method
+            corr_matrix = method_df[property_cols + metric_cols].corr()
+            corr_subset = corr_matrix.loc[property_cols, metric_cols]
+
+            if len(corr_subset) == 0 or corr_subset.isna().all().all():
+                ax.text(0.5, 0.5, f'Insufficient data\nfor {method}',
+                       ha='center', va='center', fontsize=12, color='gray')
+                ax.set_title(method, fontsize=13, fontweight='bold')
+                ax.axis('off')
+                continue
+
+            # Plot heatmap
+            sns.heatmap(corr_subset, annot=True, fmt='.2f', cmap='RdBu_r', center=0,
+                       vmin=-1, vmax=1, square=True, linewidths=0.5,
+                       cbar_kws={'label': 'Correlation'},
+                       ax=ax, annot_kws={'fontsize': 8, 'fontweight': 'bold'})
+
+            ax.set_title(method, fontsize=13, fontweight='bold', pad=10)
+            if idx % ncols == 0:  # Leftmost column
+                ax.set_ylabel('Network Properties', fontsize=11, fontweight='bold')
+            if idx >= (nrows - 1) * ncols:  # Bottom row
+                ax.set_xlabel('Performance Metrics', fontsize=11, fontweight='bold')
+            ax.tick_params(axis='x', labelsize=8, rotation=45)
+            ax.tick_params(axis='y', labelsize=8)
+
+        # Hide unused subplots
+        for idx in range(n_methods, len(axes)):
+            axes[idx].axis('off')
+
+        fig.suptitle(f'Network Properties vs Performance Metrics Correlation (Per Method)\nILS {self.ils_level}',
+                    fontsize=16, fontweight='bold', y=0.995)
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "32_per_method_correlation_heatmap.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "32_per_method_correlation_heatmap.png", bbox_inches='tight', dpi=300)
         plt.close()
 
     def generate_summary_tables(self):

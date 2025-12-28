@@ -249,8 +249,15 @@ tail -100 ../logs/alloppnet_*_rep1_*.err
 
 **What it does:**
 1. Runs TreeAnnotator on `sampledmultrees.txt` (10% burnin, mean heights)
-2. Removes `_0` and `_1` suffixes from tip labels using `remove_copy_numbers.py`
-3. Produces final MUL-tree for comparison
+   - Generates consensus tree from MCMC samples
+   - Output: `alloppnet_consensus.tre` (NEXUS format with annotations)
+2. Removes copy number suffixes using `remove_copy_numbers.py`:
+   - Uses `ploidy_level.json` to identify polyploid species (ploidy=4)
+   - Removes `0`/`1` suffixes **only** from polyploid species (e.g., `Lamiumconfertum10` → `Lamiumconfertum1`)
+   - Preserves original species names for diploids (e.g., `Lamiumbifidum1` stays as `Lamiumbifidum1`)
+3. Removes all BEAST/TreeAnnotator annotations (metadata like `[&length_range={...}, tti="X", ...]`)
+4. Removes branch lengths (produces topology-only tree)
+5. Produces final MUL-tree for comparison: `alloppnet_result.tre`
 
 **Burnin Calculation:**
 ```
@@ -260,7 +267,7 @@ Burnin: 9,999 trees (10%)
 ```
 
 **Output:**
-- `alloppnet_result.tre` - Final consensus tree (ready for comparison)
+- `alloppnet_result.tre` - Final consensus tree (topology-only, no branch lengths or annotations, ready for comparison)
 
 **Usage:**
 ```bash
@@ -355,7 +362,7 @@ simulations/<Network>/
 | `taxa_table.txt` | Maps taxa to individuals and genomes (A/B) |
 | `alloppnet.XML` | BEAST configuration file |
 | `sampledmultrees.txt` | Species networks from MCMC (input for post-processing) |
-| `alloppnet_result.tre` | **Final output for comparison** (created by postprocess_results.py) |
+| `alloppnet_result.tre` | **Final output for comparison** (topology-only, created by postprocess_results.py) |
 
 ---
 
@@ -513,17 +520,18 @@ END;
 - Use for convergence diagnostics
 - TreeAnnotator summarizes to consensus
 
-### alloppnet_final.tre
+### alloppnet_result.tre
 
 **Final consensus tree ready for comparison:**
 
 ```
-((TaxonA:0.5,TaxonB:0.5):0.3,(TaxonC:0.4,TaxonD:0.4):0.4);
+((TaxonA,TaxonB),(TaxonC,TaxonD));
 ```
 
-- Newick format
-- Copy number suffixes removed
-- Mean node heights from TreeAnnotator
+- Newick format (topology-only, no branch lengths)
+- Copy number suffixes removed (using ploidy JSON, only from polyploids)
+- All BEAST/TreeAnnotator annotations removed
+- Clean topology with species names only
 - Can be compared with other methods (GRAMPA, Polyphest, etc.)
 
 ---
@@ -565,7 +573,7 @@ AlloppNET Output Validation (run):
 # Run network comparison (if post-processing pipeline is set up)
 python ../scripts/compare_nets.py \
     --true-network ../networks/<Network>.tre \
-    --inferred results/<Network>/<config>/alloppnet/replicate_1/alloppnet_final.tre \
+    --inferred results/<Network>/<config>/alloppnet/replicate_1/alloppnet_result.tre \
     --output comparison_results.csv
 ```
 
@@ -614,7 +622,7 @@ grep "posterior" results/<Network>/<config>/alloppnet/replicate_1/sampledparams.
 
 2. **Storage Management:**
    - Gene trees (~1GB each) can be deleted after consensus if needed
-   - Keep `sampledmultrees.txt` and `alloppnet_final.tre`
+   - Keep `sampledmultrees.txt` and `alloppnet_result.tre`
 
 3. **Monitoring:**
    - Check progress every 12-24 hours

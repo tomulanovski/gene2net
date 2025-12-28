@@ -228,7 +228,7 @@ For each characteristic, TWO versions are generated:
 - Combined view of all genome duplication events
 - Shows overall WGD tolerance regardless of event type
 
-#### Figure 09-10: Completion Rate vs Num Species ⭐ NEW
+#### Figure 09-10: Completion Rate vs Num Species
 **Files**:
 - `05_combined_completion_vs_num_species.pdf/png`
 - `individual_methods/05_faceted_completion_vs_num_species.pdf/png`
