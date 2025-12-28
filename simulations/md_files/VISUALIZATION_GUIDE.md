@@ -4,12 +4,12 @@ Complete guide for generating publication-quality figures and tables from phylog
 
 ## Overview
 
-This guide covers the complete workflow from simulation results to publication-ready visualizations. After completing simulations for ILS low, medium, and high levels, this pipeline generates **34 comprehensive plots** organized into 4 categories:
+This guide covers the complete workflow from simulation results to publication-ready visualizations. After completing simulations for ILS low, medium, and high levels, this pipeline generates **42 comprehensive plots** organized into 4 categories:
 
 1. **Completion Rate Analysis (12 plots)**: How network characteristics affect method success
-2. **Accuracy vs Network Properties (8 plots)**: How network properties affect reconstruction accuracy
-3. **Advanced Performance Metrics (5 plots)**: Fine-grained accuracy analysis (Jaccard similarities, F1 scores)
-4. **Distributions & Summaries (9 plots)**: Overall performance, correlations, and comparisons
+2. **Accuracy vs Network Properties (12 plots)**: How network properties affect reconstruction accuracy
+3. **Advanced Performance Metrics (7 plots)**: Fine-grained accuracy analysis (Jaccard distances, F1 scores, distributions)
+4. **Distributions & Summaries (11 plots)**: Overall performance, correlations, and comparisons
 
 Plus **2 comprehensive tables** for publication.
 
@@ -86,6 +86,8 @@ The pipeline automatically calculates:
 - Default network stats path (no need to specify every time)
 - Both combined plots (all methods) AND faceted plots (per-method subplots)
 - Error bars showing variability across networks
+- Scatter plots for discrete data (completion rates)
+- Automatic cleanup of old plots and tables before generation
 - Organized into 4 clear categories with progress tracking
 
 ### Usage
@@ -115,55 +117,66 @@ simulations/analysis/summary/{config}/
 │   ├── 02_combined_completion_vs_h_relaxed.pdf/png
 │   ├── 03_combined_completion_vs_polyploids.pdf/png
 │   ├── 04_combined_completion_vs_total_wgd.pdf/png
-│   ├── 05_combined_completion_vs_num_species.pdf/png         # NEW
-│   ├── 06_combined_completion_vs_max_copies.pdf/png          # NEW
+│   ├── 05_combined_completion_vs_num_species.pdf/png
+│   ├── 06_combined_completion_vs_max_copies.pdf/png
 │   │
-│   # CATEGORY 2: Edit Distance vs Network Characteristics (8 plots)
-│   ├── 11_combined_editdist_vs_num_species.pdf/png           # NEW
-│   ├── 12_combined_editdist_vs_h_strict.pdf/png              # NEW
-│   ├── 13_combined_editdist_vs_polyploids.pdf/png            # NEW
-│   ├── 14_combined_editdist_vs_max_copies.pdf/png            # NEW
+│   # CATEGORY 2: Accuracy vs Network Characteristics (12 plots)
+│   ├── 11_combined_editdist_multree_vs_num_species.pdf/png
+│   ├── 12_combined_editdist_multree_vs_h_strict.pdf/png
+│   ├── 13_combined_editdist_multree_vs_polyploids.pdf/png
+│   ├── 14_combined_editdist_multree_vs_max_copies.pdf/png
+│   ├── 15_combined_rf_vs_num_species.pdf/png
+│   ├── 16_combined_rf_vs_h_strict.pdf/png
 │   │
-│   # CATEGORY 3: Advanced Metrics (5 plots)
-│   ├── 21_combined_ret_leaf_jaccard_vs_h_strict.pdf/png      # NEW
-│   ├── 22_combined_ret_sisters_jaccard_vs_h_strict.pdf/png   # NEW
-│   ├── 23_polyploid_f1_performance.pdf/png                   # NEW
+│   # CATEGORY 3: Advanced Metrics (7 plots)
+│   ├── 21_combined_ret_leaf_jaccard_vs_h_strict.pdf/png
+│   ├── 22_combined_ret_sisters_jaccard_vs_h_strict.pdf/png
+│   ├── 23_polyploid_f1_performance.pdf/png
+│   ├── 08d_ret_leaf_jaccard_distribution.pdf/png
+│   ├── 08e_ret_sisters_jaccard_distribution.pdf/png
 │   │
-│   # CATEGORY 4: Distributions, Comparisons, Summaries (9 plots)
+│   # CATEGORY 4: Distributions, Comparisons, Summaries (11 plots)
 │   ├── 05_folding_comparison.pdf/png
 │   ├── 06_folding_accuracy_comparison.pdf/png
-│   ├── 07_reticulation_error_distribution.pdf/png
-│   ├── 08_edit_distance_distribution.pdf/png
+│   ├── 07_reticulation_bias_boxplot.pdf/png
+│   ├── 08_edit_distance_multree_boxplot.pdf/png
+│   ├── 08b_edit_distance_multree_distribution.pdf/png
+│   ├── 08c_rf_distance_distribution.pdf/png
 │   ├── 09_per_network_breakdown.pdf/png
 │   ├── 10_method_summary.pdf/png
-│   ├── 31_comprehensive_correlation_heatmap.pdf/png          # NEW
+│   ├── 31_comprehensive_correlation_heatmap.pdf/png
+│   ├── 32_per_method_correlation_heatmap.pdf/png
 │   │
 │   └── individual_methods/                                    # Faceted subplot versions
 │       ├── 01_faceted_completion_vs_h_strict.pdf/png
 │       ├── 02_faceted_completion_vs_h_relaxed.pdf/png
 │       ├── 03_faceted_completion_vs_polyploids.pdf/png
 │       ├── 04_faceted_completion_vs_total_wgd.pdf/png
-│       ├── 05_faceted_completion_vs_num_species.pdf/png      # NEW
-│       ├── 06_faceted_completion_vs_max_copies.pdf/png       # NEW
-│       ├── 11_faceted_editdist_vs_num_species.pdf/png        # NEW
-│       ├── 12_faceted_editdist_vs_h_strict.pdf/png           # NEW
-│       ├── 13_faceted_editdist_vs_polyploids.pdf/png         # NEW
-│       ├── 14_faceted_editdist_vs_max_copies.pdf/png         # NEW
-│       ├── 21_faceted_ret_leaf_jaccard_vs_h_strict.pdf/png   # NEW
-│       └── 22_faceted_ret_sisters_jaccard_vs_h_strict.pdf/png # NEW
+│       ├── 05_faceted_completion_vs_num_species.pdf/png
+│       ├── 06_faceted_completion_vs_max_copies.pdf/png
+│       ├── 11_faceted_editdist_multree_vs_num_species.pdf/png
+│       ├── 12_faceted_editdist_multree_vs_h_strict.pdf/png
+│       ├── 13_faceted_editdist_multree_vs_polyploids.pdf/png
+│       ├── 14_faceted_editdist_multree_vs_max_copies.pdf/png
+│       ├── 15_faceted_rf_vs_num_species.pdf/png
+│       ├── 16_faceted_rf_vs_h_strict.pdf/png
+│       ├── 21_faceted_ret_leaf_jaccard_vs_h_strict.pdf/png
+│       └── 22_faceted_ret_sisters_jaccard_vs_h_strict.pdf/png
 │
 └── tables/
     ├── 01_method_performance_summary.csv
     └── 02_per_network_performance.csv
 ```
 
-**Total output per configuration**: 34 plots (22 combined + 12 faceted) + 2 tables
+**Total output per configuration**: 42 plots (22 combined + 20 faceted) + 2 tables
+
+**Note**: The script automatically cleans old plots and tables from the output directories before generating new ones, ensuring you always have the latest visualizations. Summary files from `run_full_summary` (like `inventory.csv`, `aggregated_metrics.csv`) are preserved.
 
 ## Figure Descriptions
 
 ### CATEGORY 1: Completion Rate vs Network Characteristics
 
-These plots show how often each method successfully completes inference for networks with different characteristics.
+These plots show how often each method successfully completes inference for networks with different characteristics. **Data is discrete** (scatter plots with error bars, no connecting lines).
 
 #### Combined vs Faceted Views
 
@@ -171,10 +184,10 @@ For each characteristic, TWO versions are generated:
 
 - **Combined plots** (`plots/XX_combined_*.pdf`): All methods on one graph
   - Best for: Direct method comparison
-  - Includes: Error bars, legend
+  - Includes: Error bars, legend, scatter points (no lines)
 
 - **Faceted plots** (`plots/individual_methods/XX_faceted_*.pdf`): Grid of subplots, one per method
-  - Best for: Detailed per-method trends without overlapping lines
+  - Best for: Detailed per-method trends without overlapping points
   - Cleaner for complex patterns
 
 #### Figure 01-02: Completion Rate vs Reticulations (Holm Fold)
@@ -186,9 +199,10 @@ For each characteristic, TWO versions are generated:
 **Y-axis**: Completion Rate (%)
 
 **Interpretation**:
-- Flat lines = method robust to reticulations
-- Steep downward slopes = method struggles with network complexity
+- Flat patterns = method robust to reticulations
+- Downward trends = method struggles with network complexity
 - Error bars show variability across networks with same H_Strict value
+- Scatter points (no lines) reflect discrete data nature
 
 #### Figure 03-04: Completion Rate vs Reticulations (Polyphest Fold)
 **Files**:
@@ -244,9 +258,9 @@ For each characteristic, TWO versions are generated:
 **Interpretation**:
 - Upward trend = method benefits from more data
 - Downward trend = method struggles with computational complexity
-- Flat line = method unaffected by phylogeny size
+- Flat pattern = method unaffected by phylogeny size
 
-#### Figure 11-12: Completion Rate vs Max Copies ⭐ NEW
+#### Figure 11-12: Completion Rate vs Max Copies
 **Files**:
 - `06_combined_completion_vs_max_copies.pdf/png`
 - `individual_methods/06_faceted_completion_vs_max_copies.pdf/png`
@@ -265,19 +279,19 @@ For each characteristic, TWO versions are generated:
 
 ---
 
-### CATEGORY 2: Edit Distance vs Network Characteristics ⭐ NEW CATEGORY
+### CATEGORY 2: Accuracy vs Network Characteristics
 
 These plots show how accurately methods reconstruct networks, and how accuracy varies with network properties.
 
-**Key concept**: Edit distance measures topological accuracy (0 = perfect, 1 = completely wrong). These plots reveal which network properties make accurate reconstruction harder.
+**Key concept**: Edit distance and RF distance measure topological accuracy (0 = perfect, higher = worse). These plots reveal which network properties make accurate reconstruction harder.
 
-#### Figure 13-14: Edit Distance vs Num Species ⭐ NEW
+#### Figure 13-14: Edit Distance vs Num Species
 **Files**:
-- `11_combined_editdist_vs_num_species.pdf/png`
-- `individual_methods/11_faceted_editdist_vs_num_species.pdf/png`
+- `11_combined_editdist_multree_vs_num_species.pdf/png`
+- `individual_methods/11_faceted_editdist_multree_vs_num_species.pdf/png`
 
 **X-axis**: Number of Species
-**Y-axis**: Normalized Edit Distance
+**Y-axis**: Normalized Edit Distance (MUL-tree)
 
 **Why important**: Does phylogeny size affect accuracy?
 
@@ -286,13 +300,13 @@ These plots show how accurately methods reconstruct networks, and how accuracy v
 - Flat line = method maintains accuracy regardless of size
 - Compare slopes between methods to identify which scale better
 
-#### Figure 15-16: Edit Distance vs H_Strict ⭐ NEW
+#### Figure 15-16: Edit Distance vs H_Strict
 **Files**:
-- `12_combined_editdist_vs_h_strict.pdf/png`
-- `individual_methods/12_faceted_editdist_vs_h_strict.pdf/png`
+- `12_combined_editdist_multree_vs_h_strict.pdf/png`
+- `individual_methods/12_faceted_editdist_multree_vs_h_strict.pdf/png`
 
 **X-axis**: Number of Reticulations (Holm Fold)
-**Y-axis**: Normalized Edit Distance
+**Y-axis**: Normalized Edit Distance (MUL-tree)
 
 **Why important**: Do more reticulations make accurate inference harder?
 
@@ -301,13 +315,13 @@ These plots show how accurately methods reconstruct networks, and how accuracy v
 - Method comparison reveals which methods handle reticulations better
 - Critical for understanding reticulation limits
 
-#### Figure 17-18: Edit Distance vs Num Polyploids ⭐ NEW
+#### Figure 17-18: Edit Distance vs Num Polyploids
 **Files**:
-- `13_combined_editdist_vs_polyploids.pdf/png`
-- `individual_methods/13_faceted_editdist_vs_polyploids.pdf/png`
+- `13_combined_editdist_multree_vs_polyploids.pdf/png`
+- `individual_methods/13_faceted_editdist_multree_vs_polyploids.pdf/png`
 
 **X-axis**: Number of Polyploid Species
-**Y-axis**: Normalized Edit Distance
+**Y-axis**: Normalized Edit Distance (MUL-tree)
 
 **Why important**: Does polyploid count affect reconstruction quality?
 
@@ -315,13 +329,13 @@ These plots show how accurately methods reconstruct networks, and how accuracy v
 - Tests if methods can maintain accuracy with many polyploid species
 - Identifies polyploidy-robust methods
 
-#### Figure 19-20: Edit Distance vs Max Copies ⭐ NEW
+#### Figure 19-20: Edit Distance vs Max Copies
 **Files**:
-- `14_combined_editdist_vs_max_copies.pdf/png`
-- `individual_methods/14_faceted_editdist_vs_max_copies.pdf/png`
+- `14_combined_editdist_multree_vs_max_copies.pdf/png`
+- `individual_methods/14_faceted_editdist_multree_vs_max_copies.pdf/png`
 
 **X-axis**: Maximum Copies per Species
-**Y-axis**: Normalized Edit Distance
+**Y-axis**: Normalized Edit Distance (MUL-tree)
 
 **Why important**: Does extreme duplication affect accuracy?
 
@@ -329,40 +343,60 @@ These plots show how accurately methods reconstruct networks, and how accuracy v
 - High Max_Copies = extreme local complexity
 - Tests if methods struggle with highly duplicated lineages
 
+#### Figure 21-22: RF Distance vs Num Species
+**Files**:
+- `15_combined_rf_vs_num_species.pdf/png`
+- `individual_methods/15_faceted_rf_vs_num_species.pdf/png`
+
+**X-axis**: Number of Species
+**Y-axis**: Robinson-Foulds Distance (MUL-tree)
+
+**Interpretation**: Similar to edit distance, but using RF metric. RF distance measures splits/topology differences.
+
+#### Figure 23-24: RF Distance vs H_Strict
+**Files**:
+- `16_combined_rf_vs_h_strict.pdf/png`
+- `individual_methods/16_faceted_rf_vs_h_strict.pdf/png`
+
+**X-axis**: Number of Reticulations (Holm Fold)
+**Y-axis**: Robinson-Foulds Distance (MUL-tree)
+
+**Interpretation**: How reticulation complexity affects RF-based accuracy measurement.
+
 ---
 
-### CATEGORY 3: Advanced Performance Metrics ⭐ NEW CATEGORY
+### CATEGORY 3: Advanced Performance Metrics
 
 Beyond overall topology accuracy, these plots assess specific aspects of network inference quality.
 
-#### Figure 21-22: Reticulation Leaf Jaccard vs H_Strict ⭐ NEW
+#### Figure 25-26: Reticulation Leaf Jaccard Distance vs H_Strict
 **Files**:
 - `21_combined_ret_leaf_jaccard_vs_h_strict.pdf/png`
 - `individual_methods/21_faceted_ret_leaf_jaccard_vs_h_strict.pdf/png`
 
 **X-axis**: Number of Reticulations (Holm Fold)
-**Y-axis**: Reticulation Leaf Set Jaccard Similarity (0-1)
+**Y-axis**: Reticulation Leaf Set Distance (0 = perfect match, 1 = no match)
 
 **What it measures**: How well do inferred reticulation leaf sets match true reticulation leaf sets?
 
 **Why important**:
 - Edit distance is global; this is reticulation-specific
-- Jaccard similarity = |True ∩ Inferred| / |True ∪ Inferred|
-- 1.0 = perfect reticulation leaf recovery
-- 0.0 = no overlap
+- Distance = 1 - Jaccard similarity
+- 0.0 = perfect reticulation leaf recovery
+- 1.0 = no overlap
 
 **Interpretation**:
-- High values = method correctly identifies which leaves are under reticulations
-- Downward trend = more reticulations make identification harder
+- Lower values = method correctly identifies which leaves are under reticulations
+- Upward trend = more reticulations make identification harder
 - Method comparison reveals reticulation detection accuracy
 
-#### Figure 23-24: Sister Relationship Jaccard vs H_Strict ⭐ NEW
+#### Figure 27-28: Sister Relationship Jaccard Distance vs H_Strict
 **Files**:
 - `22_combined_ret_sisters_jaccard_vs_h_strict.pdf/png`
 - `individual_methods/22_faceted_ret_sisters_jaccard_vs_h_strict.pdf/png`
 
 **X-axis**: Number of Reticulations (Holm Fold)
-**Y-axis**: Sister Relationship Jaccard Similarity (0-1)
+**Y-axis**: Sister Relationship Distance (0 = perfect match, 1 = no match)
 
 **What it measures**: How well do inferred sister relationships match true sister relationships?
 
@@ -372,10 +406,10 @@ Beyond overall topology accuracy, these plots assess specific aspects of network
 - Critical for phylogenetic accuracy
 
 **Interpretation**:
-- High values = correct topological relationships
-- Lower than leaf Jaccard = method gets leaves right but relationships wrong
+- Lower values = correct topological relationships
+- Higher than leaf Jaccard = method gets leaves right but relationships wrong
 
-#### Figure 25: Polyploid Identification F1 Score ⭐ NEW
+#### Figure 29: Polyploid Identification F1 Score
 **File**: `23_polyploid_f1_performance.pdf/png`
 
 **Layout**: Two-panel figure
@@ -400,36 +434,71 @@ Beyond overall topology accuracy, these plots assess specific aspects of network
 - F1 < 0.5: Poor identification
 - Compare precision vs recall to understand method behavior
 
+#### Figure 30: Reticulation Leaf Jaccard Distance Distribution
+**File**: `08d_ret_leaf_jaccard_distribution.pdf/png`
+
+**Layout**: Boxplot showing distribution of reticulation leaf set distances per method
+
+**Interpretation**:
+- Lower values = better performance
+- Box shows quartiles, whiskers show range
+- Outliers indicate networks where method struggled
+- Compare medians between methods
+
+#### Figure 31: Sister Relationship Jaccard Distance Distribution
+**File**: `08e_ret_sisters_jaccard_distribution.pdf/png`
+
+**Layout**: Boxplot showing distribution of sister relationship distances per method
+
+**Interpretation**:
+- Lower values = better performance
+- More stringent metric than leaf Jaccard
+- Shows consistency of topological relationship recovery
+
 ---
 
 ### CATEGORY 4: Distributions, Comparisons, and Summaries
 
-#### Figure 26: Folding Method Comparison
+#### Figure 32: Folding Method Comparison
 **File**: `05_folding_comparison.pdf/png`
 
 **Purpose**: Direct comparison of Holm Fold vs Polyphest Fold completion rates
 
 **Interpretation**: Which folding algorithm is more permissive for method completion?
 
-#### Figure 27: Folding Accuracy Comparison
+#### Figure 33: Folding Accuracy Comparison
 **File**: `06_folding_accuracy_comparison.pdf/png`
 
 **Purpose**: Reticulation count errors for both folding methods
 
 **Interpretation**: Which folding method provides better ground truth for comparison?
 
-#### Figure 28: Reticulation Error Distribution
-**File**: `07_reticulation_error_distribution.pdf/png`
+#### Figure 34: Reticulation Error Distribution (Percentage Bias)
+**File**: `07_reticulation_bias_boxplot.pdf/png`
 
-**Layout**: Box plots showing distribution of (inferred - true) reticulation counts
+**Layout**: Box plots showing distribution of percentage bias: (Inferred - True) / True × 100
+
+**Key Features**:
+- **Percentage bias**: Signed error as percentage of true reticulation count
+- **Positive values**: Over-estimation (inferred > true)
+- **Negative values**: Under-estimation (inferred < true)
+- **Can exceed ±100%**: If true=2 and inferred=4, bias = +100%; if inferred=0, bias = -100%
+- **Mean percentage bias** shown above each box
 
 **Interpretation**:
-- Centered at 0 = accurate
-- Positive = overestimation
-- Negative = underestimation
+- Centered at 0% = accurate
+- Positive = systematic overestimation
+- Negative = systematic underestimation
+- Box width shows consistency across networks
+- Outliers indicate networks with extreme errors
 
-#### Figure 29: Edit Distance Distribution
-**File**: `08_edit_distance_distribution.pdf/png`
+**Example**: If true reticulations = 2:
+- Inferred = 4 → bias = +100% (doubled)
+- Inferred = 0 → bias = -100% (missed all)
+- Inferred = 1 → bias = -50% (underestimated by half)
+
+#### Figure 35: Edit Distance Distribution (MUL-tree)
+**File**: `08_edit_distance_multree_boxplot.pdf/png`
 
 **Layout**: Box plots showing edit distance distribution per method
 
@@ -438,7 +507,31 @@ Beyond overall topology accuracy, these plots assess specific aspects of network
 - Box width shows consistency
 - See EDIT_DISTANCE_EXPLAINED.md for scale interpretation
 
-#### Figure 30: Per-Network Completion Breakdown
+#### Figure 36: 3-Way Distance Metric Comparison
+**File**: `08a_distance_metrics_comparison.pdf/png`
+
+**Layout**: Three side-by-side boxplots comparing:
+- Network Edit Distance
+- MUL-tree Edit Distance
+- RF Distance (MUL-tree)
+
+**Purpose**: Compare different distance metrics to understand which aspects of topology are captured
+
+#### Figure 37: Edit Distance MUL-tree Distribution (Detailed)
+**File**: `08b_edit_distance_multree_distribution.pdf/png`
+
+**Layout**: Boxplot distribution of MUL-tree edit distance
+
+**Interpretation**: Detailed view of MUL-tree accuracy distribution
+
+#### Figure 38: RF Distance Distribution
+**File**: `08c_rf_distance_distribution.pdf/png`
+
+**Layout**: Boxplot distribution of Robinson-Foulds distance
+
+**Interpretation**: RF-based accuracy distribution across methods
+
+#### Figure 39: Per-Network Completion Breakdown
 **File**: `09_per_network_breakdown.pdf/png`
 
 **Layout**: Bar plot with networks on x-axis, grouped by method
@@ -446,23 +539,32 @@ Beyond overall topology accuracy, these plots assess specific aspects of network
 **Interpretation**:
 - Identifies problematic networks (all methods fail)
 - Identifies method-specific failures
+- Shows network-by-network performance
 
-#### Figure 31: Method Performance Summary
+#### Figure 40: Method Performance Summary
 **File**: `10_method_summary.pdf/png`
 
-**Layout**: Three-panel bar chart
-- Completion rate
-- Mean edit distance
-- Mean reticulation error
+**Layout**: Four-panel bar chart
+1. **Completion rate**: Overall success rate
+2. **Mean edit distance (MUL-tree)**: Topological accuracy
+3. **Mean absolute error (MAE)**: Reticulation count absolute error
+4. **Mean percentage bias**: Reticulation count signed error as percentage
 
 **Purpose**: High-level overview for paper main text
 
-#### Figure 32: Comprehensive Correlation Heatmap ⭐ NEW
+**Key Features**:
+- Panel 4 shows percentage bias with color coding:
+  - **Red bars**: Over-estimation (positive bias)
+  - **Blue bars**: Under-estimation (negative bias)
+  - **Gray bars**: No data
+- Reference line at 0% for perfect accuracy
+
+#### Figure 41: Aggregated Correlation Heatmap
 **File**: `31_comprehensive_correlation_heatmap.pdf/png`
 
 **Layout**: Heatmap showing correlations between:
 - **Rows**: All network properties (Num_Species, H_Strict, H_Relaxed, Num_Polyploids, Max_Copies, Total_WGD, Polyploid_Ratio)
-- **Columns**: All performance metrics (completion_rate, edit_distance, num_rets_diff)
+- **Columns**: All performance metrics (completion_rate, edit_distance_multree, rf_distance, num_rets_bias_pct)
 
 **Color scale**: Red = positive correlation, Blue = negative correlation
 
@@ -470,11 +572,29 @@ Beyond overall topology accuracy, these plots assess specific aspects of network
 - Identifies which network properties most strongly predict difficulty
 - Shows relationships between properties and multiple performance aspects
 - Reveals unexpected correlations
+- **Aggregated across all methods** (see Figure 42 for per-method view)
 
 **Interpretation**:
 - Strong positive correlation with edit_distance = property makes accurate inference harder
 - Strong negative correlation with completion_rate = property causes failures
 - Example: If H_Strict strongly correlates with edit_distance, reticulations are a major accuracy challenge
+
+#### Figure 42: Per-Method Correlation Heatmaps
+**File**: `32_per_method_correlation_heatmap.pdf/png`
+
+**Layout**: Grid of heatmaps, one subplot per method
+
+**Purpose**: Shows correlation patterns **separately for each method**
+
+**Why important**:
+- Different methods may have different difficulty factors
+- Reveals method-specific strengths and weaknesses
+- Complements aggregated view (Figure 41)
+
+**Interpretation**:
+- Compare heatmaps across methods to see if difficulty factors are consistent
+- Method-specific patterns may indicate algorithmic differences
+- Strong correlations in one method but not others = method-specific challenge
 
 ---
 
@@ -488,11 +608,12 @@ Beyond overall topology accuracy, these plots assess specific aspects of network
 - `Total_Runs`: Total network attempts
 - `Completed_Runs`: Successful completions
 - `Completion_Rate_%`: Success percentage
-- `Mean_Edit_Distance`: Average accuracy
+- `Mean_Edit_Distance`: Average accuracy (MUL-tree)
 - `Median_Edit_Distance`: Median accuracy
 - `Std_Edit_Distance`: Accuracy variability
-- `Mean_Reticulation_Error`: Average reticulation count error
+- `Mean_Reticulation_Error`: Average reticulation count error (absolute)
 - `Median_Reticulation_Error`: Median reticulation count error
+- `Mean_Reticulation_Bias_%`: Average percentage bias (signed)
 
 **Use**: Main results table for paper
 
@@ -503,7 +624,7 @@ Beyond overall topology accuracy, these plots assess specific aspects of network
 - Network properties (H_Strict, H_Relaxed, Num_Polyploids, Total_WGD)
 - Per-method completion rates
 - Per-method edit distances
-- Per-method reticulation errors
+- Per-method reticulation errors and biases
 
 **Use**: Supplementary material - detailed breakdown
 
@@ -515,17 +636,41 @@ Beyond overall topology accuracy, these plots assess specific aspects of network
 - **Why not Robinson-Foulds**: RF requires unique leaf labels (not MUL-trees) and doesn't handle reticulations
 - **See**: `EDIT_DISTANCE_EXPLAINED.md` for details
 
-### Jaccard Similarity
-- **Range**: 0 (no overlap) to 1 (perfect match)
-- **Calculation**: |True ∩ Inferred| / |True ∪ Inferred|
+### Jaccard Distance
+- **Range**: 0 (perfect match) to 1 (no overlap)
+- **Calculation**: Distance = 1 - Jaccard similarity
+- **Jaccard similarity**: |True ∩ Inferred| / |True ∪ Inferred|
 - **Variants**:
-  - `ret_leaf_jaccard`: Reticulation leaf sets
-  - `ret_sisters_jaccard`: Sister relationships
+  - `ret_leaf_jaccard.dist`: Reticulation leaf set distance
+  - `ret_sisters_jaccard.dist`: Sister relationship distance
+- **Interpretation**: Lower values indicate better performance
+
+### Reticulation Error Metrics
+
+#### Absolute Error (`num_rets_diff`)
+- **Definition**: |Inferred - True|
+- **Range**: 0 to infinity
+- **Interpretation**: Magnitude of error, regardless of direction
+
+#### Percentage Bias (`num_rets_bias_pct`)
+- **Definition**: (Inferred - True) / True × 100
+- **Range**: Can exceed ±100%
+- **Interpretation**:
+  - **Positive**: Over-estimation (inferred > true)
+  - **Negative**: Under-estimation (inferred < true)
+  - **0%**: Perfect accuracy
+- **Examples**:
+  - True=2, Inferred=4 → +100% (doubled)
+  - True=2, Inferred=0 → -100% (missed all)
+  - True=10, Inferred=12 → +20% (slight over-estimation)
+- **Edge case**: If True=0, percentage cannot be calculated (uses absolute error instead)
 
 ### F1 Score (Polyploid Identification)
 - **Range**: 0 (worst) to 1 (perfect)
 - **Calculation**: 2 × (Precision × Recall) / (Precision + Recall)
 - **Based on**: True Positives, False Positives, False Negatives
+- **Precision**: TP / (TP + FP) - accuracy of positive predictions
+- **Recall**: TP / (TP + FN) - coverage of true positives
 
 ## Data Aggregation
 
@@ -547,6 +692,16 @@ mean_rate = mean(network_rates)
 std_error = std(network_rates) / sqrt(number_of_networks)
 ```
 
+### Percentage Bias Calculation
+```python
+# For each network-method pair
+bias = inferred_reticulations - true_reticulations
+if true_reticulations > 0:
+    bias_pct = (bias / true_reticulations) × 100
+else:
+    bias_pct = bias  # Use absolute value if true=0
+```
+
 ## Customization
 
 ### Color Schemes
@@ -554,7 +709,7 @@ Edit `create_analysis_figures.py`:
 ```python
 METHOD_COLORS = {
     'grampa': '#0173B2',      # Blue
-    'polyphest': '#DE8F05',   # Orange
+    'polyphest_p60': '#DE8F05',   # Orange
     'padre': '#ECE133',       # Yellow
     'mpsugar': '#CA9161'      # Tan
 }
@@ -591,12 +746,15 @@ python run_full_summary.py conf_ils_low_10M
 **Problem**: Metrics not calculated in comparison pipeline
 
 **Solution**: Ensure `compare_nets.py` calculates all metrics:
-- `ret_leaf_jaccard`
-- `ret_sisters_jaccard`
+- `ret_leaf_jaccard` and `ret_leaf_jaccard.dist`
+- `ret_sisters_jaccard` and `ret_sisters_jaccard.dist`
 - `ploidy_diff` (TP/FP/FN)
 
 ### Plots look crowded
 **Solution**: Use faceted versions in `individual_methods/` subdirectory
+
+### Old plots still present
+**Solution**: The script automatically cleans old plots before generation. If you see old files, they may be from a different configuration or the cleanup may have failed. Re-run the script.
 
 ## Workflow Checklist
 
@@ -604,10 +762,10 @@ python run_full_summary.py conf_ils_low_10M
 - [ ] Postprocessing run for each configuration
 - [ ] Summary pipeline run for each configuration
 - [ ] Network statistics file exists
-- [ ] Generated all 34 plots successfully
+- [ ] Generated all 42 plots successfully
 - [ ] Reviewed combined plots for overview
 - [ ] Reviewed faceted plots for details
-- [ ] Checked correlation heatmap for insights
+- [ ] Checked correlation heatmaps (aggregated and per-method) for insights
 - [ ] Reviewed tables
 - [ ] Selected figures for main text vs supplementary
 
@@ -616,34 +774,37 @@ python run_full_summary.py conf_ils_low_10M
 ### Main Text (4-6 key figures)
 
 **Essential**:
-1. **Fig 01 (combined)**: Completion vs H_Strict - shows method robustness to reticulations
-2. **Fig 29**: Edit distance distribution - shows overall accuracy
-3. **Fig 31**: Method summary - comprehensive overview
-4. **Fig 32**: Correlation heatmap - identifies difficulty predictors
+1. **Fig 40 (method summary)**: Comprehensive overview - completion, accuracy, reticulation error
+2. **Fig 35 (edit distance distribution)**: Overall accuracy comparison
+3. **Fig 34 (reticulation bias)**: Percentage bias shows systematic over/under-estimation
+4. **Fig 41 (aggregated correlation)**: Identifies difficulty predictors
 
 **Optional** (choose based on story):
 5. **Fig 09 (combined)**: Completion vs Num_Species - if size matters
 6. **Fig 13 (combined)**: Edit distance vs Num_Species - if accuracy degrades with size
-7. **Fig 25**: Polyploid F1 - if polyploid identification is key
+7. **Fig 29 (polyploid F1)**: If polyploid identification is key
+8. **Fig 42 (per-method correlation)**: If method-specific patterns are important
 
 ### Supplementary Material
 
 **Category 1 - Completion Analysis**:
 - All faceted completion plots (detailed per-method trends)
-- Figs 03, 05, 07, 11 (combined versions of other characteristics)
+- All combined completion plots (Figs 01-12)
 
 **Category 2 - Accuracy Analysis**:
 - All edit distance vs characteristic plots (Figs 13-20)
+- All RF distance plots (Figs 21-24)
 - Shows how accuracy varies with network properties
 
 **Category 3 - Advanced Metrics**:
-- Jaccard similarity plots (Figs 21-24)
+- Jaccard distance plots (Figs 25-28)
+- Jaccard distribution boxplots (Figs 30-31)
 - Polyploid F1 if not in main text
 
 **Category 4 - Distributions**:
-- Folding comparisons (Figs 26-27)
-- Error distributions (Figs 28-29)
-- Per-network breakdown (Fig 30)
+- Folding comparisons (Figs 32-33)
+- Error distributions (Figs 34-38)
+- Per-network breakdown (Fig 39)
 
 **Tables**:
 - Table 1: Main supplementary table
@@ -654,23 +815,27 @@ python run_full_summary.py conf_ils_low_10M
 After generating all figures:
 
 ### 1. Overall Performance
-- Review Fig 31 (method summary) - which methods perform best overall?
-- Review Fig 29 (edit distance distribution) - how accurate are methods?
+- Review Fig 40 (method summary) - which methods perform best overall?
+- Review Fig 35 (edit distance distribution) - how accurate are methods?
 - Review Table 1 - quantitative comparison
 
 ### 2. Difficulty Factors
-- Review Fig 32 (correlation heatmap) - which properties predict difficulty?
+- Review Fig 41 (aggregated correlation) - which properties predict difficulty?
+- Review Fig 42 (per-method correlation) - are difficulty factors consistent across methods?
 - Review Category 1 combined plots - how does each property affect completion?
 - Review Category 2 plots - how does each property affect accuracy?
 
 ### 3. Method-Specific Analysis
 - Use faceted plots to see per-method trends clearly
 - Identify method strengths/weaknesses from slopes
-- Compare methods on specific network types (Fig 30)
+- Compare methods on specific network types (Fig 39)
+- Compare per-method correlation patterns (Fig 42)
 
 ### 4. Advanced Insights
-- Review Jaccard plots - are topological relationships correct?
-- Review F1 plot - how well are polyploids identified?
+- Review Jaccard distance plots (Figs 25-28) - are topological relationships correct?
+- Review Jaccard distributions (Figs 30-31) - consistency of performance
+- Review F1 plot (Fig 29) - how well are polyploids identified?
+- Review percentage bias (Fig 34) - systematic over/under-estimation patterns
 - Cross-reference with biological expectations
 
 ### 5. ILS Level Comparison
@@ -692,7 +857,7 @@ gene2net/
     │   ├── *.tre                           # 21 input MUL-trees
     │   └── mul_tree_final_stats.csv        # Ground truth statistics
     ├── scripts/
-    │   ├── create_analysis_figures.py      # Main visualization script (34 plots)
+    │   ├── create_analysis_figures.py      # Main visualization script (42 plots)
     │   ├── run_full_summary.py             # Prerequisite
     │   └── postprocess_results.py          # Prerequisite
     ├── analysis/
@@ -702,7 +867,7 @@ gene2net/
     │           ├── aggregated_metrics.csv  # Input
     │           ├── comparisons_raw.csv     # Input
     │           ├── plots/                  # 22 combined plots (PDF + PNG)
-    │           │   └── individual_methods/ # 12 faceted plots (PDF + PNG)
+    │           │   └── individual_methods/ # 20 faceted plots (PDF + PNG)
     │           └── tables/                 # 2 summary tables (CSV)
     └── md_files/
         ├── VISUALIZATION_GUIDE.md          # This file
@@ -717,35 +882,43 @@ gene2net/
 - **EDIT_DISTANCE_EXPLAINED.md**: Edit distance metric explanation
 - **CLAUDE.md**: Repository-wide guidance
 
-## Quick Reference: All 34 Plots
+## Quick Reference: All 42 Plots
 
 ### Category 1: Completion Rate (12 plots)
 1-2. vs H_Strict (combined + faceted)
 3-4. vs H_Relaxed (combined + faceted)
 5-6. vs Num_Polyploids (combined + faceted)
 7-8. vs Total_WGD (combined + faceted)
-9-10. vs Num_Species (combined + faceted) ⭐ NEW
-11-12. vs Max_Copies (combined + faceted) ⭐ NEW
+9-10. vs Num_Species (combined + faceted)
+11-12. vs Max_Copies (combined + faceted)
 
-### Category 2: Edit Distance (8 plots) ⭐ NEW
-13-14. vs Num_Species (combined + faceted)
-15-16. vs H_Strict (combined + faceted)
-17-18. vs Num_Polyploids (combined + faceted)
-19-20. vs Max_Copies (combined + faceted)
+### Category 2: Accuracy Metrics (12 plots)
+13-14. Edit Distance vs Num_Species (combined + faceted)
+15-16. Edit Distance vs H_Strict (combined + faceted)
+17-18. Edit Distance vs Num_Polyploids (combined + faceted)
+19-20. Edit Distance vs Max_Copies (combined + faceted)
+21-22. RF Distance vs Num_Species (combined + faceted)
+23-24. RF Distance vs H_Strict (combined + faceted)
 
-### Category 3: Advanced Metrics (5 plots) ⭐ NEW
-21-22. Reticulation Leaf Jaccard vs H_Strict (combined + faceted)
-23-24. Sister Relationship Jaccard vs H_Strict (combined + faceted)
-25. Polyploid F1 Score
+### Category 3: Advanced Metrics (7 plots)
+25-26. Reticulation Leaf Jaccard Distance vs H_Strict (combined + faceted)
+27-28. Sister Relationship Jaccard Distance vs H_Strict (combined + faceted)
+29. Polyploid F1 Score
+30. Reticulation Leaf Jaccard Distance Distribution
+31. Sister Relationship Jaccard Distance Distribution
 
-### Category 4: Summaries (9 plots)
-26. Folding comparison
-27. Folding accuracy
-28. Reticulation error distribution
-29. Edit distance distribution
-30. Per-network breakdown
-31. Method summary
-32. Comprehensive correlation heatmap ⭐ NEW
+### Category 4: Summaries (11 plots)
+32. Folding comparison
+33. Folding accuracy
+34. Reticulation error distribution (percentage bias)
+35. Edit distance distribution (MUL-tree)
+36. 3-Way distance metric comparison
+37. Edit distance MUL-tree distribution (detailed)
+38. RF distance distribution
+39. Per-network breakdown
+40. Method summary
+41. Aggregated correlation heatmap
+42. Per-method correlation heatmaps
 
 ## Support
 
