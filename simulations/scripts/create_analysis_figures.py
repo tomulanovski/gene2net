@@ -47,8 +47,9 @@ METHOD_COLORS = {
     'polyphest_p50': '#DE8F05', # Orange
     'polyphest_p70': '#029E73', # Teal
     'polyphest_p90': '#CC78BC', # Pink
-    'mpsugar': '#CA9161',       # Tan
-    'padre': '#ECE133'          # Yellow
+    'mpsugar': '#8B4513',       # Saddle Brown (darker, distinct from orange)
+    'padre': '#ECE133',         # Yellow
+    'alloppnet': '#DC143C'      # Crimson/Red
 }
 
 # Markers for better distinction
@@ -59,7 +60,8 @@ METHOD_MARKERS = {
     'polyphest_p70': '^',
     'polyphest_p90': 'D',
     'mpsugar': 'v',
-    'padre': 'P'
+    'padre': 'P',
+    'alloppnet': 'X'
 }
 
 
@@ -1179,7 +1181,10 @@ class ConfigurationAnalyzer:
             method_data = df[df['method'] == method]
             method_data = method_data.set_index('network').reindex(networks_sorted).reset_index()
             
-            # Plot each bar individually with appropriate color
+            # Get method-specific color
+            method_color = METHOD_COLORS.get(method, '#000000')
+            
+            # Plot each bar individually with method-specific color
             bias_values = method_data['bias_pct'].values
             bars = []
             for j, (network, bias) in enumerate(zip(networks_sorted, bias_values)):
@@ -1188,15 +1193,10 @@ class ConfigurationAnalyzer:
                     bar = ax.bar(x[j] + i*width, 0, width,
                                color='#CCCCCC', alpha=0.3,
                                edgecolor='black', linewidth=0.5)
-                elif bias > 0:
-                    # Red bar for over-estimation
-                    bar = ax.bar(x[j] + i*width, bias, width,
-                               color='#D62728', alpha=0.8,
-                               edgecolor='black', linewidth=0.5)
                 else:
-                    # Blue bar for under-estimation
+                    # Use method-specific color for all bars
                     bar = ax.bar(x[j] + i*width, bias, width,
-                               color='#1F77B4', alpha=0.8,
+                               color=method_color, alpha=0.8,
                                edgecolor='black', linewidth=0.5)
                 bars.append(bar[0])
             
@@ -1208,7 +1208,7 @@ class ConfigurationAnalyzer:
         ax.set_xlabel('Network (sorted by H_Strict)', fontsize=13, fontweight='bold')
         ax.set_ylabel('Reticulation Bias (%)\n(Inferred - True) / True × 100', 
                      fontsize=13, fontweight='bold')
-        ax.set_title(f'Per-Network Reticulation Bias (ILS {self.ils_level})\n[Red = Over-estimation, Blue = Under-estimation]',
+        ax.set_title(f'Per-Network Reticulation Bias (ILS {self.ils_level})',
                     fontsize=15, fontweight='bold', pad=20)
         ax.set_xticks(x + width * len(methods) / 2)
         ax.set_xticklabels(networks_sorted, rotation=90, fontsize=8)
