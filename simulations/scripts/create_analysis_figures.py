@@ -168,7 +168,7 @@ class ConfigurationAnalyzer:
         # Clean old plots and tables before generating new ones
         self._clean_output_directories()
 
-        total_plots = 47  # Updated: added Jaccard distribution boxplots and per-method correlations
+        total_plots = 48  # Updated: added Jaccard distribution boxplots, per-method correlations, and per-network bias
         plot_num = 0
 
         # ========================================================================
@@ -414,6 +414,10 @@ class ConfigurationAnalyzer:
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Per-Network Completion Breakdown...")
         self.plot_per_network_breakdown()
+
+        plot_num += 1
+        print(f"[{plot_num}/{total_plots}] Per-Network Reticulation Bias...")
+        self.plot_reticulation_bias_per_network()
 
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Method Performance Summary...")
@@ -1098,6 +1102,122 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "09_per_network_breakdown.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "09_per_network_breakdown.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_reticulation_bias_per_network(self):
+        """Grouped bar chart showing reticulation bias (percentage) per network for all methods"""
+        if self.metrics is None or self.network_stats is None:
+            print("  WARNING: Missing data for per-network reticulation bias plot")
+            return
+
+        # Get num_rets_bias (signed error)
+        ret_bias = self.metrics[self.metrics['metric'] == 'num_rets_bias'].copy()
+        
+        if len(ret_bias) == 0:
+            print("  WARNING: No num_rets_bias data found, skipping per-network bias plot")
+            return
+
+        # Merge with network stats to get H_Strict for percentage calculation
+        ret_bias = ret_bias.merge(
+            self.network_stats[['network', 'H_Strict']],
+            on='network',
+            how='left'
+        )
+
+        # Calculate percentage bias
+        ret_bias['bias_pct'] = (
+            ret_bias['mean'] / ret_bias['H_Strict'] * 100
+        ).replace([np.inf, -np.inf], np.nan)
+        
+        # For networks with H_Strict=0, use absolute bias
+        zero_h_mask = ret_bias['H_Strict'] == 0
+        if zero_h_mask.any():
+            ret_bias.loc[zero_h_mask, 'bias_pct'] = ret_bias.loc[zero_h_mask, 'mean']
+
+        methods = sorted(ret_bias['method'].unique())
+        networks_sorted = self.network_stats.sort_values('H_Strict')['network'].tolist()
+
+        # Prepare data for plotting
+        data = []
+        for method in methods:
+            for network in networks_sorted:
+                method_net_data = ret_bias[
+                    (ret_bias['method'] == method) & 
+                    (ret_bias['network'] == network)
+                ]
+                if len(method_net_data) > 0:
+                    bias_pct = method_net_data['bias_pct'].values[0]
+                    h_strict = method_net_data['H_Strict'].values[0]
+                    data.append({
+                        'method': method,
+                        'network': network,
+                        'bias_pct': bias_pct,
+                        'H_Strict': h_strict
+                    })
+                else:
+                    # No data for this method-network combination
+                    data.append({
+                        'method': method,
+                        'network': network,
+                        'bias_pct': np.nan,
+                        'H_Strict': self.network_stats[
+                            self.network_stats['network'] == network
+                        ]['H_Strict'].values[0] if len(self.network_stats[
+                            self.network_stats['network'] == network
+                        ]) > 0 else 0
+                    })
+
+        df = pd.DataFrame(data)
+
+        fig, ax = plt.subplots(figsize=(18, 7))
+
+        # Plot grouped bars
+        x = np.arange(len(networks_sorted))
+        width = 0.8 / len(methods)
+
+        for i, method in enumerate(methods):
+            method_data = df[df['method'] == method]
+            method_data = method_data.set_index('network').reindex(networks_sorted).reset_index()
+            
+            # Plot each bar individually with appropriate color
+            bias_values = method_data['bias_pct'].values
+            bars = []
+            for j, (network, bias) in enumerate(zip(networks_sorted, bias_values)):
+                if np.isnan(bias):
+                    # Gray bar for missing data (height 0, just a marker)
+                    bar = ax.bar(x[j] + i*width, 0, width,
+                               color='#CCCCCC', alpha=0.3,
+                               edgecolor='black', linewidth=0.5)
+                elif bias > 0:
+                    # Red bar for over-estimation
+                    bar = ax.bar(x[j] + i*width, bias, width,
+                               color='#D62728', alpha=0.8,
+                               edgecolor='black', linewidth=0.5)
+                else:
+                    # Blue bar for under-estimation
+                    bar = ax.bar(x[j] + i*width, bias, width,
+                               color='#1F77B4', alpha=0.8,
+                               edgecolor='black', linewidth=0.5)
+                bars.append(bar[0])
+            
+            # Add label only for first bar of each method
+            if len(bars) > 0:
+                bars[0].set_label(method)
+
+        ax.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.5, label='Perfect accuracy (0%)')
+        ax.set_xlabel('Network (sorted by H_Strict)', fontsize=13, fontweight='bold')
+        ax.set_ylabel('Reticulation Bias (%)\n(Inferred - True) / True × 100', 
+                     fontsize=13, fontweight='bold')
+        ax.set_title(f'Per-Network Reticulation Bias (ILS {self.ils_level})\n[Red = Over-estimation, Blue = Under-estimation]',
+                    fontsize=15, fontweight='bold', pad=20)
+        ax.set_xticks(x + width * len(methods) / 2)
+        ax.set_xticklabels(networks_sorted, rotation=90, fontsize=8)
+        ax.legend(fontsize=10, ncol=len(methods) + 1)
+        ax.grid(True, alpha=0.25, axis='y', linestyle='--')
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "09b_per_network_reticulation_bias.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "09b_per_network_reticulation_bias.png", bbox_inches='tight', dpi=300)
         plt.close()
 
     def plot_method_summary(self):
