@@ -3,7 +3,7 @@
 #SBATCH --array=1-105
 #SBATCH --output=/groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/run_polyphest_%A_%a.out
 #SBATCH --error=/groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/run_polyphest_%A_%a.err
-#SBATCH --time=3-00:00:00
+#SBATCH --time=5-00:00:00
 #SBATCH --mem=50g
 #SBATCH --cpus-per-task=16
 #SBATCH --partition=itaym-pool
@@ -14,7 +14,7 @@
 # RUN_POLYPHEST.SH
 # ============================================================================
 # Runs Polyphest on prepared gene trees and multi-set files.
-# Uses a 2D array structure: 21 networks ª 5 replicates = 105 jobs
+# Uses a 2D array structure: 21 networks ï¿½ 5 replicates = 105 jobs
 #
 # Usage:
 #   sbatch --export=CONFIG=conf_ils_low_10M run_polyphest.sh
@@ -69,7 +69,7 @@ networks=(
 # ============================================================================
 # CALCULATE NETWORK AND REPLICATE FROM ARRAY TASK ID
 # ============================================================================
-# Array task IDs: 1-105 (for 21 networks ª 5 replicates)
+# Array task IDs: 1-105 (for 21 networks ï¿½ 5 replicates)
 # Mapping: task_id = (network_idx * NUM_REPLICATES) + replicate
 # So: network_idx = (task_id - 1) / NUM_REPLICATES
 #     replicate = ((task_id - 1) % NUM_REPLICATES) + 1
