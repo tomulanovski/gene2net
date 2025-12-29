@@ -1214,6 +1214,45 @@ class ConfigurationAnalyzer:
         ax.set_xticklabels(networks_sorted, rotation=90, fontsize=8)
         ax.legend(fontsize=10, ncol=len(methods) + 1)
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
+        
+        # Ensure y-axis shows both positive and negative values with proper tick labels
+        # Get the range of bias values to set appropriate limits
+        all_bias_values = df['bias_pct'].dropna()
+        if len(all_bias_values) > 0:
+            max_bias = all_bias_values.max()
+            min_bias = all_bias_values.min()
+            
+            # Add padding (10% on each side, minimum 5%)
+            y_range = max_bias - min_bias
+            if y_range == 0:
+                # If all values are the same, create symmetric range around that value
+                single_value = max_bias
+                y_range = max(abs(single_value) * 0.2, 10) if abs(single_value) > 0 else 20
+                y_max = single_value + y_range
+                y_min = single_value - y_range
+            else:
+                y_padding = max(y_range * 0.1, 5)  # At least 5% padding
+                y_max = max_bias + y_padding
+                y_min = min_bias - y_padding
+                
+                # If we have both positive and negative values, make it symmetric around zero
+                if min_bias < 0 and max_bias > 0:
+                    max_abs = max(abs(max_bias), abs(min_bias))
+                    y_max = max_abs + y_padding
+                    y_min = -(max_abs + y_padding)
+                # If all negative, ensure we show some positive space
+                elif min_bias < 0 and max_bias <= 0:
+                    y_max = y_padding  # Show a bit above zero
+                # If all positive, ensure we show some negative space  
+                elif min_bias >= 0 and max_bias > 0:
+                    y_min = -y_padding  # Show a bit below zero
+            
+            ax.set_ylim(y_min, y_max)
+            
+            # Force y-axis to show tick marks including negative values
+            # This ensures negative labels are displayed
+            ax.yaxis.set_major_locator(plt.MaxNLocator(nbins=10, symmetric=False))
+            ax.tick_params(axis='y', which='major', labelsize=11)
 
         plt.tight_layout()
         fig.savefig(self.plots_dir / "09b_per_network_reticulation_bias.pdf", bbox_inches='tight')
