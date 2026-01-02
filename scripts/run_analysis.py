@@ -16,15 +16,35 @@ from pathlib import Path
 from datetime import datetime
 import yaml
 
-# Add scripts directory to path for imports
-scripts_dir = Path(__file__).parent
+# Add scripts directory to path for imports (must be first to avoid conflicts)
+scripts_dir = Path(__file__).parent.resolve()
+# Ensure scripts directory is at the very front of sys.path
+if str(scripts_dir) in sys.path:
+    sys.path.remove(str(scripts_dir))
 sys.path.insert(0, str(scripts_dir))
 
-# Import pipeline modules
-from collect_results import ResultInventory, load_config
-from compute_comparisons import ComparisonEngine
-from summarize_results import ResultSummarizer
-from create_analysis_figures import RealDataAnalyzer
+# Import pipeline modules (from current scripts directory)
+# Use explicit imports to avoid conflicts with simulations/scripts modules
+import importlib.util
+
+def import_from_file(module_name, file_path):
+    """Import a module from a specific file path"""
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+# Import from scripts directory explicitly
+collect_results = import_from_file('collect_results', scripts_dir / 'collect_results.py')
+compute_comparisons = import_from_file('compute_comparisons', scripts_dir / 'compute_comparisons.py')
+summarize_results = import_from_file('summarize_results', scripts_dir / 'summarize_results.py')
+create_analysis_figures = import_from_file('create_analysis_figures', scripts_dir / 'create_analysis_figures.py')
+
+ResultInventory = collect_results.ResultInventory
+load_config = collect_results.load_config
+ComparisonEngine = compute_comparisons.ComparisonEngine
+ResultSummarizer = summarize_results.ResultSummarizer
+RealDataAnalyzer = create_analysis_figures.RealDataAnalyzer
 
 
 def run_pipeline(config_dict: dict, args):
