@@ -103,6 +103,11 @@ class ComparisonEngine:
         try:
             with open(path, 'r') as f:
                 newick_str = f.read().strip()
+            
+            # Ensure Newick string ends with semicolon (required by parser)
+            # Some methods (like GRAMPA) may output without semicolon
+            if newick_str and not newick_str.endswith(';') and not newick_str.endswith('nexml>'):
+                newick_str += ';'
 
             # ReticulateTree handles format detection and MUL-tree conversion
             tree = ReticulateTree(newick_str)
