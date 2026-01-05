@@ -49,7 +49,8 @@ METHOD_COLORS = {
 class RealDataAnalyzer:
     """Analyze and visualize results for real data pairwise comparisons"""
 
-    def __init__(self, comparisons_file: str, inventory_file: str, output_dir: str):
+    def __init__(self, comparisons_file: str, inventory_file: str, output_dir: str,
+                 comparable_networks: list = None):
         """
         Initialize analyzer
 
@@ -57,12 +58,14 @@ class RealDataAnalyzer:
             comparisons_file: Path to comparisons CSV
             inventory_file: Path to inventory CSV
             output_dir: Output directory for plots
+            comparable_networks: List of network names to use for completion rate calculation
         """
         self.output_dir = Path(output_dir)
         self.plots_dir = self.output_dir / "plots"
         self.tables_dir = self.output_dir / "tables"
         self.plots_dir.mkdir(parents=True, exist_ok=True)
         self.tables_dir.mkdir(parents=True, exist_ok=True)
+        self.comparable_networks = comparable_networks
 
         # Load data
         self.comparisons = pd.read_csv(comparisons_file)
@@ -79,14 +82,30 @@ class RealDataAnalyzer:
         print(f"  Inventory: {len(self.inventory)} entries")
         print(f"  Networks: {self.inventory['network'].nunique()}")
         print(f"  Methods: {self.inventory['method'].nunique()}")
+        if comparable_networks:
+            print(f"  Comparable networks (for completion rate): {len(comparable_networks)}")
 
     def plot_method_availability(self):
         """Bar chart showing completion rate per method"""
-        availability = self.inventory.groupby('method').agg({
-            'exists': ['sum', 'count']
-        }).reset_index()
-        availability.columns = ['method', 'available', 'total']
-        availability['completion_rate'] = (availability['available'] / availability['total'] * 100)
+        # Use comparable networks for completion rate if specified
+        if self.comparable_networks:
+            comparable_inventory = self.inventory[
+                self.inventory['network'].isin(self.comparable_networks)
+            ]
+            total_for_completion = len(self.comparable_networks)
+            
+            availability = comparable_inventory.groupby('method').agg({
+                'exists': 'sum'
+            }).reset_index()
+            availability.columns = ['method', 'available']
+            availability['total'] = total_for_completion
+            availability['completion_rate'] = (availability['available'] / total_for_completion * 100)
+        else:
+            availability = self.inventory.groupby('method').agg({
+                'exists': ['sum', 'count']
+            }).reset_index()
+            availability.columns = ['method', 'available', 'total']
+            availability['completion_rate'] = (availability['available'] / availability['total'] * 100)
 
         fig, ax = plt.subplots(figsize=(10, 6))
 
@@ -96,7 +115,11 @@ class RealDataAnalyzer:
 
         ax.set_ylabel('Completion Rate (%)', fontsize=13, fontweight='bold')
         ax.set_xlabel('Method', fontsize=13, fontweight='bold')
-        ax.set_title('Method Availability Across Networks', fontsize=15, fontweight='bold', pad=20)
+        if self.comparable_networks:
+            title = f'Method Availability Across Networks\n(Based on {len(self.comparable_networks)} Comparable Networks)'
+        else:
+            title = 'Method Availability Across Networks'
+        ax.set_title(title, fontsize=15, fontweight='bold', pad=20)
         ax.set_ylim(0, 105)
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
 

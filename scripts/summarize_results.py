@@ -25,16 +25,21 @@ import numpy as np
 class ResultSummarizer:
     """Generate summary tables from pairwise comparisons"""
 
-    def __init__(self, comparisons_df: pd.DataFrame, inventory_df: pd.DataFrame):
+    def __init__(self, comparisons_df: pd.DataFrame, inventory_df: pd.DataFrame,
+                 comparable_networks: list = None):
         """
         Initialize summarizer
 
         Args:
             comparisons_df: DataFrame from compute_comparisons.py
             inventory_df: DataFrame from collect_results.py
+            comparable_networks: List of network names to use for completion rate calculation.
+                               If None, uses all networks. If provided, completion rates are
+                               calculated as percentage of these networks that have results.
         """
         self.comparisons_df = comparisons_df
         self.inventory_df = inventory_df
+        self.comparable_networks = comparable_networks
 
         # Filter out failed comparisons
         if not comparisons_df.empty and 'status' in comparisons_df.columns:
@@ -47,22 +52,47 @@ class ResultSummarizer:
         Generate method availability table
 
         Returns:
-            DataFrame with columns: method, total_networks, available, missing, completion_rate
+            DataFrame with columns: method, total_networks, available, missing, completion_rate,
+                                   comparable_networks, available_comparable
         """
         availability = []
+        
+        # Determine which networks to use for completion rate calculation
+        if self.comparable_networks:
+            # Filter inventory to only comparable networks
+            comparable_inventory = self.inventory_df[
+                self.inventory_df['network'].isin(self.comparable_networks)
+            ]
+            total_for_completion = len(self.comparable_networks)
+        else:
+            comparable_inventory = self.inventory_df
+            total_for_completion = len(self.inventory_df['network'].unique())
 
         for method in self.inventory_df['method'].unique():
             method_data = self.inventory_df[self.inventory_df['method'] == method]
             total = len(method_data)
             available = method_data['exists'].sum()
             missing = total - available
+            
+            # Calculate completion rate based on comparable networks only
+            if self.comparable_networks:
+                method_comparable = comparable_inventory[
+                    comparable_inventory['method'] == method
+                ]
+                available_comparable = method_comparable['exists'].sum()
+                completion_rate = (available_comparable / total_for_completion * 100) if total_for_completion > 0 else 0
+            else:
+                available_comparable = available
+                completion_rate = (available / total * 100) if total > 0 else 0
 
             availability.append({
                 'method': method,
                 'total_networks': total,
                 'available': available,
                 'missing': missing,
-                'completion_rate': (available / total * 100) if total > 0 else 0
+                'completion_rate': completion_rate,
+                'comparable_networks': total_for_completion,
+                'available_comparable': available_comparable
             })
 
         return pd.DataFrame(availability).sort_values('completion_rate', ascending=False)
@@ -194,6 +224,8 @@ class ResultSummarizer:
 
         # Method availability
         print("Generating method availability table...")
+        if self.comparable_networks:
+            print(f"  Using {len(self.comparable_networks)} comparable networks for completion rate calculation")
         availability = self.generate_method_availability()
         availability_file = output_dir / "method_availability.csv"
         availability.to_csv(availability_file, index=False)

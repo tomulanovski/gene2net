@@ -63,11 +63,14 @@ def run_pipeline(config_dict: dict, args):
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*80}\n")
 
-    # Setup output directory
+    # Setup output directory (fixed name, not timestamp-based)
     output_base = Path(args.output) if args.output else Path(config_dict['output_dir'])
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    output_dir = output_base / timestamp
+    output_subdir = config_dict.get('output_subdir', 'real_data_summary')
+    output_dir = output_base / output_subdir
     output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Get comparable networks from config
+    comparable_networks = config_dict.get('comparable_networks', None)
 
     cache_dir = output_dir / "cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -131,7 +134,7 @@ def run_pipeline(config_dict: dict, args):
     print(f"PHASE 3: Summarize Results")
     print(f"{'='*80}\n")
 
-    summarizer = ResultSummarizer(comparisons_df, inventory_df)
+    summarizer = ResultSummarizer(comparisons_df, inventory_df, comparable_networks)
     summarizer.generate_all_summaries(output_dir)
 
     # ========================================================================
@@ -145,7 +148,8 @@ def run_pipeline(config_dict: dict, args):
         analyzer = RealDataAnalyzer(
             comparisons_file=str(comparisons_file),
             inventory_file=str(inventory_file),
-            output_dir=str(output_dir)
+            output_dir=str(output_dir),
+            comparable_networks=comparable_networks
         )
         analyzer.generate_all_figures()
 

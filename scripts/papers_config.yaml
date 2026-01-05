@@ -47,9 +47,26 @@ networks:
   - Morales-Briones_2021
   - Soza_2014
 
+# Comparable networks (networks with >1 gene sequenced)
+# These 12 networks are used for completion rate calculations (100% = all 12 have results)
+comparable_networks:
+  - Ren_2024
+  - Zhao_2021
+  - Ding_2023
+  - Koenen_2020
+  - Marcussen_2012
+  - Wu_2015
+  - Lawrence_2016
+  - Popp_2005
+  - Diaz-Perez_2018
+  - Marcussen_2015
+  - Morales-Briones_2021
+  - Wisecaver_2023
+
 # Paths
 papers_dir: "papers"  # Relative to gene2net root
 output_dir: "analysis"  # Relative to gene2net root
+output_subdir: "real_data_summary"  # Fixed subdirectory name (not timestamp-based)
 
 # Settings
 force_recompute: false
