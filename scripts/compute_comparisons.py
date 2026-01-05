@@ -149,6 +149,7 @@ class ComparisonEngine:
                 }
 
             # Run comparison using existing tool
+            # This already includes num_rets_diff (absolute difference) and num_rets_bias (signed difference)
             metrics = pairwise_compare(tree1, tree2)
 
             return {
@@ -214,8 +215,9 @@ class ComparisonEngine:
         for network in inventory['network'].unique():
             network_data = inventory[inventory['network'] == network]
             
-            # Get available methods for this network
+            # Get available methods for this network (exclude 'paper' method)
             available_methods = network_data[network_data['exists']].copy()
+            available_methods = available_methods[available_methods['method'] != 'paper']
             
             if len(available_methods) < 2:
                 # Need at least 2 methods to compare

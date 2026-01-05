@@ -84,6 +84,18 @@ class RealDataAnalyzer:
         print(f"  Methods: {self.inventory['method'].nunique()}")
         if comparable_networks:
             print(f"  Comparable networks (for completion rate): {len(comparable_networks)}")
+    
+    def _get_metric_label(self, metric: str) -> str:
+        """Get human-readable label for a metric"""
+        metric_labels = {
+            'edit_distance_multree': 'MUL-tree Edit Distance',
+            'edit_distance': 'Network Edit Distance',
+            'rf_distance': 'RF Distance (MUL-tree)',
+            'num_rets_diff': 'Reticulation Count Difference',
+            'ret_leaf_jaccard.dist': 'Reticulation Leaf Jaccard Distance',
+            'ret_sisters_jaccard.dist': 'Sister Relationship Jaccard Distance'
+        }
+        return metric_labels.get(metric, metric.replace('_', ' ').title())
 
     def plot_method_availability(self):
         """Bar chart showing completion rate per method"""
@@ -196,13 +208,18 @@ class RealDataAnalyzer:
 
         fig, ax = plt.subplots(figsize=(10, 8))
 
-        sns.heatmap(df_matrix, annot=True, fmt='.3f', cmap='YlOrRd', vmin=0,
-                   cbar_kws={'label': metric.replace('_', ' ').title()},
+        # Use sequential colormap for distances (darker = more similar, lighter = more different)
+        # All metrics are non-negative (distances or absolute differences)
+        sns.heatmap(df_matrix, annot=True, fmt='.3f', cmap='YlGnBu_r', vmin=0,
+                   cbar_kws={'label': self._get_metric_label(metric)},
                    ax=ax, linewidths=1, linecolor='black', square=True)
 
+        # Get proper metric label
+        metric_label = self._get_metric_label(metric)
+        
         ax.set_xlabel('Method', fontsize=13, fontweight='bold')
         ax.set_ylabel('Method', fontsize=13, fontweight='bold')
-        ax.set_title(f'Pairwise {metric.replace("_", " ").title()} Between Methods', 
+        ax.set_title(f'Method Similarity: {metric_label}\n(Lower = More Similar)', 
                     fontsize=15, fontweight='bold', pad=20)
 
         plt.tight_layout()
@@ -243,9 +260,12 @@ class RealDataAnalyzer:
             patch.set_facecolor('#0173B2')
             patch.set_alpha(0.7)
 
-        ax.set_ylabel(metric.replace('_', ' ').title(), fontsize=13, fontweight='bold')
+        # Get proper metric label
+        metric_label = self._get_metric_label(metric)
+        
+        ax.set_ylabel(metric_label, fontsize=13, fontweight='bold')
         ax.set_xlabel('Method Pair', fontsize=13, fontweight='bold')
-        ax.set_title(f'Distribution of {metric.replace("_", " ").title()} by Method Pair',
+        ax.set_title(f'Method Similarity Distribution: {metric_label}\nby Method Pair',
                     fontsize=15, fontweight='bold', pad=20)
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
 
@@ -284,9 +304,12 @@ class RealDataAnalyzer:
 
         pivot.plot(kind='bar', ax=ax, width=0.8, colormap='Set3')
 
-        ax.set_ylabel(metric.replace('_', ' ').title(), fontsize=13, fontweight='bold')
+        # Get proper metric label
+        metric_label = self._get_metric_label(metric)
+        
+        ax.set_ylabel(metric_label, fontsize=13, fontweight='bold')
         ax.set_xlabel('Network', fontsize=13, fontweight='bold')
-        ax.set_title(f'{metric.replace("_", " ").title()} by Network and Method Pair',
+        ax.set_title(f'Method Similarity by Network: {metric_label}',
                     fontsize=15, fontweight='bold', pad=20)
         ax.legend(title='Method Pair', bbox_to_anchor=(1.05, 1), loc='upper left')
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
@@ -326,9 +349,9 @@ class RealDataAnalyzer:
         bars = ax.barh(rankings_df['method'], rankings_df['avg_edit_distance_multree'],
                       color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
 
-        ax.set_xlabel('Average Edit Distance (MUL-tree)', fontsize=13, fontweight='bold')
+        ax.set_xlabel('Average MUL-tree Edit Distance', fontsize=13, fontweight='bold')
         ax.set_ylabel('Method', fontsize=13, fontweight='bold')
-        ax.set_title('Method Rankings: Average Distance to Other Methods\n(Lower = More Similar)', 
+        ax.set_title('Method Similarity Rankings\nAverage Distance to Other Methods (Lower = More Similar)', 
                     fontsize=15, fontweight='bold', pad=20)
         ax.grid(True, alpha=0.25, axis='x', linestyle='--')
 
@@ -342,6 +365,98 @@ class RealDataAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "06_method_rankings.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "06_method_rankings.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_distance_metrics_comparison(self):
+        """Compare all three distance metrics side-by-side: Network ED, MUL-tree ED, and RF"""
+        if self.valid_comparisons.empty:
+            return
+
+        # Get all unique methods
+        all_methods = sorted(set(self.valid_comparisons['method1'].unique()) | 
+                            set(self.valid_comparisons['method2'].unique()))
+        
+        if len(all_methods) == 0:
+            return
+
+        # Collect data for all three metrics
+        metrics_to_compare = {
+            'edit_distance': 'Network Edit Distance',
+            'edit_distance_multree': 'MUL-tree Edit Distance',
+            'rf_distance': 'RF Distance (MUL-tree)'
+        }
+        
+        fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+        
+        for idx, (metric_name, metric_label) in enumerate(metrics_to_compare.items()):
+            ax = axes[idx]
+            
+            metric_data = self.valid_comparisons[self.valid_comparisons['metric'] == metric_name]
+            
+            if len(metric_data) == 0:
+                ax.text(0.5, 0.5, f'No data for\n{metric_label}', 
+                       ha='center', va='center', fontsize=14, color='gray')
+                ax.set_title(metric_label, fontsize=13, fontweight='bold')
+                ax.axis('off')
+                continue
+            
+            # Create method pair identifier
+            metric_data = metric_data.copy()
+            metric_data['pair'] = metric_data.apply(
+                lambda row: f"{row['method1']} vs {row['method2']}", axis=1
+            )
+            
+            pairs = sorted(metric_data['pair'].unique())
+            data_by_pair = [metric_data[metric_data['pair'] == pair]['value'].values for pair in pairs]
+            
+            if len(data_by_pair) == 0:
+                ax.text(0.5, 0.5, f'No data for\n{metric_label}', 
+                       ha='center', va='center', fontsize=14, color='gray')
+                ax.set_title(metric_label, fontsize=13, fontweight='bold')
+                ax.axis('off')
+                continue
+            
+            # Create boxplot
+            bp = ax.boxplot(data_by_pair, labels=pairs, patch_artist=True,
+                           widths=0.5, showfliers=True,
+                           boxprops=dict(linewidth=1.5),
+                           whiskerprops=dict(linewidth=1.5),
+                           capprops=dict(linewidth=1.5),
+                           medianprops=dict(linewidth=2.5, color='red'))
+            
+            for patch in bp['boxes']:
+                patch.set_facecolor(METHOD_COLORS.get('grampa', '#0173B2'))
+                patch.set_alpha(0.7)
+            
+            # Add mean values as text
+            for i, pair in enumerate(pairs):
+                pair_data = metric_data[metric_data['pair'] == pair]['value']
+                if len(pair_data) > 0:
+                    mean_val = pair_data.mean()
+                    ax.text(i + 1, ax.get_ylim()[1] * 0.95, f'{mean_val:.3f}',
+                           ha='center', va='top', fontsize=9, fontweight='bold',
+                           bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
+                                    edgecolor='gray', alpha=0.8))
+            
+            ax.set_ylabel('Distance\n(0 = identical, 1 = very different)', 
+                         fontsize=12, fontweight='bold')
+            ax.set_xlabel('Method Pair', fontsize=12, fontweight='bold')
+            ax.set_title(metric_label, fontsize=13, fontweight='bold', pad=15)
+            ax.grid(True, alpha=0.25, axis='y', linestyle='--')
+            ax.tick_params(axis='x', rotation=45, labelsize=9)
+            
+            # Highlight if this is the primary metric
+            if metric_name in ['edit_distance_multree', 'rf_distance']:
+                ax.patch.set_edgecolor('#2E8B57')
+                ax.patch.set_linewidth(3)
+        
+        fig.suptitle('Method Similarity: Distance Metrics Comparison\n' + 
+                    'Green border = Primary metrics (MUL-tree based)',
+                    fontsize=16, fontweight='bold', y=1.02)
+        
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "07_distance_metrics_comparison.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "07_distance_metrics_comparison.png", bbox_inches='tight', dpi=300)
         plt.close()
 
     def generate_all_figures(self):
@@ -363,6 +478,10 @@ class RealDataAnalyzer:
             print(f"  {metric}...")
             self.plot_pairwise_heatmap(metric)
             self.plot_pairwise_boxplots(metric)
+
+        # 3-way distance comparison
+        print("Plotting 3-way distance metrics comparison...")
+        self.plot_distance_metrics_comparison()
 
         # Per-network analysis
         print("Plotting per-network comparisons...")
