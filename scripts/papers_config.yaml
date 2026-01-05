@@ -16,7 +16,7 @@ methods:
     directory: "mpallop"
     output_file: "network.tre"
   alloppnet:
-    directory: "alloppnet"
+    directory: "allopnet"
     output_file: "network.tre"
   paper:
     directory: "paper"
