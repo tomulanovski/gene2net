@@ -70,6 +70,13 @@ class RealDataAnalyzer:
         # Load data
         self.comparisons = pd.read_csv(comparisons_file)
         self.inventory = pd.read_csv(inventory_file)
+        
+        # Exclude 'paper' method from all analyses
+        self.inventory = self.inventory[self.inventory['method'] != 'paper'].copy()
+        self.comparisons = self.comparisons[
+            (self.comparisons['method1'] != 'paper') & 
+            (self.comparisons['method2'] != 'paper')
+        ].copy()
 
         # Filter to successful comparisons
         if 'status' in self.comparisons.columns:
@@ -149,7 +156,10 @@ class RealDataAnalyzer:
 
     def plot_availability_heatmap(self):
         """Heatmap showing method × network availability matrix"""
-        pivot = self.inventory.pivot_table(
+        # Filter out 'paper' method (already filtered in __init__, but double-check)
+        inventory_filtered = self.inventory[self.inventory['method'] != 'paper'].copy()
+        
+        pivot = inventory_filtered.pivot_table(
             index='network',
             columns='method',
             values='exists',

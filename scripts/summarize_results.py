@@ -68,7 +68,10 @@ class ResultSummarizer:
             comparable_inventory = self.inventory_df
             total_for_completion = len(self.inventory_df['network'].unique())
 
-        for method in self.inventory_df['method'].unique():
+        # Exclude 'paper' method from availability
+        methods_to_include = [m for m in self.inventory_df['method'].unique() if m != 'paper']
+        
+        for method in methods_to_include:
             method_data = self.inventory_df[self.inventory_df['method'] == method]
             total = len(method_data)
             available = method_data['exists'].sum()
