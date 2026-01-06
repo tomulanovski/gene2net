@@ -99,6 +99,7 @@ class RealDataAnalyzer:
             'edit_distance': 'Network Edit Distance',
             'rf_distance': 'RF Distance (MUL-tree)',
             'num_rets_diff': 'Reticulation Count Difference',
+            'ploidy_diff.dist': 'Polyploid Identification Distance',
             'ret_leaf_jaccard.dist': 'Reticulation Leaf Jaccard Distance',
             'ret_sisters_jaccard.dist': 'Sister Relationship Jaccard Distance'
         }
@@ -469,6 +470,130 @@ class RealDataAnalyzer:
         fig.savefig(self.plots_dir / "07_distance_metrics_comparison.png", bbox_inches='tight', dpi=300)
         plt.close()
 
+    def plot_polyploid_agreement(self):
+        """Comprehensive figure showing polyploid identification agreement/disagreement between methods"""
+        if self.valid_comparisons.empty:
+            return
+
+        ploidy_data = self.valid_comparisons[self.valid_comparisons['metric'] == 'ploidy_diff.dist']
+        
+        if ploidy_data.empty:
+            print("  WARNING: No polyploid identification data available")
+            return
+
+        # Create a 2x2 subplot figure
+        fig = plt.figure(figsize=(18, 14))
+        gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+
+        # ========================================================================
+        # Subplot 1: Heatmap of polyploid identification distance
+        # ========================================================================
+        ax1 = fig.add_subplot(gs[0, 0])
+        
+        # Get all unique methods
+        all_methods = sorted(set(ploidy_data['method1'].unique()) | set(ploidy_data['method2'].unique()))
+        
+        # Create symmetric matrix
+        matrix = np.full((len(all_methods), len(all_methods)), np.nan)
+        
+        for i, method1 in enumerate(all_methods):
+            for j, method2 in enumerate(all_methods):
+                if i == j:
+                    matrix[i, j] = 0.0  # Distance to self is 0
+                else:
+                    # Get comparisons for this pair (both directions)
+                    pair_data = ploidy_data[
+                        ((ploidy_data['method1'] == method1) & (ploidy_data['method2'] == method2)) |
+                        ((ploidy_data['method1'] == method2) & (ploidy_data['method2'] == method1))
+                    ]['value']
+                    
+                    if len(pair_data) > 0:
+                        matrix[i, j] = pair_data.mean()
+        
+        df_matrix = pd.DataFrame(matrix, index=all_methods, columns=all_methods)
+        
+        sns.heatmap(df_matrix, annot=True, fmt='.3f', cmap='YlOrRd', vmin=0, vmax=1,
+                   cbar_kws={'label': 'Polyploid Identification Distance'},
+                   ax=ax1, linewidths=1, linecolor='black', square=True,
+                   annot_kws={'fontsize': 10, 'fontweight': 'bold'})
+        
+        ax1.set_xlabel('Method', fontsize=13, fontweight='bold')
+        ax1.set_ylabel('Method', fontsize=13, fontweight='bold')
+        ax1.set_title('Polyploid Identification Agreement\n(Lower = More Agreement)', 
+                     fontsize=14, fontweight='bold', pad=15)
+
+        # ========================================================================
+        # Subplot 2: Boxplot of polyploid identification distances by method pair
+        # ========================================================================
+        ax2 = fig.add_subplot(gs[0, 1])
+        
+        ploidy_data_copy = ploidy_data.copy()
+        ploidy_data_copy['pair'] = ploidy_data_copy.apply(
+            lambda row: f"{row['method1']} vs {row['method2']}", axis=1
+        )
+        
+        pairs = sorted(ploidy_data_copy['pair'].unique())
+        data_by_pair = [ploidy_data_copy[ploidy_data_copy['pair'] == pair]['value'].values 
+                       for pair in pairs]
+        
+        bp = ax2.boxplot(data_by_pair, labels=pairs, patch_artist=True,
+                        widths=0.6, showfliers=True,
+                        boxprops=dict(linewidth=1.5),
+                        whiskerprops=dict(linewidth=1.5),
+                        capprops=dict(linewidth=1.5),
+                        medianprops=dict(linewidth=2.5, color='red'))
+        
+        for patch in bp['boxes']:
+            patch.set_facecolor('#DC143C')  # Crimson for polyploid focus
+            patch.set_alpha(0.7)
+        
+        ax2.set_ylabel('Polyploid Identification Distance\n(0 = identical, 1 = completely different)', 
+                      fontsize=12, fontweight='bold')
+        ax2.set_xlabel('Method Pair', fontsize=12, fontweight='bold')
+        ax2.set_title('Distribution of Polyploid Identification Differences\nby Method Pair',
+                     fontsize=14, fontweight='bold', pad=15)
+        ax2.grid(True, alpha=0.25, axis='y', linestyle='--')
+        plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45, ha='right')
+
+        # ========================================================================
+        # Subplot 3: Per-network polyploid identification differences
+        # ========================================================================
+        ax3 = fig.add_subplot(gs[1, :])
+        
+        # Create method pair identifier
+        ploidy_data_copy = ploidy_data.copy()
+        ploidy_data_copy['pair'] = ploidy_data_copy.apply(
+            lambda row: f"{row['method1']} vs {row['method2']}", axis=1
+        )
+        
+        # Pivot: network × pair
+        pivot = ploidy_data_copy.pivot_table(
+            index='network',
+            columns='pair',
+            values='value',
+            aggfunc='first'
+        )
+        
+        pivot.plot(kind='bar', ax=ax3, width=0.8, colormap='Set3', figsize=(16, 6))
+        
+        ax3.set_ylabel('Polyploid Identification Distance', fontsize=13, fontweight='bold')
+        ax3.set_xlabel('Network', fontsize=13, fontweight='bold')
+        ax3.set_title('Polyploid Identification Differences by Network\n(Shows which networks have high/low method agreement)',
+                     fontsize=14, fontweight='bold', pad=15)
+        ax3.legend(title='Method Pair', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
+        ax3.grid(True, alpha=0.25, axis='y', linestyle='--')
+        
+        plt.setp(ax3.xaxis.get_majorticklabels(), rotation=45, ha='right')
+
+        # Overall title
+        fig.suptitle('Polyploid Identification Agreement Between Methods\n(Real Data - No Ground Truth)',
+                    fontsize=16, fontweight='bold', y=0.98)
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "08_polyploid_identification_agreement.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "08_polyploid_identification_agreement.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
     def generate_all_figures(self):
         """Generate all analysis figures"""
         print(f"\n{'='*80}")
@@ -483,7 +608,7 @@ class RealDataAnalyzer:
 
         # Pairwise comparisons
         print("Plotting pairwise comparisons...")
-        metrics_to_plot = ['edit_distance_multree', 'rf_distance', 'num_rets_diff']
+        metrics_to_plot = ['edit_distance_multree', 'rf_distance', 'num_rets_diff', 'ploidy_diff.dist']
         for metric in metrics_to_plot:
             print(f"  {metric}...")
             self.plot_pairwise_heatmap(metric)
@@ -500,6 +625,10 @@ class RealDataAnalyzer:
         # Method rankings
         print("Plotting method rankings...")
         self.plot_method_rankings()
+
+        # Polyploid identification agreement
+        print("Plotting polyploid identification agreement...")
+        self.plot_polyploid_agreement()
 
         print(f"\n{'='*80}")
         print(f"✓ Figure generation complete!")
