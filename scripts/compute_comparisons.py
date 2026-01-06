@@ -152,6 +152,26 @@ class ComparisonEngine:
             # This already includes num_rets_diff (absolute difference) and num_rets_bias (signed difference)
             metrics = pairwise_compare(tree1, tree2)
 
+            # Add binary polyploid identification agreement metric
+            # This measures which species are identified as polyploid (count > 1), not copy counts
+            leaf_counts1 = tree1.get_leaf_counts()
+            leaf_counts2 = tree2.get_leaf_counts()
+            
+            # Extract sets of polyploid species (species with >1 copy)
+            polyploids1 = {species for species, count in leaf_counts1.items() if count > 1}
+            polyploids2 = {species for species, count in leaf_counts2.items() if count > 1}
+            
+            # Compute Jaccard distance on polyploid species sets
+            if len(polyploids1) == 0 and len(polyploids2) == 0:
+                # Both have no polyploids - perfect agreement
+                polyploid_species_jaccard = 0.0
+            else:
+                intersection = len(polyploids1 & polyploids2)
+                union = len(polyploids1 | polyploids2)
+                polyploid_species_jaccard = 1.0 - (intersection / union) if union > 0 else 1.0
+            
+            metrics['polyploid_species_jaccard'] = polyploid_species_jaccard
+
             return {
                 'status': 'SUCCESS',
                 'error': None,

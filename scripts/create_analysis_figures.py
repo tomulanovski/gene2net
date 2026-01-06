@@ -99,6 +99,7 @@ class RealDataAnalyzer:
             'edit_distance': 'Network Edit Distance',
             'rf_distance': 'RF Distance (MUL-tree)',
             'num_rets_diff': 'Reticulation Count Difference',
+            'polyploid_species_jaccard': 'Polyploid Species Agreement\n(0=same species, 1=different species)',
             'ploidy_diff.dist': 'Polyploid Identification Distance',
             'ret_leaf_jaccard.dist': 'Reticulation Leaf Jaccard Distance',
             'ret_sisters_jaccard.dist': 'Sister Relationship Jaccard Distance'
@@ -475,7 +476,7 @@ class RealDataAnalyzer:
         if self.valid_comparisons.empty:
             return
 
-        ploidy_data = self.valid_comparisons[self.valid_comparisons['metric'] == 'ploidy_diff.dist']
+        ploidy_data = self.valid_comparisons[self.valid_comparisons['metric'] == 'polyploid_species_jaccard']
         
         if ploidy_data.empty:
             print("  WARNING: No polyploid identification data available")
@@ -513,7 +514,7 @@ class RealDataAnalyzer:
         df_matrix = pd.DataFrame(matrix, index=all_methods, columns=all_methods)
         
         sns.heatmap(df_matrix, annot=True, fmt='.3f', cmap='YlOrRd', vmin=0, vmax=1,
-                   cbar_kws={'label': 'Polyploid Identification Distance'},
+                   cbar_kws={'label': 'Polyploid Species Agreement\n(0=same, 1=different)'},
                    ax=ax1, linewidths=1, linecolor='black', square=True,
                    annot_kws={'fontsize': 10, 'fontweight': 'bold'})
         
@@ -547,10 +548,10 @@ class RealDataAnalyzer:
             patch.set_facecolor('#DC143C')  # Crimson for polyploid focus
             patch.set_alpha(0.7)
         
-        ax2.set_ylabel('Polyploid Identification Distance\n(0 = identical, 1 = completely different)', 
+        ax2.set_ylabel('Polyploid Species Agreement\n(0 = Same Species, 1 = Different Species)', 
                       fontsize=12, fontweight='bold')
         ax2.set_xlabel('Method Pair', fontsize=12, fontweight='bold')
-        ax2.set_title('Distribution of Polyploid Identification Differences\nby Method Pair',
+        ax2.set_title('Distribution of Polyploid Species Agreement\nby Method Pair',
                      fontsize=14, fontweight='bold', pad=15)
         ax2.grid(True, alpha=0.25, axis='y', linestyle='--')
         plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45, ha='right')
@@ -576,9 +577,9 @@ class RealDataAnalyzer:
         
         pivot.plot(kind='bar', ax=ax3, width=0.8, colormap='Set3', figsize=(16, 6))
         
-        ax3.set_ylabel('Polyploid Identification Distance', fontsize=13, fontweight='bold')
+        ax3.set_ylabel('Polyploid Species Agreement\n(0 = Same Species, 1 = Different Species)', fontsize=13, fontweight='bold')
         ax3.set_xlabel('Network', fontsize=13, fontweight='bold')
-        ax3.set_title('Polyploid Identification Differences by Network\n(Shows which networks have high/low method agreement)',
+        ax3.set_title('Polyploid Species Agreement by Network\n(Shows which networks have high/low method agreement)',
                      fontsize=14, fontweight='bold', pad=15)
         ax3.legend(title='Method Pair', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
         ax3.grid(True, alpha=0.25, axis='y', linestyle='--')
@@ -586,7 +587,7 @@ class RealDataAnalyzer:
         plt.setp(ax3.xaxis.get_majorticklabels(), rotation=45, ha='right')
 
         # Overall title
-        fig.suptitle('Polyploid Identification Agreement Between Methods\n(Real Data - No Ground Truth)',
+        fig.suptitle('Polyploid Species Agreement Between Methods\n(Which species are identified as polyploid - Real Data)',
                     fontsize=16, fontweight='bold', y=0.98)
 
         plt.tight_layout()
@@ -608,7 +609,7 @@ class RealDataAnalyzer:
 
         # Pairwise comparisons
         print("Plotting pairwise comparisons...")
-        metrics_to_plot = ['edit_distance_multree', 'rf_distance', 'num_rets_diff', 'ploidy_diff.dist']
+        metrics_to_plot = ['edit_distance_multree', 'rf_distance', 'num_rets_diff', 'polyploid_species_jaccard']
         for metric in metrics_to_plot:
             print(f"  {metric}...")
             self.plot_pairwise_heatmap(metric)
