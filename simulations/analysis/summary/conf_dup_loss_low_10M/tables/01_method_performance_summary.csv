@@ -1,0 +1,8 @@
+Method,Total_Runs,Completed_Runs,Completion_Rate_%,Mean_Edit_Distance_MULtree,Median_Edit_Distance_MULtree,Std_Edit_Distance_MULtree,Mean_RF_Distance,Median_RF_Distance,Mean_Reticulation_MAE,Median_Reticulation_MAE,Mean_Reticulation_Bias,Median_Reticulation_Bias
+alloppnet,105,0,0.0000,,,,,,,,,
+grampa,105,100,95.2381,0.7592,0.8160,0.2113,0.4552,0.4541,7.2200,5.0000,-7.1800,-5.0000
+mpsugar,105,0,0.0000,,,,,,,,,
+padre,105,0,0.0000,,,,,,,,,
+polyphest_p50,105,84,80.0000,0.4032,0.3880,0.2520,0.0074,0.0000,0.5765,0.0000,0.4353,0.0000
+polyphest_p70,105,83,79.0476,0.3916,0.3286,0.2585,0.0070,0.0000,0.4000,0.0000,0.3059,0.0000
+polyphest_p90,105,83,79.0476,0.4059,0.4271,0.2432,0.0078,0.0000,0.2471,0.0000,-0.0118,0.0000
