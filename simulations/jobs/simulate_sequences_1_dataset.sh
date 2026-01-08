@@ -146,9 +146,9 @@ for replicate in $(seq 1 $NUM_REPLICATES); do
     # ========================================================================
     # SMART GENE TREE DETECTION
     # SimPhy creates tree files numbered WITHIN each batch:
-    # - Single batch: replicate_N/1/g_trees0001.trees ... g_trees1000.trees
-    # - Batches of 10: Each batch has g_trees1.trees ... g_trees10.trees
-    # - Batches of 1: Each batch has g_trees1.trees
+    # - Single batch: replicate_N/1/g_trees0001.trees ... g_trees1000.trees (4-digit)
+    # - Batches of 10: Each batch has g_trees01.trees ... g_trees10.trees (2-digit)
+    # - Batches of 1: Each batch has g_trees1.trees (no padding)
     # ========================================================================
 
     GENE_TREE_FILE=""
@@ -183,17 +183,31 @@ for replicate in $(seq 1 $NUM_REPLICATES); do
         # Gene tree 42 with batches of 10: tree_in_batch = ((42-1) % 10) + 1 = 2
         TREE_IN_BATCH=$(( (SLURM_ARRAY_TASK_ID - 1) % TREES_PER_BATCH + 1 ))
 
-        # Format tree number (no leading zeros for batch tree numbering)
-        GENE_TREE_FILE="${REPLICATE_DIR}/batch_${BATCH_NUM}/1/g_trees${TREE_IN_BATCH}.trees"
+        # Format tree number with appropriate zero-padding based on trees per batch
+        # - Batches of 1: g_trees1 (no padding)
+        # - Batches of 10: g_trees01 to g_trees10 (2-digit padding)
+        # - Single batch (1000): g_trees0001 to g_trees1000 (4-digit padding)
+        if [ $TREES_PER_BATCH -ge 100 ]; then
+            # 4-digit padding (0001, 0002, ..., 1000)
+            TREE_NUM_FORMATTED=$(printf "%04d" $TREE_IN_BATCH)
+        elif [ $TREES_PER_BATCH -ge 10 ]; then
+            # 2-digit padding (01, 02, ..., 09, 10)
+            TREE_NUM_FORMATTED=$(printf "%02d" $TREE_IN_BATCH)
+        else
+            # No padding (1, 2, 3, ...)
+            TREE_NUM_FORMATTED=$TREE_IN_BATCH
+        fi
+
+        GENE_TREE_FILE="${REPLICATE_DIR}/batch_${BATCH_NUM}/1/g_trees${TREE_NUM_FORMATTED}.trees"
 
         if [ ! -f "$GENE_TREE_FILE" ]; then
             echo "  ERROR: Gene tree file not found: $GENE_TREE_FILE"
-            echo "  Calculated: Gene tree ${SLURM_ARRAY_TASK_ID} → batch ${BATCH_NUM}, tree ${TREE_IN_BATCH}"
+            echo "  Calculated: Gene tree ${SLURM_ARRAY_TASK_ID} → batch ${BATCH_NUM}, tree ${TREE_IN_BATCH} (formatted: ${TREE_NUM_FORMATTED})"
             exit 1
         fi
 
         echo "  Mode: ${NUM_BATCHES} batches of ${TREES_PER_BATCH} trees each"
-        echo "  Gene tree ${SLURM_ARRAY_TASK_ID} → batch_${BATCH_NUM}/1/g_trees${TREE_IN_BATCH}.trees"
+        echo "  Gene tree ${SLURM_ARRAY_TASK_ID} → batch_${BATCH_NUM}/1/g_trees${TREE_NUM_FORMATTED}.trees"
     fi
 
     echo "  Output: ${OUTPUT_PREFIX}.phy"
