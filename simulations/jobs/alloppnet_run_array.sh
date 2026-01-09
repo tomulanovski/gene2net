@@ -6,9 +6,8 @@
 #SBATCH --time=120:00:00
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=1
-#SBATCH --partition=itaym-pool
-#SBATCH --account=itaym-users_v2
-#SBATCH --qos=owner
+#SBATCH --partition=power-general-public-pool
+#SBATCH --qos=public 
 
 # ============================================================================
 # ALLOPPNET_RUN_ARRAY.SH
