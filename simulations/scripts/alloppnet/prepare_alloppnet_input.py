@@ -247,8 +247,9 @@ def count_copies_from_alignments(alignment_dir, kernel_width=2, verbose=False):
     """
     Count copies per taxon across all alignment files and determine representative copy numbers.
 
-    Uses kernel smoothing to find the most representative copy number for each taxon,
-    which is robust to outliers from occasional gene duplication or loss.
+    Counts actual occurrences of each taxon (species name = parts[0]) in each alignment,
+    matching Polyphest's approach. Uses kernel smoothing to find the most representative
+    copy number for each taxon, which is robust to outliers from occasional gene duplication or loss.
 
     Args:
         alignment_dir (str): Directory containing alignment_*.phy files
@@ -273,8 +274,8 @@ def count_copies_from_alignments(alignment_dir, kernel_width=2, verbose=False):
     if verbose:
         print(f"Found {len(phy_files)} alignment files")
 
-    # Track copies: taxon -> gene -> set of copy numbers
-    taxon_gene_copies = defaultdict(lambda: defaultdict(set))
+    # Track copies: taxon -> gene -> count of occurrences (just like Polyphest)
+    taxon_gene_counts = defaultdict(lambda: defaultdict(int))
 
     # Process each alignment file
     for i, phy_file in enumerate(phy_files, 1):
@@ -293,22 +294,26 @@ def count_copies_from_alignments(alignment_dir, kernel_width=2, verbose=False):
 
         gene_num = extract_gene_number(os.path.basename(phy_file))
 
-        # Count copies in this alignment
+        # Count occurrences of each taxon in this alignment (just like Polyphest)
+        # Extract species name (parts[0]) and count how many times it appears
+        taxon_counts = defaultdict(int)
         for seq_id in sequences.keys():
-            taxon = extract_taxon_name(seq_id)
-            copy = extract_copy_number(seq_id)
-            taxon_gene_copies[taxon][gene_num].add(copy)
+            taxon = extract_taxon_name(seq_id)  # This is just parts[0]
+            taxon_counts[taxon] += 1
+        
+        # Store the count for each taxon in this gene
+        for taxon, count in taxon_counts.items():
+            taxon_gene_counts[taxon][gene_num] = count
 
     # Calculate copy number distributions for each taxon
     taxon_copy_distributions = {}
     taxon_representative_copies = {}
 
-    for taxon, gene_dict in taxon_gene_copies.items():
+    for taxon, gene_dict in taxon_gene_counts.items():
         # Count how many genes have each copy number
         copy_distribution = Counter()
-        for gene_num, copy_set in gene_dict.items():
-            num_copies = len(copy_set)
-            copy_distribution[num_copies] += 1
+        for gene_num, count in gene_dict.items():
+            copy_distribution[count] += 1
 
         taxon_copy_distributions[taxon] = copy_distribution
 
