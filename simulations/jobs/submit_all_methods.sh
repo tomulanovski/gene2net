@@ -52,7 +52,7 @@ DEFAULT_CONFIGS=(
 )
 
 # All available methods
-ALL_METHODS=(grampa polyphest padre mpsugar alloppnet)
+ALL_METHODS=(grampa grandma_split polyphest padre mpsugar alloppnet)
 
 # Common parameters
 NUM_REPLICATES=5
