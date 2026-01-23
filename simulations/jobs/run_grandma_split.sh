@@ -53,7 +53,7 @@ NUM_NETWORKS=21
 
 BASE_DIR="/groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations"
 CONDA_PATH="/groups/itay_mayrose/tomulanovski/miniconda3"
-GRANDMA_SPLIT_SCRIPT="/groups/itay_mayrose/ronenshtein/Grampa_revamp/run.py"
+GRANDMA_SPLIT_SCRIPT="/groups/itay_mayrose/ronenshtein/Grandma/gran.py"
 
 # Array of networks
 networks=(
