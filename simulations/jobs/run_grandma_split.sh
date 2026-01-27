@@ -183,7 +183,9 @@ python "$GRANDMA_SPLIT_SCRIPT" \
     -g "$GENE_TREES" \
     -s "$SPECIES_TREE" \
     -o "$OUTPUT_DIR" \
-    -m split
+    -m split \
+    -i 50 \
+    -p ${SLURM_CPUS_PER_TASK}
 
 exit_code=$?
 end_time=$(date +%s)
