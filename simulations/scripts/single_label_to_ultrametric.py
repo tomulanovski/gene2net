@@ -63,6 +63,21 @@ def _normalize_invalid_branch_lengths(newick_str):
     return s
 
 
+def _fill_empty_leaves(newick_str):
+    """
+    Replace empty leaf nodes with placeholder _empty so ETE3 can parse.
+    ETE3 requires every leaf to have a name; some Newick files have ,: or (,. etc.
+    """
+    s = newick_str
+    s = s.replace('(,', '(_empty,')
+    s = s.replace(',)', ',_empty)')
+    s = s.replace(',,', ',_empty,')
+    # Empty leaf before branch length: ,: or (,:  -> ,_empty: or (_empty:
+    s = re.sub(r',\s*:', ',_empty:', s)
+    s = re.sub(r'\(\s*:', '(_empty:', s)
+    return s
+
+
 def read_newick_tree(filepath):
     """
     Read a tree from a Newick file. Handles :nan, :NA, etc. by replacing with :0.
@@ -72,6 +87,7 @@ def read_newick_tree(filepath):
         with open(filepath, 'r') as f:
             content = f.read().strip()
         content = _normalize_invalid_branch_lengths(content)
+        content = _fill_empty_leaves(content)
         tree = _parse_newick_string(content)
         return tree
     except Exception as e:
@@ -89,6 +105,7 @@ def read_nexus_tree(filepath):
             if line.startswith('tree ') and '=' in line:
                 newick_str = line.split('=', 1)[1].strip().rstrip(';').strip()
                 newick_str = _normalize_invalid_branch_lengths(newick_str)
+                newick_str = _fill_empty_leaves(newick_str)
                 tree = _parse_newick_string(newick_str)
                 return tree
         raise ValueError("No tree definition found in NEXUS file")
