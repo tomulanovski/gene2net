@@ -195,7 +195,7 @@ def process_all_trees(base_dir, input_filename, output_filename, tree_height, se
 
 def main():
     script_dir = Path(__file__).resolve().parent
-    default_base = script_dir.parent  # simulations/ (contains network subdirs, or use --base_dir for config path)
+    default_base = script_dir.parent / "simulations"  # simulations/simulations/ (Bendiksby_2011/, etc.)
     parser = argparse.ArgumentParser(
         description='Convert single-label Newick trees to ultrametric NEXUS (topology-based).',
         formatter_class=argparse.RawDescriptionHelpFormatter,
