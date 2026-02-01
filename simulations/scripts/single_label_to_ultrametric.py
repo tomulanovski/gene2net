@@ -18,10 +18,26 @@ import argparse
 from pathlib import Path
 
 
+def _parse_newick_string(newick_str):
+    """
+    Parse a Newick string with ETE3. Tries format=0 (internal support values)
+    then format=1 (internal names) so both types of trees are accepted.
+    """
+    if not newick_str.strip().endswith(';'):
+        newick_str = newick_str.strip() + ';'
+    for fmt in (0, 1):
+        try:
+            return Tree(newick_str, format=fmt)
+        except Exception:
+            continue
+    raise ValueError("Could not parse Newick string with format=0 or format=1")
+
+
 def read_newick_tree(filepath):
     """
     Read a tree from a Newick file. Handles :nan and other invalid branch lengths
     by replacing them with 0 (branch lengths are ignored for ultrametric conversion).
+    Tries format=0 (support values) then format=1 (internal names) for compatibility.
     """
     try:
         with open(filepath, 'r') as f:
@@ -30,9 +46,7 @@ def read_newick_tree(filepath):
         content = re.sub(r':\s*nan\b', ':0', content, flags=re.IGNORECASE)
         # Also handle empty branch lengths like ):nan or ),:nan
         content = re.sub(r':\s*nan\s*([,\)])', r':0\1', content, flags=re.IGNORECASE)
-        if not content.endswith(';'):
-            content += ';'
-        tree = Tree(content, format=1)
+        tree = _parse_newick_string(content)
         return tree
     except Exception as e:
         print(f"Error reading Newick file {filepath}: {e}")
@@ -49,7 +63,7 @@ def read_nexus_tree(filepath):
             if line.startswith('tree ') and '=' in line:
                 newick_str = line.split('=', 1)[1].strip().rstrip(';').strip()
                 newick_str = re.sub(r':\s*nan\b', ':0', newick_str, flags=re.IGNORECASE)
-                tree = Tree(newick_str + ';', format=1)
+                tree = _parse_newick_string(newick_str)
                 return tree
         raise ValueError("No tree definition found in NEXUS file")
     except Exception as e:
