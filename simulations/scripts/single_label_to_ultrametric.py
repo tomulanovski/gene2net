@@ -18,34 +18,60 @@ import argparse
 from pathlib import Path
 
 
+def _newick_to_topology_only(newick_str):
+    """
+    Strip branch lengths and internal labels to leave topology only (leaf names and parens).
+    Use with format=9 when all other ETE3 formats fail.
+    """
+    s = newick_str.strip().rstrip(';')
+    # Remove all branch lengths :value (value = number, nan, NA, etc.)
+    s = re.sub(r':[^,\))]+', '', s)
+    # Remove internal node labels: )label when followed by , or )
+    s = re.sub(r'\)([^,\))]+)(?=[,\)])', ')', s)
+    return s + ';' if not s.endswith(';') else s
+
+
 def _parse_newick_string(newick_str):
     """
-    Parse a Newick string with ETE3. Tries format=0 (internal support values)
-    then format=1 (internal names) so both types of trees are accepted.
+    Parse a Newick string with ETE3. Tries formats 0-9, then fallback to
+    topology-only + format=9 so a wide variety of Newick files are accepted.
     """
     if not newick_str.strip().endswith(';'):
         newick_str = newick_str.strip() + ';'
-    for fmt in (0, 1):
+    for fmt in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9):
         try:
             return Tree(newick_str, format=fmt)
         except Exception:
             continue
-    raise ValueError("Could not parse Newick string with format=0 or format=1")
+    # Fallback: strip to topology only (we only need topology for ultrametric conversion)
+    try:
+        topology_str = _newick_to_topology_only(newick_str)
+        return Tree(topology_str, format=9)
+    except Exception as e:
+        raise ValueError(
+            f"Could not parse Newick with any ETE3 format (0-9) or topology-only fallback: {e}"
+        )
+
+
+def _normalize_invalid_branch_lengths(newick_str):
+    """Replace :nan, :NA, :na, etc. with :0 so ETE3 can parse (we ignore lengths for ultrametric)."""
+    s = newick_str
+    s = re.sub(r':\s*nan\b', ':0', s, flags=re.IGNORECASE)
+    s = re.sub(r':\s*na\b', ':0', s, flags=re.IGNORECASE)  # R-style NA, or bare 'na'
+    s = re.sub(r':\s*n\/a\b', ':0', s, flags=re.IGNORECASE)
+    s = re.sub(r':\s*nan\s*([,\)])', r':0\1', s, flags=re.IGNORECASE)
+    return s
 
 
 def read_newick_tree(filepath):
     """
-    Read a tree from a Newick file. Handles :nan and other invalid branch lengths
-    by replacing them with 0 (branch lengths are ignored for ultrametric conversion).
-    Tries format=0 (support values) then format=1 (internal names) for compatibility.
+    Read a tree from a Newick file. Handles :nan, :NA, etc. by replacing with :0.
+    Tries ETE3 formats 0-9, then topology-only fallback.
     """
     try:
         with open(filepath, 'r') as f:
             content = f.read().strip()
-        # Replace :nan (and variants like :NaN, :NAN) with :0 so ETE3 can parse
-        content = re.sub(r':\s*nan\b', ':0', content, flags=re.IGNORECASE)
-        # Also handle empty branch lengths like ):nan or ),:nan
-        content = re.sub(r':\s*nan\s*([,\)])', r':0\1', content, flags=re.IGNORECASE)
+        content = _normalize_invalid_branch_lengths(content)
         tree = _parse_newick_string(content)
         return tree
     except Exception as e:
@@ -62,7 +88,7 @@ def read_nexus_tree(filepath):
             line = line.strip()
             if line.startswith('tree ') and '=' in line:
                 newick_str = line.split('=', 1)[1].strip().rstrip(';').strip()
-                newick_str = re.sub(r':\s*nan\b', ':0', newick_str, flags=re.IGNORECASE)
+                newick_str = _normalize_invalid_branch_lengths(newick_str)
                 tree = _parse_newick_string(newick_str)
                 return tree
         raise ValueError("No tree definition found in NEXUS file")
