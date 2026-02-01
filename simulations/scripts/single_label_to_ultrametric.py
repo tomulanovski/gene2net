@@ -230,7 +230,7 @@ def process_all_trees(base_dir, input_filename, output_filename, tree_height, se
         print(f"\nProcessing: {network}")
         print(f"  Reading from: {input_path}")
         tree = read_tree(str(input_path))
-        print(f"  Tree loaded ({tree.get_leaf_count()} tips)")
+        print(f"  Tree loaded ({len(tree.get_leaf_names())} tips)")
         tree = resolve_polytomies(tree, seed=seed)
         print(f"  Polytomies resolved")
         tree = make_ultrametric_from_topology(tree, target_height=tree_height)
