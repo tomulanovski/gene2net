@@ -93,7 +93,7 @@ SimPhy generates gene trees under different evolutionary scenarios:
 ```bash
 cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
 
-# ILS scenarios
+# ILS scenarios (hybrid species trees with reticulations)
 ./submit_simphy.sh conf_ils_low_10M       # Ne = 200,000 (low ILS)
 ./submit_simphy.sh conf_ils_medium_10M    # Ne = 1,000,000 (medium ILS)
 ./submit_simphy.sh conf_ils_high_10M      # Ne = 2,000,000 (high ILS)
@@ -102,9 +102,28 @@ cd /groups/itay_mayrose/tomulanovski/gene2net/simulations/jobs
 ./submit_simphy.sh conf_dup_loss_low_10M      # dup=0.001, loss=0.001
 ./submit_simphy.sh conf_dup_loss_medium_10M   # dup=0.005, loss=0.005
 ./submit_simphy.sh conf_dup_loss_high_10M     # dup=0.01, loss=0.01
+
+# Single-label trees (no hybridization events)
+./submit_simphy.sh conf_nohybrid_ils_low 0 0 0              # Single-label, Ne=200,000
+./submit_simphy.sh conf_nohybrid_ils_high 0 0 0 2000000     # Single-label, Ne=2,000,000
 ```
 
 **Dry-run option available:** Add `--dry-run` to preview
+
+### Tree Height Options
+
+The second argument (TREE_HEIGHT) controls which species tree is used:
+
+| Value | Species Tree File | Description |
+|-------|------------------|-------------|
+| `10M` (default) | `tree_10_mil.nex` | MUL-tree with hybridization events, 10M generations height |
+| `50M` | `tree_50_mil.nex` | MUL-tree with hybridization events, 50M generations height |
+| `0` | `single_label.nex` | Single-label tree without hybridization (10M height) |
+
+**When to use single-label trees:**
+- Control experiments without reticulation events
+- Testing method behavior on pure species trees
+- Comparing ILS-only vs ILS+hybridization scenarios
 
 ### Monitor SimPhy Jobs
 

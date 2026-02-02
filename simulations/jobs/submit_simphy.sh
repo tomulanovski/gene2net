@@ -8,7 +8,8 @@
 #
 # ARGUMENTS:
 #   1. CONFIG_NAME : Name of the run (e.g., "conf_dup_loss_low").
-#   2. TREE_HEIGHT : "10M" or "50M" (Default: 10M).
+#   2. TREE_HEIGHT : "10M", "50M", or "0" for single-label tree (Default: 10M).
+#                    Use "0" for single-label trees without hybridization events.
 #   3. DUP_RATE    : Duplication rate per MY (Default: 0).
 #   4. LOSS_RATE   : Loss rate per MY (Default: 0).
 #   5. NE          : (Optional) Population size (Default: 200000).
@@ -38,6 +39,10 @@
 #
 #   --- Different tree heights ---
 #   ./submit_simphy.sh conf_ils_low_50M 50M 0 0                  # 50M tree height
+#
+#   --- Single-label trees (no hybridization) ---
+#   ./submit_simphy.sh conf_nohybrid_ils_low 0 0 0               # Single-label, Ne=200,000
+#   ./submit_simphy.sh conf_nohybrid_ils_high 0 0 0 2000000      # Single-label, Ne=2,000,000
 # ==============================================================================
 
 # 1. READ ARGUMENTS

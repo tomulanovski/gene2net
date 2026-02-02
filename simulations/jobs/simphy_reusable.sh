@@ -172,7 +172,11 @@ echo "==========================================================================
 echo "Network: ${network}"
 echo "Array Task ID: ${SLURM_ARRAY_TASK_ID}"
 echo "Configuration: ${CONFIGURATION}"
-echo "Tree Height: ${TREE_HEIGHT}"
+if [ "$TREE_HEIGHT" == "0" ]; then
+    echo "Tree Height: single-label (10M height, no hybridization)"
+else
+    echo "Tree Height: ${TREE_HEIGHT}"
+fi
 echo ""
 echo "Parameters:"
 echo "  Effective Population Size (Ne): ${NE}"
@@ -188,7 +192,10 @@ echo "==========================================================================
 echo ""
 
 # Define paths
-if [ "$TREE_HEIGHT" == "50M" ]; then
+if [ "$TREE_HEIGHT" == "0" ]; then
+    # Single-label tree (no hybridization events, 10M height)
+    SPECIES_TREE="${BASE_DIR}/${network}/single_label.nex"
+elif [ "$TREE_HEIGHT" == "50M" ]; then
     SPECIES_TREE="${BASE_DIR}/${network}/tree_50_mil.nex"
 else
     SPECIES_TREE="${BASE_DIR}/${network}/tree_10_mil.nex"
@@ -253,7 +260,7 @@ for config in "${BATCH_CONFIGS[@]}"; do
     
     echo "============================================================================"
     echo "ATTEMPTING CONFIGURATION:"
-    echo "  ${trees_per_run} trees ª ${num_runs} runs ª ${NUM_REPLICATES} replicates"
+    echo "  ${trees_per_run} trees ? ${num_runs} runs ? ${NUM_REPLICATES} replicates"
     echo "  = ${total_trees} trees per replicate"
     if [ $num_runs -gt 1 ]; then
         echo "  (with up to ${MAX_BATCH_RETRIES} retries per batch)"
@@ -448,7 +455,7 @@ EOF
         echo "============================================================================"
         
         if [ "$config" == "1000:1" ]; then
-            echo "? Falling back to smaller batches (1 tree ª 1000 runs with ${MAX_BATCH_RETRIES} retries each)"
+            echo "? Falling back to smaller batches (1 tree ? 1000 runs with ${MAX_BATCH_RETRIES} retries each)"
         fi
         echo ""
     fi
@@ -462,7 +469,7 @@ echo "==========================================================================
 
 if [ $success -eq 1 ]; then
     echo "Status: ? SUCCESS"
-    echo "Configuration: ${trees_per_run} trees ª ${num_runs} runs ª ${NUM_REPLICATES} replicates"
+    echo "Configuration: ${trees_per_run} trees ? ${num_runs} runs ? ${NUM_REPLICATES} replicates"
     echo "Output: ${OUTPUT_BASE}"
 else
     echo "Status: ? FAILURE"
