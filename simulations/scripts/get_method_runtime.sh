@@ -110,7 +110,7 @@ check_output_file_exists() {
             # Polyphest uses percentile directories - check common ones (50, 70, 90)
             for percentile in 50 70 90; do
                 local polyphest_file="${BASE_DIR}/${network}/results/${CONFIG}/polyphest_p${percentile}/replicate_${replicate}/polyphest_trees-polyphest.txt"
-                if [ -f "$polyphest_file" ]; then
+                if [ -f "$polyphest_file" ] && [ -s "$polyphest_file" ]; then
                     echo "1"
                     return 0
                 fi
@@ -127,7 +127,7 @@ check_output_file_exists() {
             ;;
     esac
     
-    if [ -f "$output_file" ]; then
+    if [ -f "$output_file" ] && [ -s "$output_file" ]; then
         echo "1"
         return 0
     else
@@ -147,6 +147,7 @@ analyze_method() {
     # Arrays to store results
     declare -A task_durations
     declare -A task_job_ids
+    declare -a successful_tasks
     
     # Find all matching log files and extract durations
     for log_file in ${LOG_DIR}/${pattern}; do
@@ -179,10 +180,11 @@ analyze_method() {
         if [ -n "$duration" ] && [ "$duration" -gt 0 ]; then
             # Check if this is the highest job_id for this task
             if [ -z "${task_job_ids[$task_id]}" ] || [ "$job_id" -gt "${task_job_ids[$task_id]}" ]; then
-                # Validate that output file exists before counting
+                # Validate that output file exists and is non-empty before counting
                 if [ "$(check_output_file_exists "$method" "$task_id")" == "1" ]; then
                     task_job_ids[$task_id]=$job_id
                     task_durations[$task_id]=$duration
+                    successful_tasks+=($task_id)
                 fi
             fi
         fi
@@ -211,7 +213,9 @@ analyze_method() {
     done
     
     # Return results as space-separated string
-    echo "$total_found $sum_duration $min_duration $max_duration"
+    # Format: total_found sum_duration min_duration max_duration successful_tasks_list
+    local tasks_list=$(IFS=','; echo "${successful_tasks[*]}")
+    echo "$total_found $sum_duration $min_duration $max_duration $tasks_list"
 }
 
 # Start output
@@ -255,6 +259,7 @@ analyze_method() {
         sum_duration=$(echo "$result" | awk '{print $2}')
         min_duration=$(echo "$result" | awk '{print $3}')
         max_duration=$(echo "$result" | awk '{print $4}')
+        successful_tasks_list=$(echo "$result" | awk '{print $5}')
         
         if [ "$total_found" -eq 0 ]; then
             echo "✗ No completed jobs found with duration information"
@@ -298,6 +303,10 @@ analyze_method() {
             echo "⚠ WARNING: Low coverage (<50%). Some jobs may be incomplete."
             echo ""
         fi
+        
+        # Print successful tasks for debugging
+        echo "Successful tasks: ${successful_tasks_list}"
+        echo ""
     done
     
     echo "============================================================================"
