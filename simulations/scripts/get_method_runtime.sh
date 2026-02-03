@@ -55,6 +55,16 @@ fi
 LOG_DIR="/groups/itay_mayrose/tomulanovski/gene2net/simulations/logs"
 ANALYSIS_DIR="/groups/itay_mayrose/tomulanovski/gene2net/simulations/analysis"
 OUTPUT_FILE="${ANALYSIS_DIR}/runtime_${CONFIG}.txt"
+BASE_DIR="/groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations"
+
+# Networks (21 total)
+NETWORKS=(
+    "Bendiksby_2011" "Koenen_2020" "Brysting_2007" "Lawrence_2016"
+    "Diaz-Perez_2018" "Wisecaver_2023" "Ding_2023" "Liang_2019"
+    "Popp_2005" "Wu_2015" "Liu_2023" "Ren_2024" "Marcussen_2011"
+    "Marcussen_2012" "Sessa_2012b" "Zhao_2021" "Hori_2014"
+    "Marcussen_2015" "Shahrestani_2015" "Morales-Briones_2021" "Soza_2014"
+)
 
 # All methods
 ALL_METHODS=("grampa" "polyphest" "padre" "mpsugar")
@@ -68,6 +78,63 @@ fi
 
 # Create analysis directory if it doesn't exist
 mkdir -p "$ANALYSIS_DIR"
+
+# Function to map task_id (1-105) to network and replicate
+# task_id = (network_index * 5) + replicate, where network_index is 0-based
+get_network_replicate() {
+    local task_id=$1
+    local network_idx=$(( (task_id - 1) / 5 ))
+    local replicate=$(( ((task_id - 1) % 5) + 1 ))
+    echo "${NETWORKS[$network_idx]} $replicate"
+}
+
+# Function to check if output file exists for a method/task
+check_output_file_exists() {
+    local method=$1
+    local task_id=$2
+    local network_replicate=$(get_network_replicate "$task_id")
+    local network=$(echo "$network_replicate" | awk '{print $1}')
+    local replicate=$(echo "$network_replicate" | awk '{print $2}')
+    
+    local output_file=""
+    
+    case "$method" in
+        "padre")
+            # PADRE writes to processed directory
+            output_file="${BASE_DIR}/${network}/processed/${CONFIG}/padre_input/replicate_${replicate}/padre_trees-result.tre"
+            ;;
+        "grampa")
+            output_file="${BASE_DIR}/${network}/results/${CONFIG}/grampa/replicate_${replicate}/grampa-scores.txt"
+            ;;
+        "polyphest")
+            # Polyphest uses percentile directories - check common ones (50, 70, 90)
+            for percentile in 50 70 90; do
+                local polyphest_file="${BASE_DIR}/${network}/results/${CONFIG}/polyphest_p${percentile}/replicate_${replicate}/polyphest_trees-polyphest.txt"
+                if [ -f "$polyphest_file" ]; then
+                    echo "1"
+                    return 0
+                fi
+            done
+            echo "0"
+            return 1
+            ;;
+        "mpsugar")
+            output_file="${BASE_DIR}/${network}/results/${CONFIG}/mpsugar/replicate_${replicate}/mpsugar_results.txt"
+            ;;
+        *)
+            echo "0"
+            return 1
+            ;;
+    esac
+    
+    if [ -f "$output_file" ]; then
+        echo "1"
+        return 0
+    else
+        echo "0"
+        return 1
+    fi
+}
 
 # Function to analyze a single method
 analyze_method() {
@@ -112,8 +179,11 @@ analyze_method() {
         if [ -n "$duration" ] && [ "$duration" -gt 0 ]; then
             # Check if this is the highest job_id for this task
             if [ -z "${task_job_ids[$task_id]}" ] || [ "$job_id" -gt "${task_job_ids[$task_id]}" ]; then
-                task_job_ids[$task_id]=$job_id
-                task_durations[$task_id]=$duration
+                # Validate that output file exists before counting
+                if [ "$(check_output_file_exists "$method" "$task_id")" == "1" ]; then
+                    task_job_ids[$task_id]=$job_id
+                    task_durations[$task_id]=$duration
+                fi
             fi
         fi
     done
