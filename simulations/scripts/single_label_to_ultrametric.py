@@ -2,8 +2,12 @@
 """
 Convert single-label Newick trees to ultrametric trees and save as NEXUS.
 
-Reads Newick files (handles :nan branch lengths by ignoring them; uses topology only).
-Resolves polytomies, assigns branch lengths from topology, and writes ultrametric NEXUS.
+Workflow:
+  1. Parse trees using topology-only (ignores all branch lengths)
+  2. Collapse any empty leaves (artifacts from ASTRAL on MUL-trees)
+  3. Resolve polytomies randomly
+  4. Assign branch lengths to make tree ultrametric
+  5. Write to NEXUS format
 
 Usage:
   python single_label_to_ultrametric.py <tree_height> [options]
@@ -33,34 +37,48 @@ def _newick_to_topology_only(newick_str):
 
 def _parse_newick_string(newick_str):
     """
-    Parse a Newick string with ETE3. Tries formats 0-9, then fallback to
-    topology-only + format=9 so a wide variety of Newick files are accepted.
+    Parse a Newick string with ETE3 using topology-only (format=9).
+    Since we rebuild the tree as ultrametric from topology, we don't need branch lengths.
     """
     if not newick_str.strip().endswith(';'):
         newick_str = newick_str.strip() + ';'
-    for fmt in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9):
-        try:
-            return Tree(newick_str, format=fmt)
-        except Exception:
-            continue
-    # Fallback: strip to topology only (we only need topology for ultrametric conversion)
     try:
         topology_str = _newick_to_topology_only(newick_str)
         return Tree(topology_str, format=9)
     except Exception as e:
-        raise ValueError(
-            f"Could not parse Newick with any ETE3 format (0-9) or topology-only fallback: {e}"
-        )
+        raise ValueError(f"Could not parse Newick as topology-only: {e}")
 
 
-def _normalize_invalid_branch_lengths(newick_str):
-    """Replace :nan, :NA, :na, etc. with :0 so ETE3 can parse (we ignore lengths for ultrametric)."""
-    s = newick_str
-    s = re.sub(r':\s*nan\b', ':0', s, flags=re.IGNORECASE)
-    s = re.sub(r':\s*na\b', ':0', s, flags=re.IGNORECASE)  # R-style NA, or bare 'na'
-    s = re.sub(r':\s*n\/a\b', ':0', s, flags=re.IGNORECASE)
-    s = re.sub(r':\s*nan\s*([,\)])', r':0\1', s, flags=re.IGNORECASE)
-    return s
+def collapse_empty_leaves(tree):
+    """
+    Remove any leaves named '_empty' from the tree.
+    These are artifacts from parsing Newick files with unnamed leaves.
+    When a leaf is removed, if its parent now has only one child, collapse the parent.
+    """
+    removed_count = 0
+    for leaf in list(tree.iter_leaves()):  # list() so we can modify during iteration
+        if leaf.name == '_empty':
+            removed_count += 1
+            parent = leaf.up
+            if parent is None:  # leaf is root (shouldn't happen, but check)
+                continue
+            # Remove this leaf
+            leaf.detach()
+            # If parent now has only one child, collapse parent into grandparent
+            if len(parent.children) == 1:
+                remaining_child = parent.children[0]
+                grandparent = parent.up
+                if grandparent is not None:
+                    # Reconnect remaining child to grandparent
+                    remaining_child.detach()
+                    parent.detach()
+                    grandparent.add_child(remaining_child)
+                    # Adjust branch length (though we'll recalculate anyway for ultrametric)
+                    remaining_child.dist = parent.dist + remaining_child.dist
+                else:
+                    # Parent is root, make remaining child the new root
+                    tree = remaining_child
+    return tree, removed_count
 
 
 def _fill_empty_leaves(newick_str):
@@ -80,13 +98,12 @@ def _fill_empty_leaves(newick_str):
 
 def read_newick_tree(filepath):
     """
-    Read a tree from a Newick file. Handles :nan, :NA, etc. by replacing with :0.
-    Tries ETE3 formats 0-9, then topology-only fallback.
+    Read a tree from a Newick file using topology-only parsing.
+    Branch lengths are ignored since we rebuild the tree as ultrametric from topology.
     """
     try:
         with open(filepath, 'r') as f:
             content = f.read().strip()
-        content = _normalize_invalid_branch_lengths(content)
         content = _fill_empty_leaves(content)
         tree = _parse_newick_string(content)
         return tree
@@ -96,7 +113,7 @@ def read_newick_tree(filepath):
 
 
 def read_nexus_tree(filepath):
-    """Read a tree from NEXUS file (optional support)."""
+    """Read a tree from NEXUS file using topology-only parsing."""
     try:
         with open(filepath, 'r') as f:
             content = f.read()
@@ -104,7 +121,6 @@ def read_nexus_tree(filepath):
             line = line.strip()
             if line.startswith('tree ') and '=' in line:
                 newick_str = line.split('=', 1)[1].strip().rstrip(';').strip()
-                newick_str = _normalize_invalid_branch_lengths(newick_str)
                 newick_str = _fill_empty_leaves(newick_str)
                 tree = _parse_newick_string(newick_str)
                 return tree
@@ -230,7 +246,15 @@ def process_all_trees(base_dir, input_filename, output_filename, tree_height, se
         print(f"\nProcessing: {network}")
         print(f"  Reading from: {input_path}")
         tree = read_tree(str(input_path))
-        print(f"  Tree loaded ({len(tree.get_leaf_names())} tips)")
+        initial_tip_count = len(tree.get_leaf_names())
+        print(f"  Tree loaded ({initial_tip_count} tips)")
+        
+        # Collapse any empty leaves (artifacts from parsing)
+        tree, removed_count = collapse_empty_leaves(tree)
+        if removed_count > 0:
+            final_tip_count = len(tree.get_leaf_names())
+            print(f"  Removed {removed_count} empty leaf/leaves ({initial_tip_count} → {final_tip_count} tips)")
+        
         tree = resolve_polytomies(tree, seed=seed)
         print(f"  Polytomies resolved")
         tree = make_ultrametric_from_topology(tree, target_height=tree_height)
