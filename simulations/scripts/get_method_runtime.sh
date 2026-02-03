@@ -139,7 +139,14 @@ check_output_file_exists() {
 # Function to analyze a single method
 analyze_method() {
     local method=$1
-    local pattern="run_${method}_${CONFIG}_*_*.out"
+    local pattern
+
+    # MPSUGAR has extra parameters in log filename: i${ITERATIONS}_c${CHAINS}
+    if [ "$method" == "mpsugar" ]; then
+        pattern="run_${method}_${CONFIG}_i*_c*_*_*.out"
+    else
+        pattern="run_${method}_${CONFIG}_*_*.out"
+    fi
     
     # Total expected tasks (21 networks × 5 replicates = 105)
     local total_tasks=105
@@ -157,16 +164,18 @@ analyze_method() {
         fi
         
         # Extract job_id and task_id from filename
-        # Format: run_<method>_<config>_<job_id>_<task_id>.out
+        # Format: run_<method>_<config>[_extra_params]_<job_id>_<task_id>.out
+        # MPSUGAR has extra params: run_mpsugar_<config>_i<iter>_c<chains>_<job_id>_<task_id>.out
         local basename=$(basename "$log_file")
-        
-        # Remove the prefix and suffix to get job_id_task_id
+
+        # Remove the prefix and suffix
         local temp="${basename#run_${method}_${CONFIG}_}"
         temp="${temp%.out}"
-        
-        # Split by underscore to get job_id and task_id
-        local job_id=$(echo "$temp" | cut -d'_' -f1)
-        local task_id=$(echo "$temp" | cut -d'_' -f2)
+
+        # Extract job_id and task_id as the LAST two underscore-separated fields
+        # This handles both regular (jobid_taskid) and MPSUGAR (i500_c1_jobid_taskid)
+        local job_id=$(echo "$temp" | rev | cut -d'_' -f2 | rev)
+        local task_id=$(echo "$temp" | rev | cut -d'_' -f1 | rev)
         
         # Check if job completed successfully (case-insensitive)
         if ! grep -qi "COMPLETED SUCCESSFULLY" "$log_file"; then
@@ -248,8 +257,12 @@ analyze_method() {
         echo "----------------------------------------------------------------------------"
         echo ""
         
-        # Check if logs exist
-        pattern="run_${method}_${CONFIG}_*_*.out"
+        # Check if logs exist (MPSUGAR has extra params in filename)
+        if [ "$method" == "mpsugar" ]; then
+            pattern="run_${method}_${CONFIG}_i*_c*_*_*.out"
+        else
+            pattern="run_${method}_${CONFIG}_*_*.out"
+        fi
         if ! ls ${LOG_DIR}/${pattern} 1> /dev/null 2>&1; then
             echo "⚠ No log files found for ${method}"
             echo "  Pattern: ${LOG_DIR}/${pattern}"
