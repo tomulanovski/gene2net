@@ -100,10 +100,16 @@ analyze_method() {
         local job_id=$(echo "$temp" | cut -d'_' -f1)
         local task_id=$(echo "$temp" | cut -d'_' -f2)
         
+        # Check if job completed successfully (case-insensitive)
+        if ! grep -qi "COMPLETED SUCCESSFULLY" "$log_file"; then
+            continue  # Skip failed jobs
+        fi
+        
         # Extract duration from log file
         local duration=$(grep "Duration:" "$log_file" | grep -oP '\d+(?= seconds)' | head -1)
         
-        if [ -n "$duration" ]; then
+        # Filter out 0-second durations (suspicious/failed jobs)
+        if [ -n "$duration" ] && [ "$duration" -gt 0 ]; then
             # Check if this is the highest job_id for this task
             if [ -z "${task_job_ids[$task_id]}" ] || [ "$job_id" -gt "${task_job_ids[$task_id]}" ]; then
                 task_job_ids[$task_id]=$job_id
