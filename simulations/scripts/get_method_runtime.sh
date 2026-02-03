@@ -195,6 +195,8 @@ analyze_method() {
     local sum_duration=0
     local min_duration=""
     local max_duration=""
+    local min_task_id=""
+    local max_task_id=""
     
     for task_id in $(seq 1 $total_tasks); do
         if [ -n "${task_durations[$task_id]}" ]; then
@@ -202,20 +204,22 @@ analyze_method() {
             ((total_found++))
             sum_duration=$((sum_duration + duration))
             
-            # Track min/max
+            # Track min/max with task IDs
             if [ -z "$min_duration" ] || [ "$duration" -lt "$min_duration" ]; then
                 min_duration=$duration
+                min_task_id=$task_id
             fi
             if [ -z "$max_duration" ] || [ "$duration" -gt "$max_duration" ]; then
                 max_duration=$duration
+                max_task_id=$task_id
             fi
         fi
     done
     
     # Return results as space-separated string
-    # Format: total_found sum_duration min_duration max_duration successful_tasks_list
+    # Format: total_found sum_duration min_duration max_duration min_task_id max_task_id successful_tasks_list
     local tasks_list=$(IFS=','; echo "${successful_tasks[*]}")
-    echo "$total_found $sum_duration $min_duration $max_duration $tasks_list"
+    echo "$total_found $sum_duration $min_duration $max_duration $min_task_id $max_task_id $tasks_list"
 }
 
 # Start output
@@ -259,7 +263,9 @@ analyze_method() {
         sum_duration=$(echo "$result" | awk '{print $2}')
         min_duration=$(echo "$result" | awk '{print $3}')
         max_duration=$(echo "$result" | awk '{print $4}')
-        successful_tasks_list=$(echo "$result" | awk '{print $5}')
+        min_task_id=$(echo "$result" | awk '{print $5}')
+        max_task_id=$(echo "$result" | awk '{print $6}')
+        successful_tasks_list=$(echo "$result" | awk '{print $7}')
         
         if [ "$total_found" -eq 0 ]; then
             echo "✗ No completed jobs found with duration information"
@@ -286,8 +292,10 @@ analyze_method() {
         echo "  ${avg_duration} seconds"
         echo "  ${avg_hours} hours"
         echo ""
-        echo "Min runtime: ${min_duration} seconds ($(echo "scale=2; $min_duration/3600" | bc) hours)"
-        echo "Max runtime: ${max_duration} seconds ($(echo "scale=2; $max_duration/3600" | bc) hours)"
+        min_info=$(get_network_replicate "$min_task_id")
+        max_info=$(get_network_replicate "$max_task_id")
+        echo "Min runtime: ${min_duration} seconds ($(echo "scale=2; $min_duration/3600" | bc) hours) - Task ${min_task_id} (${min_info})"
+        echo "Max runtime: ${max_duration} seconds ($(echo "scale=2; $max_duration/3600" | bc) hours) - Task ${max_task_id} (${max_info})"
         echo ""
         
         # Suggest time limit (max * 2)
