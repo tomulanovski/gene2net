@@ -195,9 +195,14 @@ def verify_ultrametric(tree, tolerance=1.0):
 
 
 def tree_to_nexus_newick(tree):
-    """Convert ETE3 tree to Newick string with taxa names and branch lengths."""
+    """Convert ETE3 tree to Newick string with taxa names and branch lengths.
+    Removes all underscores from species names (e.g., Cerastium_uniflorum_Austria -> CerastiumuniflorumAustria).
+    """
     def format_node(node):
         name = node.name if node.is_leaf() and node.name else ""
+        # Remove all underscores from species names
+        if name:
+            name = name.replace('_', '')
         if node.is_leaf():
             result = name
         else:
