@@ -141,7 +141,7 @@ process_gene_trees() {
                 continue
             fi
             
-            for gene_tree in "$inner_dir"/g_*; do
+            for gene_tree in "$inner_dir"/g_*.trees; do
                 if [ ! -f "$gene_tree" ]; then
                     continue
                 fi
@@ -161,7 +161,7 @@ process_gene_trees() {
             return 1
         fi
         
-        for gene_tree in "$inner_dir"/g_*; do
+        for gene_tree in "$inner_dir"/g_*.trees; do
             if [ ! -f "$gene_tree" ]; then
                 continue
             fi

@@ -140,27 +140,27 @@ collect_gene_trees() {
                 continue
             fi
             
-            for gene_tree in "$inner_dir"/g_*; do
+            for gene_tree in "$inner_dir"/g_*.trees; do
                 if [ ! -f "$gene_tree" ]; then
                     continue
                 fi
-                
+
                 # Copy to temp dir with unique name
                 gene_tree_count=$((gene_tree_count + 1))
                 cp "$gene_tree" "${temp_dir}/g_tree_${gene_tree_count}"
             done
         done
     else
-        # Single batch structure: replicate_X/1/g_*
+        # Single batch structure: replicate_X/1/g_*.trees
         echo "    Detected single batch structure"
-        
+
         local inner_dir="${replicate_data_dir}/1"
         if [ ! -d "$inner_dir" ]; then
             echo "    ERROR: No '1' subdirectory found in ${replicate_data_dir}"
             return 1
         fi
-        
-        for gene_tree in "$inner_dir"/g_*; do
+
+        for gene_tree in "$inner_dir"/g_*.trees; do
             if [ ! -f "$gene_tree" ]; then
                 continue
             fi
