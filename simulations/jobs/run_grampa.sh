@@ -14,7 +14,7 @@
 # RUN_GRAMPA.SH
 # ============================================================================
 # Runs GRAMPA on prepared gene trees and species tree.
-# Uses a 2D array structure: 21 networks ª 5 replicates = 105 jobs
+# Uses a 2D array structure: 21 networks ï¿½ 5 replicates = 105 jobs
 #
 # Usage:
 #   sbatch --export=CONFIG=conf_ils_low_10M run_grampa.sh
@@ -64,7 +64,7 @@ networks=(
 # ============================================================================
 # CALCULATE NETWORK AND REPLICATE FROM ARRAY TASK ID
 # ============================================================================
-# Array task IDs: 1-105 (for 21 networks ª 5 replicates)
+# Array task IDs: 1-105 (for 21 networks ï¿½ 5 replicates)
 # Mapping: task_id = (network_idx * NUM_REPLICATES) + replicate
 # So: network_idx = (task_id - 1) / NUM_REPLICATES
 #     replicate = ((task_id - 1) % NUM_REPLICATES) + 1
@@ -170,6 +170,16 @@ echo ""
 start_time=$(date +%s)
 
 grampa -g "$GENE_TREES" -s "$SPECIES_TREE" -o "$OUTPUT_DIR" --overwrite
+
+python "$GRANDMA_SPLIT_SCRIPT" \
+    -g "$GENE_TREES" \
+    -s "$SPECIES_TREE" \
+    -o "$OUTPUT_DIR" \
+    -m single \
+    -p ${SLURM_CPUS_PER_TASK} \
+    --plot \
+    --debug \
+    --v 3
 
 exit_code=$?
 end_time=$(date +%s)

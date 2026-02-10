@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=run_grandma_split
+#SBATCH --job-name=run_grampa
 #SBATCH --array=1-105
-#SBATCH --output=/groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/run_grandma_split_%a.out
-#SBATCH --error=/groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/run_grandma_split_%a.err
+#SBATCH --output=/groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/run_grampa_%A_%a.out
+#SBATCH --error=/groups/itay_mayrose/tomulanovski/gene2net/simulations/logs/run_grampa_%A_%a.err
 #SBATCH --time=5-00:00:00
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=8
@@ -11,18 +11,17 @@
 #SBATCH --qos=owner
 
 # ============================================================================
-# RUN_GRANDMA_SPLIT.SH
+# RUN_GRAMPA.SH
 # ============================================================================
-# Runs GRANDMA_SPLIT on prepared gene trees and species tree.
-# Uses the same inputs as GRAMPA (gene trees and species tree from grampa_input).
-# Uses a 2D array structure: 21 networks × 5 replicates = 105 jobs
+# Runs GRAMPA on prepared gene trees and species tree.
+# Uses a 2D array structure: 21 networks � 5 replicates = 105 jobs
 #
 # Usage:
-#   sbatch --export=CONFIG=conf_ils_low_10M run_grandma_split.sh
-#   sbatch --export=CONFIG=conf_ils_low_10M,NUM_REPLICATES=3 run_grandma_split.sh
+#   sbatch --export=CONFIG=conf_ils_low_10M run_grampa.sh
+#   sbatch --export=CONFIG=conf_ils_low_10M,NUM_REPLICATES=3 run_grampa.sh
 #
 # To run with different array size (e.g., 3 replicates = 63 jobs):
-#   sbatch --array=1-63 --export=CONFIG=conf_ils_low_10M,NUM_REPLICATES=3 run_grandma_split.sh
+#   sbatch --array=1-63 --export=CONFIG=conf_ils_low_10M,NUM_REPLICATES=3 run_grampa.sh
 #
 # Environment variables:
 #   CONFIG          - Configuration name (required, e.g., conf_ils_low_10M)
@@ -53,7 +52,6 @@ NUM_NETWORKS=21
 
 BASE_DIR="/groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations"
 CONDA_PATH="/groups/itay_mayrose/tomulanovski/miniconda3"
-GRANDMA_SPLIT_SCRIPT="/groups/itay_mayrose/ronenshtein/Grandma/gran.py"
 
 # Array of networks
 networks=(
@@ -66,7 +64,7 @@ networks=(
 # ============================================================================
 # CALCULATE NETWORK AND REPLICATE FROM ARRAY TASK ID
 # ============================================================================
-# Array task IDs: 1-105 (for 21 networks × 5 replicates)
+# Array task IDs: 1-105 (for 21 networks � 5 replicates)
 # Mapping: task_id = (network_idx * NUM_REPLICATES) + replicate
 # So: network_idx = (task_id - 1) / NUM_REPLICATES
 #     replicate = ((task_id - 1) % NUM_REPLICATES) + 1
@@ -87,10 +85,8 @@ network="${networks[$network_idx]}"
 # PATHS FOR THIS JOB
 # ============================================================================
 
-# Use same input as GRAMPA
 INPUT_DIR="${BASE_DIR}/${network}/processed/${CONFIG}/grampa_input/replicate_${replicate}"
-# Output to grandma_split folder
-OUTPUT_DIR="${BASE_DIR}/${network}/results/${CONFIG}/grandma_split/replicate_${replicate}"
+OUTPUT_DIR="${BASE_DIR}/${network}/results/${CONFIG}/grampa/replicate_${replicate}"
 
 GENE_TREES="${INPUT_DIR}/grampa_trees.tre"
 SPECIES_TREE="${INPUT_DIR}/species.tre"
@@ -100,7 +96,7 @@ SPECIES_TREE="${INPUT_DIR}/species.tre"
 # ============================================================================
 
 echo "============================================================================"
-echo "RUN GRANDMA_SPLIT"
+echo "RUN GRAMPA"
 echo "============================================================================"
 echo "Network: ${network} (index: ${network_idx})"
 echo "Replicate: ${replicate}"
@@ -125,19 +121,13 @@ fi
 
 if [ ! -f "$SPECIES_TREE" ]; then
     echo "ERROR: Species tree file not found: $SPECIES_TREE"
-    echo "Did you run run_astral.sh first?"
+    echo "Did you run run_astral_grampa.sh first?"
     exit 1
 fi
 
-if [ ! -f "$GRANDMA_SPLIT_SCRIPT" ]; then
-    echo "ERROR: GRANDMA_SPLIT script not found: $GRANDMA_SPLIT_SCRIPT"
-    exit 1
-fi
-
-echo "✓ Input files validated"
+echo "? Input files validated"
 echo "  Gene trees: $GENE_TREES"
 echo "  Species tree: $SPECIES_TREE"
-echo "  GRANDMA_SPLIT script: $GRANDMA_SPLIT_SCRIPT"
 echo ""
 
 # ============================================================================
@@ -150,15 +140,15 @@ conda activate gene2net || {
     exit 1
 }
 
-echo "✓ Conda environment activated: gene2net"
+echo "? Conda environment activated: gene2net"
 
-# Check if Python is available
-if ! command -v python &> /dev/null; then
-    echo "ERROR: Python command not found. Check conda environment."
+# Check if GRAMPA is available
+if ! command -v grampa &> /dev/null; then
+    echo "ERROR: grampa command not found. Check if it's installed in your conda environment."
     exit 1
 fi
 
-echo "✓ Python found: $(which python)"
+echo "? GRAMPA found: $(which grampa)"
 echo ""
 
 # ============================================================================
@@ -166,29 +156,20 @@ echo ""
 # ============================================================================
 
 mkdir -p "$OUTPUT_DIR"
-echo "✓ Output directory created: $OUTPUT_DIR"
+echo "? Output directory created: $OUTPUT_DIR"
 echo ""
 
 # ============================================================================
-# RUN GRANDMA_SPLIT
+# RUN GRAMPA
 # ============================================================================
 
-echo "Starting GRANDMA_SPLIT..."
+echo "Starting GRAMPA..."
 echo "============================================================================"
 echo ""
 
 start_time=$(date +%s)
 
-python "$GRANDMA_SPLIT_SCRIPT" \
-    -g "$GENE_TREES" \
-    -s "$SPECIES_TREE" \
-    -o "$OUTPUT_DIR" \
-    -m split \
-    -i 50 \
-    -p ${SLURM_CPUS_PER_TASK} \
-    --plot \
-    --debug \
-    --v 3
+grampa -g "$GENE_TREES" -s "$SPECIES_TREE" -o "$OUTPUT_DIR" --overwrite
 
 exit_code=$?
 end_time=$(date +%s)
@@ -198,7 +179,7 @@ echo ""
 echo "============================================================================"
 
 if [ $exit_code -eq 0 ]; then
-    echo "✓ GRANDMA_SPLIT COMPLETED SUCCESSFULLY"
+    echo "? GRAMPA COMPLETED SUCCESSFULLY"
     echo ""
     echo "Network: ${network}"
     echo "Replicate: ${replicate}"
@@ -210,7 +191,7 @@ if [ $exit_code -eq 0 ]; then
     echo "Output files:"
     ls -la "$OUTPUT_DIR" 2>/dev/null || echo "  (unable to list)"
 else
-    echo "✗ GRANDMA_SPLIT FAILED"
+    echo "? GRAMPA FAILED"
     echo ""
     echo "Network: ${network}"
     echo "Replicate: ${replicate}"
