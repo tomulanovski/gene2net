@@ -179,7 +179,8 @@ python "$GRANDMA_SPLIT_SCRIPT" \
     -p ${SLURM_CPUS_PER_TASK} \
     --plot \
     --debug \
-    --v 3
+    --v 3 \
+    --overwrite
 
 exit_code=$?
 end_time=$(date +%s)
