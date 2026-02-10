@@ -170,8 +170,6 @@ echo ""
 
 start_time=$(date +%s)
 
-grampa -g "$GENE_TREES" -s "$SPECIES_TREE" -o "$OUTPUT_DIR" --overwrite
-
 python "$GRANDMA_SPLIT_SCRIPT" \
     -g "$GENE_TREES" \
     -s "$SPECIES_TREE" \
