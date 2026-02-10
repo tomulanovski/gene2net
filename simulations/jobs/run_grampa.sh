@@ -90,6 +90,7 @@ OUTPUT_DIR="${BASE_DIR}/${network}/results/${CONFIG}/grampa/replicate_${replicat
 
 GENE_TREES="${INPUT_DIR}/grampa_trees.tre"
 SPECIES_TREE="${INPUT_DIR}/species.tre"
+GRANDMA_SPLIT_SCRIPT="/groups/itay_mayrose/ronenshtein/Grandma/gran.py"
 
 # ============================================================================
 # HEADER
