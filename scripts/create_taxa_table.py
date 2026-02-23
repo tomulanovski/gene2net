@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """
-Simple AlloppNET Taxa Table Generator
+AlloppNET Taxa Table Generator
 
-Creates taxa tables with a straightforward strategy:
+Creates taxa tables following the Jones manual (Section 2.4) strategy:
 - Diploids: All copies as different individuals with genome A
-- Polyploids/Unknown with multiple copies: Random homeolog pairs (A,B)
-- if odd number of sequences for polyploids then it will create another sequence with _missing suffix to pair a homeolog
+- Polyploids with exactly 2 sequences: Pair as A/B homeologs in one individual
+- Polyploids with 1 sequence: Individual with genome A + _miss placeholder for genome B
+- Polyploids with 3+ sequences: Each sequence gets its own individual with genome A
+  and a _miss placeholder for genome B (AlloppNET assigns Parent1/Parent2 independently)
 
 Usage:
-    python "/groups/itay_mayrose/tomulanovski/gene2net/scripts/create_taxa_table.py" --nexus-dir path_to_nexus_files --ploidy-file ploidy.json(optional) --copy-number copy_numbers.tsv(optional) path_to/taxa_table.txt
+    python scripts/create_taxa_table.py --nexus-dir path_to_nexus_files --ploidy-file ploidy.json(optional) --copy-number copy_numbers.tsv(optional) path_to/taxa_table.txt
 """
 
 import sys
 import argparse
 import os
 import json
-import random
 from collections import defaultdict
 
 def parse_nexus_taxa(nexus_file):
@@ -134,14 +135,30 @@ def parse_ploidy_file(ploidy_file):
         print(f"Error: Could not parse ploidy JSON file: {e}")
         return {}
 
-def extract_species_info(taxa_name):
+def extract_species_info(taxa_name, species_field=0, known_species=None):
     """
-    Extract species name from taxa name - everything before the first underscore
+    Extract species name from taxa name.
+
+    If known_species is provided (list of known species names), uses longest-prefix
+    matching to handle tricky cases like 'saxatilis' vs 'saxatilis_var_mairei'.
+
+    Otherwise falls back to underscore-separated field extraction.
+
+    Args:
+        taxa_name: Full taxon name (e.g., "Ephedra_sinica_KT033298")
+        species_field: Which underscore-separated field to use as species name (default: 0)
+        known_species: Optional list of known species names for prefix matching
     """
-    # Split by underscore and take the first part
+    # If we have known species, try longest-prefix match
+    if known_species:
+        for species in sorted(known_species, key=len, reverse=True):
+            if taxa_name.startswith(species + '_') or taxa_name == species:
+                return species
+
     parts = taxa_name.split('_')
-    species = parts[1]
-    return species
+    if species_field < len(parts):
+        return parts[species_field]
+    return parts[0]
 
 def detect_naming_pattern(taxon_names, separator='_'):
     """Auto-detect naming pattern from taxon names"""
@@ -185,45 +202,41 @@ def get_all_taxa_from_nexus_files(nexus_files):
     print(f"Total unique taxa across all files: {len(all_taxa)}")
     return all_taxa
 
-def assign_homeolog_pairs_random_with_missing(sequences, species):
+def assign_polyploid_sequences(sequences, species):
     """
-    Randomly assign sequences to homeolog pairs (A,B)
-    If odd number of sequences, create a missing sequence for the last individual
+    Assign polyploid sequences following Jones manual Section 2.4 strategy.
+
+    - 1 sequence: single individual with genome A + _miss placeholder for genome B
+    - 2 sequences: pair as A/B homeologs in one individual
+    - 3+ sequences: each sequence gets its own individual with genome A + _miss for B
+      (AlloppNET assigns each to Parent1 or Parent2 independently via MCMC)
+
     Returns: list of (sequence_id, individual_id, genome) tuples
     """
     assignments = []
-    
-    # Shuffle sequences for random assignment
-    shuffled_seqs = sequences.copy()
-    random.shuffle(shuffled_seqs)
-    
-    # Create pairs
-    individual_num = 1
-    for i in range(0, len(shuffled_seqs), 2):
-        individual_id = f"ind{individual_num}"
-        
-        # First sequence gets genome A
-        assignments.append((shuffled_seqs[i], individual_id, 'A'))
-        
-        # Second sequence gets genome B (if it exists)
-        if i + 1 < len(shuffled_seqs):
-            assignments.append((shuffled_seqs[i + 1], individual_id, 'B'))
-        else:
-            # Odd number - create missing sequence with _miss suffix
-            missing_seq_id = f"{species}_miss"
-            assignments.append((missing_seq_id, individual_id, 'B'))
-        
-        individual_num += 1
-    
+    num_seqs = len(sequences)
+
+    if num_seqs == 2:
+        # Exactly 2 sequences: pair as homeologs A/B in one individual
+        assignments.append((sequences[0], 'ind1', 'A'))
+        assignments.append((sequences[1], 'ind1', 'B'))
+
+    elif num_seqs == 1:
+        # Single sequence: genome A + missing B
+        assignments.append((sequences[0], 'ind1', 'A'))
+        assignments.append((f"{species}_miss", 'ind1', 'B'))
+
+    else:
+        # 3+ sequences: each gets its own individual with A + missing B
+        for i, seq in enumerate(sorted(sequences)):
+            ind_id = f"ind{i + 1}"
+            assignments.append((seq, ind_id, 'A'))
+            assignments.append((f"{species}_miss{i + 1}", ind_id, 'B'))
+
     return assignments
 
 def generate_taxa_table(args):
     """Main function to generate taxa table"""
-    
-    # Set random seed for reproducibility
-    if args.seed:
-        random.seed(args.seed)
-        print(f"Random seed set to: {args.seed}")
     
     # Parse inputs
     copy_counts = parse_copy_numbers(args.copy_numbers)
@@ -249,13 +262,18 @@ def generate_taxa_table(args):
         print("Error: No taxa found")
         return False
     
-    print(f"\nUsing species extraction method: everything before first underscore")
-    
+    # Use known species names from ploidy file for prefix matching (handles tricky names)
+    known_species = list(known_ploidy.keys()) if known_ploidy else None
+    if known_species:
+        print(f"\nUsing known species from ploidy file for name matching ({len(known_species)} species)")
+    else:
+        print(f"\nUsing species extraction: underscore-separated field {args.species_field}")
+
     # Group taxa by species
     species_groups = defaultdict(list)
-    
+
     for taxon in all_taxa:
-        species = extract_species_info(taxon)
+        species = extract_species_info(taxon, args.species_field, known_species)
         species_groups[species].append(taxon)
     
     # Create taxa table
@@ -294,16 +312,19 @@ def generate_taxa_table(args):
                 })
                 
         elif ploidy == 4:
-            # POLYPLOID: Random homeolog pairs (A,B) with missing sequences if odd
-            if num_sequences % 2 == 1:
-                strategy = f"Random pairs from {num_sequences} seqs + missing"
+            # POLYPLOID: Strategy depends on number of sequences
+            if num_sequences == 1:
+                strategy = "1 seq: A + missing B"
                 status = "INCLUDED (with missing)"
-            else:
-                strategy = f"Random pairs from {num_sequences} seqs"
+            elif num_sequences == 2:
+                strategy = "2 seqs: paired as A/B"
                 status = "INCLUDED"
-            
-            assignments = assign_homeolog_pairs_random_with_missing(sequences, species)
-            
+            else:
+                strategy = f"{num_sequences} seqs: each ind A + miss B"
+                status = "INCLUDED (with missing)"
+
+            assignments = assign_polyploid_sequences(sequences, species)
+
             for seq_id, individual_id, genome in assignments:
                 taxa_entries.append({
                     'ID': seq_id,
@@ -345,42 +366,45 @@ def generate_taxa_table(args):
     print(f"  Polyploid species: {len(polyploid_species)}")
     print(f"  Missing sequences created: {missing_sequences}")
     
-    if args.seed:
-        print(f"  Random seed used: {args.seed} (use same seed for reproducible results)")
-    
     return True
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate AlloppNET taxa table with modified strategy",
+        description="Generate AlloppNET taxa table (Jones manual Section 2.4 strategy)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Strategy:
+Strategy (per Jones manual Section 2.4):
   Diploids (2x):    All copies as different individuals with genome A
-  Polyploids (4x):  Random homeolog pairs with genomes A and B
-                   If odd number of copies, create missing sequence with _miss suffix
+  Polyploids (4x):
+    1 sequence:     Individual with genome A + _miss placeholder for genome B
+    2 sequences:    Paired as A/B homeologs in one individual
+    3+ sequences:   Each sequence gets its own individual (A + _miss B),
+                    AlloppNET assigns each to Parent1/Parent2 via MCMC
   Unknown ploidy:   1 copy = diploid, 2+ copies = polyploid
 
-Species name extraction: Everything before the first underscore
+Species name extraction:
+  Uses --species-field to select which underscore-separated field is the species name.
+  Default: 0 (first field, i.e., everything before the first underscore)
+  Example: --species-field 1 for names like "Genus_species_accession"
 
 Examples:
   # Using directory with all NEXUS files (minimal)
-  python taxa_table.py --nexus-dir /path/to/nexus/files output.txt
-  
-  # With optional copy numbers file
-  python taxa_table.py --nexus-dir /path/to/nexus/files --copy-numbers copy_numbers.tsv output.txt
-  
-  # With known ploidy file and random seed
-  python taxa_table.py --nexus-dir nexus_files --ploidy-file ploidy.json --seed 42 output.txt
-  
+  python create_taxa_table.py --nexus-dir /path/to/nexus/files output.txt
+
+  # With known ploidy file
+  python create_taxa_table.py --nexus-dir nexus_files --ploidy-file ploidy.json output.txt
+
+  # Species name is the second field (e.g., Genus_species_acc)
+  python create_taxa_table.py --nexus-dir nexus_files --species-field 1 output.txt
+
   # Using individual files
-  python taxa_table.py --nexus-files gene1.nex gene2.nex output.txt
+  python create_taxa_table.py --nexus-files gene1.nex gene2.nex output.txt
 
 File formats:
   Copy numbers (TSV, optional):
-    Species	RepresentativeCopyNumber	Distribution
-    Species1_acc1	1	1:1
-    
+    Species\tRepresentativeCopyNumber\tDistribution
+    Species1_acc1\t1\t1:1
+
   Ploidy file (JSON, optional):
     {"species1": 2, "species2": 4}
         """
@@ -395,7 +419,8 @@ File formats:
     
     parser.add_argument('--copy-numbers', dest='copy_numbers', help='Copy numbers TSV file (optional)')
     parser.add_argument('--ploidy-file', help='JSON file with known ploidy levels (optional)')
-    parser.add_argument('--seed', type=int, help='Random seed for reproducible homeolog assignment')
+    parser.add_argument('--species-field', dest='species_field', type=int, default=0,
+                        help='Which underscore-separated field is the species name (default: 0, first field)')
     
     args = parser.parse_args()
     

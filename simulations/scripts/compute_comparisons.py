@@ -22,7 +22,7 @@ import numpy as np
 
 # Import existing comparison tools
 from reticulate_tree import ReticulateTree
-from compare_reticulations import pairwise_compare
+from compare_reticulations import pairwise_compare, SINGLE_RETICULATION_METHODS
 
 
 class ComparisonEngine:
@@ -60,7 +60,8 @@ class ComparisonEngine:
 
     def _cache_key(self, network: str, config: str, method: str, replicate: int) -> str:
         """Generate cache filename"""
-        return f"{network}_{config}_{method}_rep{replicate}.pkl"
+        suffix = '_partial' if method in SINGLE_RETICULATION_METHODS else ''
+        return f"{network}_{config}_{method}_rep{replicate}{suffix}.pkl"
 
     def _is_cache_valid(self, cache_path: Path, gt_path: str, inf_path: str) -> bool:
         """
@@ -140,7 +141,8 @@ class ComparisonEngine:
                 }
 
             # Run comparison using existing tool
-            metrics = pairwise_compare(gt_tree, inf_tree)
+            partial_match = method in SINGLE_RETICULATION_METHODS
+            metrics = pairwise_compare(gt_tree, inf_tree, partial_match=partial_match)
 
             return {
                 'status': 'SUCCESS',
@@ -261,6 +263,7 @@ class ComparisonEngine:
                 # Flatten metrics and add to results
                 flat_metrics = self.flatten_metrics(comparison['metrics'])
 
+                jaccard_mode = 'partial' if method in SINGLE_RETICULATION_METHODS else 'standard'
                 for metric_name, value in flat_metrics.items():
                     results.append({
                         'network': network,
@@ -269,6 +272,7 @@ class ComparisonEngine:
                         'replicate': replicate,
                         'metric': metric_name,
                         'value': value,
+                        'jaccard_mode': jaccard_mode,
                         'status': 'SUCCESS'
                     })
             else:

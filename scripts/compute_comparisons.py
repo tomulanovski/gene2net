@@ -23,7 +23,7 @@ import numpy as np
 # Import existing comparison tools from simulations/scripts
 sys.path.insert(0, str(Path(__file__).parent.parent / 'simulations' / 'scripts'))
 from reticulate_tree import ReticulateTree
-from compare_reticulations import pairwise_compare
+from compare_reticulations import pairwise_compare, SINGLE_RETICULATION_METHODS
 
 
 class ComparisonEngine:
@@ -63,7 +63,10 @@ class ComparisonEngine:
         """Generate cache filename for pairwise comparison"""
         # Sort methods alphabetically to ensure consistent cache keys
         methods = tuple(sorted([method1, method2]))
-        return f"{network}_{methods[0]}_vs_{methods[1]}.pkl"
+        has_partial = (method1 in SINGLE_RETICULATION_METHODS or
+                       method2 in SINGLE_RETICULATION_METHODS)
+        suffix = '_partial' if has_partial else ''
+        return f"{network}_{methods[0]}_vs_{methods[1]}{suffix}.pkl"
 
     def _is_cache_valid(self, cache_path: Path, path1: str, path2: str) -> bool:
         """
@@ -150,7 +153,9 @@ class ComparisonEngine:
 
             # Run comparison using existing tool
             # This already includes num_rets_diff (absolute difference) and num_rets_bias (signed difference)
-            metrics = pairwise_compare(tree1, tree2)
+            partial_match = (method1 in SINGLE_RETICULATION_METHODS or
+                             method2 in SINGLE_RETICULATION_METHODS)
+            metrics = pairwise_compare(tree1, tree2, partial_match=partial_match)
 
             # Add binary polyploid identification agreement metric
             # This measures which species are identified as polyploid (count > 1), not copy counts
@@ -301,6 +306,9 @@ class ComparisonEngine:
                         # Flatten metrics and add to results
                         flat_metrics = self.flatten_metrics(comparison['metrics'])
 
+                        has_partial = (method1 in SINGLE_RETICULATION_METHODS or
+                                      method2 in SINGLE_RETICULATION_METHODS)
+                        jaccard_mode = 'partial' if has_partial else 'standard'
                         for metric_name, value in flat_metrics.items():
                             results.append({
                                 'network': network,
@@ -308,6 +316,7 @@ class ComparisonEngine:
                                 'method2': method2,
                                 'metric': metric_name,
                                 'value': value,
+                                'jaccard_mode': jaccard_mode,
                                 'status': 'SUCCESS'
                             })
                     else:

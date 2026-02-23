@@ -1,11 +1,27 @@
 #!/usr/bin/env python3
 import re
+import json
 from ete3 import Tree
 import argparse
 
 '''
-python "/groups/itay_mayrose/tomulanovski/gene2net/scripts/reduce_diverse_k.py" input_trees.tre -o output_trees.tre
+Diversity-based pruning of phylogenetic trees.
 
+Keeps the k most diverse copies per species, where k is specified via --taxa-json.
+
+Usage:
+  # With a JSON file specifying copy numbers per taxon
+  python reduce_diverse_k.py input.tre -o output.tre --taxa-json taxa_copies.json
+
+  # With default copies per taxon (e.g., keep 2 for all)
+  python reduce_diverse_k.py input.tre -o output.tre --keep-per-taxon 2
+
+The taxa JSON file should map taxon names to copy numbers:
+  {"Ephedra_sinica": 2, "Ephedra_foeminea": 1, ...}
+
+Taxon name extraction: by default, everything before the last underscore
+(e.g., Ephedra_sinica_KT033298 -> Ephedra_sinica).
+Override with --taxon-separator and --accession-position if needed.
 '''
 
 def read_multiple_trees(input_file):
@@ -53,47 +69,33 @@ def read_multiple_trees(input_file):
     
     return trees
 
-def extract_taxon_name(leaf_name):
+def extract_taxon_name(leaf_name, taxa_dict=None):
     """
-    Extract the taxon name from a leaf name with Brachypodium naming convention.
-    
+    Extract the taxon name from a leaf name.
+
+    Strategy:
+    1. If taxa_dict is provided, try matching leaf_name against known taxon names
+       (longest match first). This handles cases like 'Genus_species_var_subsp'.
+    2. Fallback: everything before the last underscore.
+       e.g., Ephedra_sinica_KT033298 -> Ephedra_sinica
+
     Examples:
-    Brachypodium_arbuscula_accession123 -> Brachypodium_arbuscula
-    Brachypodium_cf_pinnatum_DLA-2015_accession123 -> Brachypodium_cf_pinnatum_DLA-2015
-    Brachypodium_distachyon_accession456 -> Brachypodium_distachyon
-    Brachypodium_sylvaticum_subsp_glaucovirens_acc789 -> Brachypodium_sylvaticum_subsp_glaucovirens
+      Ephedra_sinica_KT033298 -> Ephedra_sinica
+      Ephedra_saxatilis_var_mairei_KT033359 -> Ephedra_saxatilis_var_mairei (if in taxa_dict)
+      Brachypodium_distachyon_acc456 -> Brachypodium_distachyon
     """
-    
-    # Handle special case: Brachypodium_cf_pinnatum_DLA-2015
-    cf_pinnatum_match = re.match(r'(Brachypodium_cf_pinnatum_DLA-2015)', leaf_name)
-    if cf_pinnatum_match:
-        return cf_pinnatum_match.group(1)
-    
-    # Handle special case: Brachypodium_sylvaticum_subsp_glaucovirens
-    subsp_match = re.match(r'(Brachypodium_sylvaticum_subsp_glaucovirens)', leaf_name)
-    if subsp_match:
-        return subsp_match.group(1)
-    
-    # Handle other subspecies patterns (in case you have more)
-    general_subsp_match = re.match(r'(Brachypodium_[a-z]+_subsp_[a-z]+)', leaf_name)
-    if general_subsp_match:
-        return general_subsp_match.group(1)
-    
-    # Handle other "cf" patterns (in case you have more)
-    cf_match = re.match(r'(Brachypodium_cf_[a-z]+_[A-Z0-9-]+)', leaf_name)
-    if cf_match:
-        return cf_match.group(1)
-    
-    # Handle standard species: Brachypodium_species_accession -> Brachypodium_species
-    standard_match = re.match(r'(Brachypodium_[a-z]+)_', leaf_name)
-    if standard_match:
-        return standard_match.group(1)
-    
-    # If no underscore (just species name), return as-is
+    # If we have a taxa dictionary, try to match known taxon names (longest first)
+    if taxa_dict:
+        # Sort by length descending so longer names match first
+        for taxon in sorted(taxa_dict.keys(), key=len, reverse=True):
+            if leaf_name.startswith(taxon + '_') or leaf_name == taxon:
+                return taxon
+
+    # If no underscore, return as-is
     if '_' not in leaf_name:
         return leaf_name
-    
-    # Fallback: return everything before the last underscore (assumes last part is accession)
+
+    # Fallback: everything before the last underscore
     parts = leaf_name.rsplit('_', 1)
     return parts[0]
 
@@ -187,7 +189,7 @@ def process_single_tree(tree, taxa_dict, tree_num=None, verbose=False):
     all_leaves = list(tree.get_leaves())
     
     for leaf in all_leaves:
-        taxon = extract_taxon_name(leaf.name)
+        taxon = extract_taxon_name(leaf.name, taxa_dict)
         if taxon not in taxa_to_leaves:
             taxa_to_leaves[taxon] = []
         taxa_to_leaves[taxon].append(leaf)
@@ -235,81 +237,71 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Single tree or multi-tree file with default (keep 1 per taxon)
-  python diversity_prune.py input.newick -o output.newick
-  
-  # Specify number to keep per taxon
-  python diversity_prune.py input.newick -o output.newick --keep-per-taxon 2
-  
-  # Use custom taxa dictionary (modify script)
-  python diversity_prune.py input.newick -o output.newick --verbose
+  # Using a JSON taxa dictionary (recommended)
+  python reduce_diverse_k.py input.tre -o output.tre --taxa-json copies.json -v
+
+  # Using default copies per taxon
+  python reduce_diverse_k.py input.tre -o output.tre --keep-per-taxon 2
+
+Taxa JSON format:
+  {"Ephedra_sinica": 2, "Ephedra_foeminea": 1, ...}
         """
     )
-    
+
     parser.add_argument("input", help="Input tree file (single or multiple trees)")
     parser.add_argument("-o", "--output", required=True, help="Output file")
+    parser.add_argument("--taxa-json", help="JSON file mapping taxon names to copy numbers")
     parser.add_argument("--keep-per-taxon", type=int, default=1,
                        help="Default number of copies to keep per taxon (default: 1)")
     parser.add_argument("-v", "--verbose", action="store_true",
                        help="Verbose output")
-    
+
     args = parser.parse_args()
-    
-    # Taxa dictionary with desired copy numbers
-    TAXA_DICT = {
-        'ALLEXIS': 1,
-        'Andinium': 1, 
-        'Chamaemelanium': 1,
-        'Chilenium': 5,
-        'Delphiniopsis': 2,
-        'Erpetion': 5,
-        'Leptidium': 2,
-        'Melanium': 2,
-        'Noisettia': 1,
-        'Nosphinium': 5,
-        'Plagiostigma': 2,
-        'Rubellium': 1,
-        'Sclerosium': 2,
-        'Tridens': 6,
-        'Viola': 2,
-        'Xylinosium': 4,
-        'sectnovA': 6,
-        'sectnovB': 4
-    }
-    
+
+    # Load taxa dictionary from JSON or use empty dict
+    if args.taxa_json:
+        with open(args.taxa_json, 'r') as f:
+            TAXA_DICT = json.load(f)
+        print(f"Loaded copy numbers for {len(TAXA_DICT)} taxa from {args.taxa_json}")
+    else:
+        TAXA_DICT = {}
+        print(f"No --taxa-json provided, using --keep-per-taxon={args.keep_per_taxon} for all taxa")
+
     # Read trees
     trees = read_multiple_trees(args.input)
-    
+
     if not trees:
         print(f"No valid trees found in {args.input}")
         return
-    
+
     print(f"Found {len(trees)} tree(s) in {args.input}")
-    
+
     # Process each tree
     processed_trees = []
     for i, tree in enumerate(trees):
         tree_num = i + 1 if len(trees) > 1 else None
-        
-        # For taxa not in the predefined dictionary, use default keep-per-taxon value
+
+        # For taxa not in the dictionary, use default keep-per-taxon value
         temp_taxa_dict = TAXA_DICT.copy()
-        
+
         # Add any new taxa found in tree with default value
         for leaf in tree.get_leaves():
-            taxon = extract_taxon_name(leaf.name)
+            taxon = extract_taxon_name(leaf.name, temp_taxa_dict)
             if taxon not in temp_taxa_dict:
                 temp_taxa_dict[taxon] = args.keep_per_taxon
-        
+                if args.verbose:
+                    print(f"  Note: {taxon} not in taxa JSON, using default k={args.keep_per_taxon}")
+
         processed_tree = process_single_tree(tree, temp_taxa_dict, tree_num, args.verbose)
         if processed_tree:
             processed_trees.append(processed_tree)
-    
+
     # Write output
     if processed_trees:
         with open(args.output, 'w') as f:
             for tree in processed_trees:
                 f.write(tree.write(format=1) + '\n')
-        
+
         print(f"\nSaved {len(processed_trees)} processed tree(s) to {args.output}")
     else:
         print("No trees were successfully processed")

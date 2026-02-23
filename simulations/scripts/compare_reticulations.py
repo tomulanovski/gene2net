@@ -6,6 +6,12 @@ from pathlib import Path
 from scipy.optimize import linear_sum_assignment
 from reticulate_tree import ReticulateTree
 
+# Methods that can only infer a single reticulation by design.
+# Exported so downstream scripts can check method membership.
+# For these methods, Jaccard metrics use best-match-only (no penalty for
+# unmatched reticulations in the reference network).
+SINGLE_RETICULATION_METHODS = {'grampa'}
+
 '''
 bug in the edit distance calculation, it doesn't match internal nodes and it does in fact mess up the score
 must check that the GED for the polyphest's mul2net is OK...
@@ -148,28 +154,41 @@ def compute_sisters_stats(sisters1, sisters2, keys1, keys2, row_ind, col_ind, de
 
     return totals
 
-def correct_and_normalize_stats(totals, max_len, intersect_len, len1, len2, debug=False):
+def correct_and_normalize_stats(totals, max_len, intersect_len, len1, len2, debug=False, partial_match=False):
     '''
     Normalize total_dist, total_FP, total_FN by max_len and account for unmatched groups.
     Modifies the `totals` dict in place.
     Assumes that at most one input set is empty (i.e., max_len > 0).
     totals = {'dist': float, 'FP': float, 'FN': float}
-    '''
-    # account for unmatched groups
-    totals['dist'] += (max_len - intersect_len) # unmatched groups count as full distance
-    totals['FP'] += max(0, max_len - len1) # unmatched groups in set2 count as full FP
-    totals['FN'] += max(0, max_len - len2) # unmatched groups in set1 count as full FN
 
-    # normalize by max number of groups
-    totals['dist'] /= max_len
-    totals['FP'] /= max_len
-    totals['FN'] /= max_len
+    If partial_match=True, normalize by the number of matched pairs (intersect_len)
+    instead of max_len and skip the unmatched penalty.  This is fair for methods
+    that can only infer a limited number of reticulations (e.g. GRAMPA).
+    '''
+    if partial_match and intersect_len > 0:
+        # No penalty for unmatched groups; normalize by matched pairs only
+        totals['dist'] /= intersect_len
+        totals['FP'] /= intersect_len
+        totals['FN'] /= intersect_len
+    else:
+        # Standard: account for unmatched groups
+        totals['dist'] += (max_len - intersect_len) # unmatched groups count as full distance
+        totals['FP'] += max(0, max_len - len1) # unmatched groups in set2 count as full FP
+        totals['FN'] += max(0, max_len - len2) # unmatched groups in set1 count as full FN
+
+        # normalize by max number of groups
+        totals['dist'] /= max_len
+        totals['FP'] /= max_len
+        totals['FN'] /= max_len
 
     if debug:
-        print(f'Corrections: dist +{(max_len - intersect_len)}, FP +{max(0, max_len - len1)}, FN +{max(0, max_len - len2)}')
+        mode = 'partial' if partial_match else 'standard'
+        print(f'Corrections ({mode}): dist +{(max_len - intersect_len) if not partial_match else 0}, '
+              f'FP +{max(0, max_len - len1) if not partial_match else 0}, '
+              f'FN +{max(0, max_len - len2) if not partial_match else 0}')
         print(f'Corrected norm. stats: dist={totals["dist"]:.4f}, FP={totals["FP"]:.4f}, FN={totals["FN"]:.4f}')
 
-def match_and_compare(leaves1, leaves2, sisters1=None, sisters2=None, precomputed_match=None, debug=False):
+def match_and_compare(leaves1, leaves2, sisters1=None, sisters2=None, precomputed_match=None, debug=False, partial_match=False):
     '''
     Leaves mode:
         (1 - Total Jaccard) over matched reticulation leaf sets.
@@ -207,7 +226,7 @@ def match_and_compare(leaves1, leaves2, sisters1=None, sisters2=None, precompute
     else:
         raise ValueError(f'Unknown mode: {mode}')
 
-    correct_and_normalize_stats(totals, max_len, len(row_ind), len(sets1), len(sets2), debug=debug)
+    correct_and_normalize_stats(totals, max_len, len(row_ind), len(sets1), len(sets2), debug=debug, partial_match=partial_match)
 
     # NOTE: true positives (TP) can't be derived as 1 - tot_dist in this case, because
     # the denominator is different in each case (unmatched groups count as full distance/FP/FN).
@@ -220,19 +239,23 @@ def match_and_compare(leaves1, leaves2, sisters1=None, sisters2=None, precompute
 
     return totals
 
-def pairwise_compare(obj1, obj2, df=None):
+def pairwise_compare(obj1, obj2, df=None, partial_match=False):
     '''
     Compare two ReticulateTree objects (or their cached rows in df).
     If df is provided, obj1/obj2 are treated as row labels (names).
+
+    If partial_match=True, Jaccard metrics (ret_leaf_jaccard, ret_sisters_jaccard)
+    normalize by matched pairs only, with no penalty for unmatched reticulations.
+    This is used for methods that can only infer a limited number of reticulations.
     '''
     if df is not None:
         row1, row2 = df.loc[obj1], df.loc[obj2]
         precomputed = run_hungarian_on_groups(row1['reticulation_leaves'].values(),
                                                             row2['reticulation_leaves'].values())
-        
+
         # Get reticulation count comparison (returns dict with 'signed' and 'abs')
         num_rets_comparison = compare_num_rets(row1['reticulation_count'], row2['reticulation_count'])
-        
+
         return {
             'edit_distance':            row1['object'] - row2['object'],  # Old: on folded networks
             'edit_distance_multree':    row1['object'].get_edit_distance_multree(row2['object']),  # NEW: on MUL-trees
@@ -241,16 +264,17 @@ def pairwise_compare(obj1, obj2, df=None):
             'num_rets_bias':            num_rets_comparison['signed'],  # NEW: Signed difference (bias)
             'ploidy_diff':              compare_ploidy_diff(row1['leaf_counts'], row2['leaf_counts']),
             'ret_leaf_jaccard':         match_and_compare(row1['reticulation_leaves'], row2['reticulation_leaves'],
-                                        precomputed_match = precomputed),
+                                        precomputed_match = precomputed, partial_match=partial_match),
             'ret_sisters_jaccard':      match_and_compare(row1['reticulation_leaves'], row2['reticulation_leaves'],
-                                        row1['reticulation_sisters'], row2['reticulation_sisters'], precomputed),
+                                        row1['reticulation_sisters'], row2['reticulation_sisters'], precomputed,
+                                        partial_match=partial_match),
         }
     # object-based comparison
     precomputed = run_hungarian_on_groups(obj1.get_reticulation_leaves().values(), obj2.get_reticulation_leaves().values())
-    
+
     # Get reticulation count comparison (returns dict with 'signed' and 'abs')
     num_rets_comparison = compare_num_rets(obj1.get_reticulation_count(), obj2.get_reticulation_count())
-    
+
     return {
         'edit_distance':            obj1 - obj2,  # Old: edit distance on folded networks (kept for compatibility)
         'edit_distance_multree':    obj1.get_edit_distance_multree(obj2),  # NEW: edit distance on MUL-trees
@@ -259,9 +283,10 @@ def pairwise_compare(obj1, obj2, df=None):
         'num_rets_bias':            num_rets_comparison['signed'],  # NEW: Signed difference (bias)
         'ploidy_diff':              compare_ploidy_diff(obj1.get_leaf_counts(), obj2.get_leaf_counts()),
         'ret_leaf_jaccard':         match_and_compare(obj1.get_reticulation_leaves(), obj2.get_reticulation_leaves(),
-                                        precomputed_match = precomputed),
+                                        precomputed_match = precomputed, partial_match=partial_match),
         'ret_sisters_jaccard':      match_and_compare(obj1.get_reticulation_leaves(), obj2.get_reticulation_leaves(),
-                                        obj1.get_reticulation_sisters(), obj2.get_reticulation_sisters(), precomputed),
+                                        obj1.get_reticulation_sisters(), obj2.get_reticulation_sisters(), precomputed,
+                                        partial_match=partial_match),
     }
 
 def are_identical(obj1, obj2):

@@ -231,8 +231,15 @@ class RealDataAnalyzer:
         
         ax.set_xlabel('Method', fontsize=13, fontweight='bold')
         ax.set_ylabel('Method', fontsize=13, fontweight='bold')
-        ax.set_title(f'Method Similarity: {metric_label}\n(Lower = More Similar)', 
+        ax.set_title(f'Method Similarity: {metric_label}\n(Lower = More Similar)',
                     fontsize=15, fontweight='bold', pad=20)
+
+        # Add GRAMPA footnote on Jaccard heatmaps
+        if 'jaccard' in metric:
+            from compare_reticulations import SINGLE_RETICULATION_METHODS
+            if set(all_methods) & SINGLE_RETICULATION_METHODS:
+                fig.text(0.01, 0.01, '* GRAMPA: best-match only (1 reticulation)',
+                         fontsize=9, fontstyle='italic', color='gray')
 
         plt.tight_layout()
         metric_safe = metric.replace('.', '_')
@@ -280,6 +287,14 @@ class RealDataAnalyzer:
         ax.set_title(f'Method Similarity Distribution: {metric_label}\nby Method Pair',
                     fontsize=15, fontweight='bold', pad=20)
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
+
+        # Add GRAMPA footnote on Jaccard boxplots
+        if 'jaccard' in metric:
+            from compare_reticulations import SINGLE_RETICULATION_METHODS
+            all_methods = set(metric_data['method1'].unique()) | set(metric_data['method2'].unique())
+            if all_methods & SINGLE_RETICULATION_METHODS:
+                fig.text(0.01, 0.01, '* GRAMPA: best-match only (1 reticulation)',
+                         fontsize=9, fontstyle='italic', color='gray')
 
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()

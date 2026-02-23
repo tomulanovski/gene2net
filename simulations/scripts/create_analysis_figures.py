@@ -1040,6 +1040,13 @@ class ConfigurationAnalyzer:
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
         plt.xticks(rotation=0, fontsize=12)
 
+        # Add GRAMPA footnote on Jaccard distribution plots
+        if 'jaccard' in metric_name:
+            from compare_reticulations import SINGLE_RETICULATION_METHODS
+            if set(methods) & SINGLE_RETICULATION_METHODS:
+                fig.text(0.01, 0.01, '* GRAMPA: best-match only (1 reticulation)',
+                         fontsize=9, fontstyle='italic', color='gray')
+
         plt.tight_layout()
         fig.savefig(self.plots_dir / f"{filename_prefix}.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / f"{filename_prefix}.png", bbox_inches='tight', dpi=300)
@@ -1600,6 +1607,13 @@ class ConfigurationAnalyzer:
         if metrics_with_stats[char_col].dtype in ['int64', 'int32']:
             ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
 
+        # Add GRAMPA footnote if GRAMPA is among the plotted methods
+        plotted_methods = set(metrics_with_stats['method'].unique())
+        from compare_reticulations import SINGLE_RETICULATION_METHODS
+        if plotted_methods & SINGLE_RETICULATION_METHODS:
+            fig.text(0.01, 0.01, '* GRAMPA: best-match only (1 reticulation)',
+                     fontsize=9, fontstyle='italic', color='gray')
+
         plt.tight_layout()
         fig.savefig(self.plots_dir / f"{fig_prefix}.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / f"{fig_prefix}.png", bbox_inches='tight', dpi=300)
@@ -1671,6 +1685,13 @@ class ConfigurationAnalyzer:
 
         fig.suptitle(f'{jaccard_label} vs {char_label} (ILS {self.ils_level})',
                     fontsize=16, fontweight='bold', y=1.00)
+
+        # Add GRAMPA footnote if GRAMPA is among the plotted methods
+        from compare_reticulations import SINGLE_RETICULATION_METHODS
+        if set(methods) & SINGLE_RETICULATION_METHODS:
+            fig.text(0.01, 0.01, '* GRAMPA: best-match only (1 reticulation)',
+                     fontsize=9, fontstyle='italic', color='gray')
+
         plt.tight_layout()
         fig.savefig(self.plots_individual_dir / f"{fig_prefix}.pdf", bbox_inches='tight')
         fig.savefig(self.plots_individual_dir / f"{fig_prefix}.png", bbox_inches='tight', dpi=300)
