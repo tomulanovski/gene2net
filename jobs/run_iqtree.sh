@@ -16,7 +16,8 @@
 # Example:
 #   sbatch run_iqtree.sh /path/to/alignments /path/to/gene_trees
 
-set -euo pipefail
+set -eo pipefail
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 
 # --- Arguments ---
 INPUT_DIR="${1:?ERROR: Please provide input directory as first argument}"
