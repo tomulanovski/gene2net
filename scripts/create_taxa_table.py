@@ -17,6 +17,7 @@ import sys
 import argparse
 import os
 import json
+import re
 from collections import defaultdict
 
 def parse_nexus_taxa(nexus_file):
@@ -149,8 +150,21 @@ def extract_species_info(taxa_name, species_field=0, known_species=None):
         species_field: Which underscore-separated field to use as species name (default: 0)
         known_species: Optional list of known species names for prefix matching
     """
-    # If we have known species, try longest-prefix match
+    # Special case: foe1887 outgroup (foe1887_X → foe_1887)
+    if re.match(r'^foe1887', taxa_name, re.IGNORECASE):
+        key = 'foe_1887'
+        if not known_species or key in known_species:
+            return key
+
+    # Try regex: extract [lowercase]+_[UPPERCASE]+ prefix (e.g. prz_WB from prz_WB03_8)
     if known_species:
+        match = re.match(r'^([a-z]+_[A-Z]+)', taxa_name)
+        if match:
+            candidate = match.group(1)
+            if candidate in known_species:
+                return candidate
+
+        # Fallback: longest-prefix match (handles names with no digit suffix)
         for species in sorted(known_species, key=len, reverse=True):
             if taxa_name.startswith(species + '_') or taxa_name == species:
                 return species
@@ -288,21 +302,21 @@ def generate_taxa_table(args):
     for species, sequences in sorted(species_groups.items()):
         num_sequences = len(sequences)
         
-        # Determine ploidy
+        # Determine copy number from JSON (1=diploid, 2=tetraploid)
         known_ploidy_str = str(known_ploidy.get(species, '-'))
-        
+
         if species in known_ploidy:
-            ploidy = known_ploidy[species]
+            copy_num = known_ploidy[species]
         else:
-            # Default: treat unknown as polyploid if multiple sequences
-            ploidy = 2 if num_sequences == 1 else 4
-        
+            # Default: treat as diploid if 1 sequence, tetraploid if 2+
+            copy_num = 1 if num_sequences == 1 else 2
+
         # Apply strategy
-        if ploidy == 2:
+        if copy_num == 1:
             # DIPLOID: All sequences as different individuals with genome A
             strategy = f"All {num_sequences} seqs as diploid indivs"
             status = "INCLUDED"
-            
+
             for i, seq in enumerate(sequences):
                 taxa_entries.append({
                     'ID': seq,
@@ -310,8 +324,8 @@ def generate_taxa_table(args):
                     'individual': f"{species}_ind{i+1}",
                     'genome': 'A'
                 })
-                
-        elif ploidy == 4:
+
+        elif copy_num >= 2:
             # POLYPLOID: Strategy depends on number of sequences
             if num_sequences == 1:
                 strategy = "1 seq: A + missing B"
@@ -332,12 +346,12 @@ def generate_taxa_table(args):
                     'individual': f"{species}_{individual_id}",
                     'genome': genome
                 })
-        
+
         else:
-            # Unsupported ploidy
+            # Unsupported copy number
             strategy = "-"
-            status = f"SKIPPED (ploidy {ploidy}x unsupported)"
-        
+            status = f"SKIPPED (copy_num {copy_num} unsupported)"
+
         print(f"{species:<20} {num_sequences:<5} {known_ploidy_str:<8} {strategy:<30} {status}")
     
     # Write output
