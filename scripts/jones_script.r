@@ -24,8 +24,8 @@ alignmentnames <- sub("\\.nex$", "", nex_files)
 
 #########################################################################
 # directory for input and output
-data.dpath <- paste0(normalizePath(nex_dir, mustWork=FALSE), "/")
-fpath.taxatable <- file.path(nex_dir, "taxa_table.txt")
+data.dpath <- nex_dir
+fpath.taxatable <- "taxa_table.txt"
 
 # BEAST information
 # Extract parent folder name of nex_dir
