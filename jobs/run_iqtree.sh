@@ -58,7 +58,7 @@ for ALIGNMENT in "$INPUT_DIR"/*.fasta "$INPUT_DIR"/*.fa; do
     PREFIX="$OUTPUT_DIR/$NAME"
 
     echo "Processing: $BASENAME"
-    iqtree2 -s "$ALIGNMENT" -m GTR+G -pre "$PREFIX" -nt "$SLURM_CPUS_PER_TASK" -quiet
+    iqtree -s "$ALIGNMENT" -m GTR+G -pre "$PREFIX" -nt "$SLURM_CPUS_PER_TASK" -quiet
 
     COUNT=$((COUNT + 1))
 done
