@@ -24,7 +24,7 @@ alignmentnames <- sub("\\.nex$", "", nex_files)
 
 #########################################################################
 # directory for input and output
-data.dpath <- nex_dir
+data.dpath <- paste0(normalizePath(nex_dir, mustWork=FALSE), "/")
 fpath.taxatable <- file.path(nex_dir, "taxa_table.txt")
 
 # BEAST information
