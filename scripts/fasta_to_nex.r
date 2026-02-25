@@ -37,8 +37,8 @@ if(!dir.exists(output_dir)) {
   cat("Using existing output directory:", output_dir, "\n")
 }
 
-# Get all .fasta files
-fasta_files <- list.files(path = input_dir, pattern = "\\.fasta$", full.names = TRUE)
+# Get all .fasta and .aln files
+fasta_files <- list.files(path = input_dir, pattern = "\\.(fasta|fa|aln)$", full.names = TRUE)
 
 if(length(fasta_files) == 0) {
   cat("No .fasta files found in the directory.\n")
