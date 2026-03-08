@@ -59,7 +59,19 @@ dataset="${datasets[$dataset_idx]}"
 # PATHS FOR THIS JOB
 # ============================================================================
 
-GENE_TREES="${PAPERS_DIR}/${dataset}/gene_trees/grampa_trees.tre"
+# Datasets with stripped internal node labels (rooting added labels that
+# interfere with GRAMPA/GRANDMA_SPLIT; use grampa_trees_striped.tre for these)
+stripped_datasets=("Ren_2024" "Koenen_2020" "Wu_2015" "Popp_2005" "Marcussen_2015" "Wisecaver_2023")
+
+gene_trees_file="grampa_trees.tre"
+for d in "${stripped_datasets[@]}"; do
+    if [ "$dataset" = "$d" ]; then
+        gene_trees_file="grampa_trees_striped.tre"
+        break
+    fi
+done
+
+GENE_TREES="${PAPERS_DIR}/${dataset}/gene_trees/${gene_trees_file}"
 SPECIES_TREE="${PAPERS_DIR}/${dataset}/gene_trees/grampa_species_tree.tre"
 OUTPUT_DIR="${PAPERS_DIR}/${dataset}/networks/grandma_split"
 
@@ -72,7 +84,7 @@ echo "RUN GRANDMA_SPLIT (EMPIRICAL)"
 echo "============================================================================"
 echo "Dataset:          ${dataset}"
 echo "Task ID:          ${SLURM_ARRAY_TASK_ID}"
-echo "Gene trees:       ${GENE_TREES}"
+echo "Gene trees:       ${GENE_TREES} (${gene_trees_file})"
 echo "Species tree:     ${SPECIES_TREE}"
 echo "Output directory: ${OUTPUT_DIR}"
 echo "Date:             $(date)"
