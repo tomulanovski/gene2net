@@ -485,8 +485,8 @@ class ReticulateTree:
         renamed_targets = set()
         for n, data in list(G.nodes(data=True)):
             name = data.get('label', '')
-            if name.startswith('#H') and G.out_degree(n) == 0:  # leaf reference
-                hid = name.split('#H')[1]
+            if name.startswith('#') and G.out_degree(n) == 0:  # leaf reference
+                hid = name[1:]  # strip the '#' prefix
                 if hid not in defs:
                     continue
 
