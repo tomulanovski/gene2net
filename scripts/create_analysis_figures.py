@@ -41,6 +41,7 @@ METHOD_COLORS = {
     'polyphest': '#DE8F05',     # Orange
     'padre': '#ECE133',         # Yellow
     'mpallop': '#8B4513',       # Saddle Brown
+    'grandma_split': '#CC78BC',  # Muted Purple
     'alloppnet': '#DC143C',     # Crimson/Red
     'paper': '#029E73'          # Teal
 }

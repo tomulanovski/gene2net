@@ -15,6 +15,9 @@ methods:
   mpallop:
     directory: "mpallop"
     output_file: "network.tre"
+  grandma_split:
+    directory: "grandma_split"
+    output_file: "network.tre"
   alloppnet:
     directory: "allopnet"
     output_file: "network.tre"

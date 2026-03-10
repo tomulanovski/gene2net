@@ -100,7 +100,7 @@ class ReticulateTree:
                 if not input_str.endswith(';'):
                     raise ValueError('String format unrecognized. Must end with ";" for Newick / enriched Newick, or "nexml>" for NeXML.')
                 else:
-                    if '#H' in input_str or '//' in input_str:
+                    if '#' in input_str or '//' in input_str:
                         input_type = 'str:enewick'
                     else:
                         input_type = 'str:newick'
@@ -473,10 +473,10 @@ class ReticulateTree:
         defs = {}
         for n, data in G.nodes(data=True):
             name = data.get('label', '')
-            if name.startswith('#H') and G.out_degree(n) > 0:
-                hid = name.split('#H')[1]
+            if name.startswith('#') and G.out_degree(n) > 0:
+                hid = name[1:]  # strip the '#' prefix
                 if hid in defs:
-                    raise ValueError(f"Duplicate definition for H id '{hid}' found.")
+                    raise ValueError(f"Duplicate definition for reticulation id '{hid}' found.")
                 defs[hid] = n
         return defs
 
