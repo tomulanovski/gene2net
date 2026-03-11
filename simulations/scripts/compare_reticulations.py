@@ -276,8 +276,8 @@ def pairwise_compare(obj1, obj2, df=None, partial_match=False):
     num_rets_comparison = compare_num_rets(obj1.get_reticulation_count(), obj2.get_reticulation_count())
 
     return {
-        'edit_distance':            obj1 - obj2,  # Old: edit distance on folded networks (kept for compatibility)
-        'edit_distance_multree':    obj1.get_edit_distance_multree(obj2),  # NEW: edit distance on MUL-trees
+        # 'edit_distance':            obj1 - obj2,  # Disabled: GED on folded networks is NP-hard, hangs on large trees
+        'edit_distance_multree':    obj1.get_edit_distance_multree(obj2),  # edit distance on MUL-trees
         'rf_distance':              obj1.get_rf_distance(obj2),  # NEW: Robinson-Foulds on MUL-trees
         'num_rets_diff':            num_rets_comparison['abs'],  # Absolute difference (backward compatible)
         'num_rets_bias':            num_rets_comparison['signed'],  # NEW: Signed difference (bias)

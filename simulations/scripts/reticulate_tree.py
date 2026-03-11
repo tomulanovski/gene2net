@@ -812,7 +812,7 @@ class ReticulateTree:
             distance /= normalization
         return distance
     
-    def get_edit_distance_multree(self, other: 'ReticulateTree', normalize=True) -> float:
+    def get_edit_distance_multree(self, other: 'ReticulateTree', normalize=True, timeout=300) -> float:
         '''
         Compute graph edit distance on MUL-trees (before folding to networks).
         This compares the tree structures directly without network folding.
@@ -820,12 +820,19 @@ class ReticulateTree:
         Args:
             other: Another ReticulateTree instance
             normalize: If True, normalize by max tree size
+            timeout: Max seconds per comparison (default 300s = 5 min).
+                     Returns NaN if exceeded. GED is NP-hard so large trees
+                     that don't finish in 5 min won't finish in 24 hours either.
 
         Returns:
-            Edit distance between the two MUL-trees
+            Edit distance between the two MUL-trees, or NaN if timed out
         '''
+        import signal
+
+        def _timeout_handler(signum, frame):
+            raise TimeoutError("GED computation timed out")
+
         # Convert trees to graphs (without folding - just tree structure)
-        # Create a directed graph from the tree structure
         def tree_to_simple_graph(tree_obj):
             """Convert ete3 tree to NetworkX graph preserving tree structure"""
             G = nx.DiGraph()
@@ -851,11 +858,22 @@ class ReticulateTree:
         graph1 = tree_to_simple_graph(self)
         graph2 = tree_to_simple_graph(other)
 
-        # Compute edit distance with node matching based on labels
-        distance = next(nx.optimize_graph_edit_distance(
-            graph1, graph2,
-            node_match=lambda u, v: u.get('label') == v.get('label')
-        ))
+        # Compute edit distance with timeout
+        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.alarm(timeout)
+        try:
+            distance = next(nx.optimize_graph_edit_distance(
+                graph1, graph2,
+                node_match=lambda u, v: u.get('label') == v.get('label')
+            ))
+        except TimeoutError:
+            n1, n2 = len(graph1.nodes), len(graph2.nodes)
+            print(f"  WARNING: MUL-tree GED timed out after {timeout}s "
+                  f"(tree sizes: {n1}, {n2} nodes). Returning NaN.")
+            return float('nan')
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
 
         if normalize:
             normalization = max(
