@@ -519,11 +519,10 @@ class RealDataAnalyzer:
         plt.close()
 
     def plot_dataset_agreement_ranking(self):
-        """Rank datasets by mean pairwise method agreement (lower distance = more agreement)"""
+        """Rank datasets by method agreement: one panel per metric + one for average"""
         if self.valid_comparisons.empty:
             return
 
-        # Use multiple key metrics to compute overall agreement
         agreement_metrics = ['rf_distance', 'polyploid_species_jaccard', 'ret_leaf_jaccard.dist']
         available_metrics = [m for m in agreement_metrics
                             if m in self.valid_comparisons['metric'].values]
@@ -532,38 +531,83 @@ class RealDataAnalyzer:
             print("  WARNING: No agreement metrics available for dataset ranking")
             return
 
-        # Compute mean distance per network across all method pairs and metrics
-        metric_data = self.valid_comparisons[self.valid_comparisons['metric'].isin(available_metrics)]
-        network_means = metric_data.groupby('network')['value'].mean().sort_values()
-
-        fig, ax = plt.subplots(figsize=(12, max(6, len(network_means) * 0.4)))
-
-        colors = ['#2E8B57' if v < 0.3 else '#DE8F05' if v < 0.6 else '#DC143C'
-                  for v in network_means.values]
-        bars = ax.barh(network_means.index, network_means.values,
-                      color=colors, alpha=0.8, edgecolor='black', linewidth=1)
-
-        # Add value labels
-        for bar, val in zip(bars, network_means.values):
-            ax.text(val + 0.01, bar.get_y() + bar.get_height() / 2.,
-                   f'{val:.3f}', ha='left', va='center', fontsize=10, fontweight='bold')
-
-        ax.set_xlabel('Mean Pairwise Distance Across Methods\n(Lower = Higher Agreement)',
-                     fontsize=13, fontweight='bold')
-        ax.set_ylabel('Dataset', fontsize=13, fontweight='bold')
-        ax.set_title('Dataset Ranking by Method Agreement\n'
-                    f'(Averaged over: {", ".join(available_metrics)})',
-                    fontsize=15, fontweight='bold', pad=20)
-        ax.grid(True, alpha=0.25, axis='x', linestyle='--')
-
-        # Legend for color coding
         from matplotlib.patches import Patch
+
+        n_panels = len(available_metrics) + 1  # +1 for average
+        fig, axes = plt.subplots(1, n_panels, figsize=(6 * n_panels, max(6, 12 * 0.4)),
+                                sharey=True)
+        if n_panels == 1:
+            axes = [axes]
+
+        # Sort datasets by average across all metrics (used for consistent y-axis order)
+        all_metric_data = self.valid_comparisons[self.valid_comparisons['metric'].isin(available_metrics)]
+        overall_means = all_metric_data.groupby('network')['value'].mean().sort_values()
+        dataset_order = overall_means.index.tolist()
+
+        metric_labels = {
+            'rf_distance': 'RF Distance',
+            'polyploid_species_jaccard': 'Polyploid Species\nJaccard',
+            'ret_leaf_jaccard.dist': 'Reticulation Leaf\nJaccard',
+        }
+
+        def color_for_val(v):
+            if v < 0.3:
+                return '#2E8B57'
+            elif v < 0.6:
+                return '#DE8F05'
+            else:
+                return '#DC143C'
+
+        # Individual metric panels
+        for idx, metric in enumerate(available_metrics):
+            ax = axes[idx]
+            metric_data = self.valid_comparisons[self.valid_comparisons['metric'] == metric]
+            network_means = metric_data.groupby('network')['value'].mean()
+
+            # Reindex to consistent order
+            network_means = network_means.reindex(dataset_order)
+
+            colors = [color_for_val(v) if not np.isnan(v) else '#CCCCCC'
+                      for v in network_means.values]
+            bars = ax.barh(range(len(dataset_order)), network_means.values,
+                          color=colors, alpha=0.8, edgecolor='black', linewidth=0.8)
+
+            for i, val in enumerate(network_means.values):
+                if not np.isnan(val):
+                    ax.text(val + 0.01, i, f'{val:.2f}', ha='left', va='center', fontsize=9)
+
+            ax.set_yticks(range(len(dataset_order)))
+            if idx == 0:
+                ax.set_yticklabels(dataset_order)
+            ax.set_xlabel('Mean Pairwise Distance', fontsize=11)
+            ax.set_title(metric_labels.get(metric, metric), fontsize=12, fontweight='bold')
+            ax.grid(True, alpha=0.25, axis='x', linestyle='--')
+            ax.set_xlim(0, 1.15)
+
+        # Average panel (last)
+        ax = axes[-1]
+        colors = [color_for_val(v) for v in overall_means.values]
+        bars = ax.barh(range(len(dataset_order)), overall_means.values,
+                      color=colors, alpha=0.8, edgecolor='black', linewidth=0.8)
+
+        for i, val in enumerate(overall_means.values):
+            ax.text(val + 0.01, i, f'{val:.2f}', ha='left', va='center', fontsize=9)
+
+        ax.set_xlabel('Mean Pairwise Distance', fontsize=11)
+        ax.set_title('Average\n(All Metrics)', fontsize=12, fontweight='bold')
+        ax.grid(True, alpha=0.25, axis='x', linestyle='--')
+        ax.set_xlim(0, 1.15)
+
+        # Legend
         legend_elements = [
             Patch(facecolor='#2E8B57', edgecolor='black', label='High agreement (<0.3)'),
             Patch(facecolor='#DE8F05', edgecolor='black', label='Moderate (0.3-0.6)'),
             Patch(facecolor='#DC143C', edgecolor='black', label='Low agreement (>0.6)')
         ]
-        ax.legend(handles=legend_elements, loc='lower right', fontsize=10)
+        axes[-1].legend(handles=legend_elements, loc='lower right', fontsize=9)
+
+        fig.suptitle('Dataset Ranking by Method Agreement\n(Lower = Methods Agree More)',
+                    fontsize=15, fontweight='bold', y=1.02)
 
         plt.tight_layout()
         fig.savefig(self.plots_dir / "09_dataset_agreement_ranking.pdf", bbox_inches='tight')
