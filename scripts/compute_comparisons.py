@@ -258,6 +258,7 @@ class ComparisonEngine:
                     path2 = method_paths[method2]
 
                     self.stats['total'] += 1
+                    print(f"  [{self.stats['total']}] {network}: {method1} vs {method2}", flush=True)
 
                     # Check cache
                     cache_filename = self._cache_key(network, method1, method2)
