@@ -858,6 +858,13 @@ class ReticulateTree:
         graph1 = tree_to_simple_graph(self)
         graph2 = tree_to_simple_graph(other)
 
+        # GED is NP-hard with exponential memory — skip for large trees
+        MAX_NODES_FOR_GED = 60
+        n1, n2 = len(graph1.nodes), len(graph2.nodes)
+        if max(n1, n2) > MAX_NODES_FOR_GED:
+            print(f"  Skipping MUL-tree GED: trees too large ({n1}, {n2} nodes > {MAX_NODES_FOR_GED} limit)")
+            return float('nan')
+
         # Compute edit distance with timeout
         old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
         signal.alarm(timeout)
