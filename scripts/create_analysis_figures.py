@@ -396,54 +396,45 @@ class RealDataAnalyzer:
         plt.close()
 
     def plot_distance_metrics_comparison(self):
-        """Compare all three distance metrics side-by-side: Network ED, MUL-tree ED, and RF"""
+        """Compare MUL-tree Edit Distance and RF Distance side-by-side"""
         if self.valid_comparisons.empty:
             return
 
-        # Get all unique methods
-        all_methods = sorted(set(self.valid_comparisons['method1'].unique()) | 
-                            set(self.valid_comparisons['method2'].unique()))
-        
-        if len(all_methods) == 0:
-            return
-
-        # Collect data for all three metrics
         metrics_to_compare = {
-            'edit_distance': 'Network Edit Distance',
             'edit_distance_multree': 'MUL-tree Edit Distance',
             'rf_distance': 'RF Distance (MUL-tree)'
         }
-        
-        fig, axes = plt.subplots(1, 3, figsize=(20, 6))
-        
+
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
         for idx, (metric_name, metric_label) in enumerate(metrics_to_compare.items()):
             ax = axes[idx]
-            
+
             metric_data = self.valid_comparisons[self.valid_comparisons['metric'] == metric_name]
-            
+
             if len(metric_data) == 0:
-                ax.text(0.5, 0.5, f'No data for\n{metric_label}', 
+                ax.text(0.5, 0.5, f'No data for\n{metric_label}',
                        ha='center', va='center', fontsize=14, color='gray')
                 ax.set_title(metric_label, fontsize=13, fontweight='bold')
                 ax.axis('off')
                 continue
-            
+
             # Create method pair identifier
             metric_data = metric_data.copy()
             metric_data['pair'] = metric_data.apply(
                 lambda row: f"{row['method1']} vs {row['method2']}", axis=1
             )
-            
+
             pairs = sorted(metric_data['pair'].unique())
             data_by_pair = [metric_data[metric_data['pair'] == pair]['value'].values for pair in pairs]
-            
+
             if len(data_by_pair) == 0:
-                ax.text(0.5, 0.5, f'No data for\n{metric_label}', 
+                ax.text(0.5, 0.5, f'No data for\n{metric_label}',
                        ha='center', va='center', fontsize=14, color='gray')
                 ax.set_title(metric_label, fontsize=13, fontweight='bold')
                 ax.axis('off')
                 continue
-            
+
             # Create boxplot
             bp = ax.boxplot(data_by_pair, labels=pairs, patch_artist=True,
                            widths=0.5, showfliers=True,
@@ -451,11 +442,11 @@ class RealDataAnalyzer:
                            whiskerprops=dict(linewidth=1.5),
                            capprops=dict(linewidth=1.5),
                            medianprops=dict(linewidth=2.5, color='red'))
-            
+
             for patch in bp['boxes']:
                 patch.set_facecolor(METHOD_COLORS.get('grampa', '#0173B2'))
                 patch.set_alpha(0.7)
-            
+
             # Add mean values as text
             for i, pair in enumerate(pairs):
                 pair_data = metric_data[metric_data['pair'] == pair]['value']
@@ -463,152 +454,214 @@ class RealDataAnalyzer:
                     mean_val = pair_data.mean()
                     ax.text(i + 1, ax.get_ylim()[1] * 0.95, f'{mean_val:.3f}',
                            ha='center', va='top', fontsize=9, fontweight='bold',
-                           bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
+                           bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
                                     edgecolor='gray', alpha=0.8))
-            
-            ax.set_ylabel('Distance\n(0 = identical, 1 = very different)', 
+
+            ax.set_ylabel('Distance\n(0 = identical, 1 = very different)',
                          fontsize=12, fontweight='bold')
             ax.set_xlabel('Method Pair', fontsize=12, fontweight='bold')
             ax.set_title(metric_label, fontsize=13, fontweight='bold', pad=15)
             ax.grid(True, alpha=0.25, axis='y', linestyle='--')
             ax.tick_params(axis='x', rotation=45, labelsize=9)
-            
-            # Highlight if this is the primary metric
-            if metric_name in ['edit_distance_multree', 'rf_distance']:
-                ax.patch.set_edgecolor('#2E8B57')
-                ax.patch.set_linewidth(3)
-        
-        fig.suptitle('Method Similarity: Distance Metrics Comparison\n' + 
-                    'Green border = Primary metrics (MUL-tree based)',
+
+        fig.suptitle('Method Similarity: MUL-tree Distance Metrics Comparison',
                     fontsize=16, fontweight='bold', y=1.02)
-        
+
         plt.tight_layout()
         fig.savefig(self.plots_dir / "07_distance_metrics_comparison.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "07_distance_metrics_comparison.png", bbox_inches='tight', dpi=300)
         plt.close()
 
     def plot_polyploid_agreement(self):
-        """Comprehensive figure showing polyploid identification agreement/disagreement between methods"""
+        """Heatmap showing mean polyploid species Jaccard distance between methods"""
         if self.valid_comparisons.empty:
             return
 
         ploidy_data = self.valid_comparisons[self.valid_comparisons['metric'] == 'polyploid_species_jaccard']
-        
+
         if ploidy_data.empty:
             print("  WARNING: No polyploid identification data available")
             return
 
-        # Create a 2x2 subplot figure
-        fig = plt.figure(figsize=(18, 14))
-        gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
-
-        # ========================================================================
-        # Subplot 1: Heatmap of polyploid identification distance
-        # ========================================================================
-        ax1 = fig.add_subplot(gs[0, 0])
-        
-        # Get all unique methods
+        # Build symmetric method×method mean distance matrix
         all_methods = sorted(set(ploidy_data['method1'].unique()) | set(ploidy_data['method2'].unique()))
-        
-        # Create symmetric matrix
         matrix = np.full((len(all_methods), len(all_methods)), np.nan)
-        
-        for i, method1 in enumerate(all_methods):
-            for j, method2 in enumerate(all_methods):
+
+        for i, m1 in enumerate(all_methods):
+            for j, m2 in enumerate(all_methods):
                 if i == j:
-                    matrix[i, j] = 0.0  # Distance to self is 0
+                    matrix[i, j] = 0.0
                 else:
-                    # Get comparisons for this pair (both directions)
-                    pair_data = ploidy_data[
-                        ((ploidy_data['method1'] == method1) & (ploidy_data['method2'] == method2)) |
-                        ((ploidy_data['method1'] == method2) & (ploidy_data['method2'] == method1))
+                    pair_vals = ploidy_data[
+                        ((ploidy_data['method1'] == m1) & (ploidy_data['method2'] == m2)) |
+                        ((ploidy_data['method1'] == m2) & (ploidy_data['method2'] == m1))
                     ]['value']
-                    
-                    if len(pair_data) > 0:
-                        matrix[i, j] = pair_data.mean()
-        
+                    if len(pair_vals) > 0:
+                        matrix[i, j] = pair_vals.mean()
+
         df_matrix = pd.DataFrame(matrix, index=all_methods, columns=all_methods)
-        
+
+        fig, ax = plt.subplots(figsize=(10, 8))
+
         sns.heatmap(df_matrix, annot=True, fmt='.3f', cmap='YlOrRd', vmin=0, vmax=1,
-                   cbar_kws={'label': 'Polyploid Species Agreement\n(0=same, 1=different)'},
-                   ax=ax1, linewidths=1, linecolor='black', square=True,
+                   cbar_kws={'label': 'Polyploid Species Jaccard Distance\n(0 = same species, 1 = different)'},
+                   ax=ax, linewidths=1, linecolor='black', square=True,
                    annot_kws={'fontsize': 10, 'fontweight': 'bold'})
-        
-        ax1.set_xlabel('Method', fontsize=13, fontweight='bold')
-        ax1.set_ylabel('Method', fontsize=13, fontweight='bold')
-        ax1.set_title('Polyploid Identification Agreement\n(Lower = More Agreement)', 
-                     fontsize=14, fontweight='bold', pad=15)
 
-        # ========================================================================
-        # Subplot 2: Boxplot of polyploid identification distances by method pair
-        # ========================================================================
-        ax2 = fig.add_subplot(gs[0, 1])
-        
-        ploidy_data_copy = ploidy_data.copy()
-        ploidy_data_copy['pair'] = ploidy_data_copy.apply(
-            lambda row: f"{row['method1']} vs {row['method2']}", axis=1
-        )
-        
-        pairs = sorted(ploidy_data_copy['pair'].unique())
-        data_by_pair = [ploidy_data_copy[ploidy_data_copy['pair'] == pair]['value'].values 
-                       for pair in pairs]
-        
-        bp = ax2.boxplot(data_by_pair, labels=pairs, patch_artist=True,
-                        widths=0.6, showfliers=True,
-                        boxprops=dict(linewidth=1.5),
-                        whiskerprops=dict(linewidth=1.5),
-                        capprops=dict(linewidth=1.5),
-                        medianprops=dict(linewidth=2.5, color='red'))
-        
-        for patch in bp['boxes']:
-            patch.set_facecolor('#DC143C')  # Crimson for polyploid focus
-            patch.set_alpha(0.7)
-        
-        ax2.set_ylabel('Polyploid Species Agreement\n(0 = Same Species, 1 = Different Species)', 
-                      fontsize=12, fontweight='bold')
-        ax2.set_xlabel('Method Pair', fontsize=12, fontweight='bold')
-        ax2.set_title('Distribution of Polyploid Species Agreement\nby Method Pair',
-                     fontsize=14, fontweight='bold', pad=15)
-        ax2.grid(True, alpha=0.25, axis='y', linestyle='--')
-        plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45, ha='right')
-
-        # ========================================================================
-        # Subplot 3: Per-network polyploid identification differences
-        # ========================================================================
-        ax3 = fig.add_subplot(gs[1, :])
-        
-        # Create method pair identifier
-        ploidy_data_copy = ploidy_data.copy()
-        ploidy_data_copy['pair'] = ploidy_data_copy.apply(
-            lambda row: f"{row['method1']} vs {row['method2']}", axis=1
-        )
-        
-        # Pivot: network × pair
-        pivot = ploidy_data_copy.pivot_table(
-            index='network',
-            columns='pair',
-            values='value',
-            aggfunc='first'
-        )
-        
-        pivot.plot(kind='bar', ax=ax3, width=0.8, colormap='Set3', figsize=(16, 6))
-        
-        ax3.set_ylabel('Polyploid Species Agreement\n(0 = Same Species, 1 = Different Species)', fontsize=13, fontweight='bold')
-        ax3.set_xlabel('Network', fontsize=13, fontweight='bold')
-        ax3.set_title('Polyploid Species Agreement by Network\n(Shows which networks have high/low method agreement)',
-                     fontsize=14, fontweight='bold', pad=15)
-        ax3.legend(title='Method Pair', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
-        ax3.grid(True, alpha=0.25, axis='y', linestyle='--')
-        
-        plt.setp(ax3.xaxis.get_majorticklabels(), rotation=45, ha='right')
-
-        # Overall title
-        fig.suptitle('Polyploid Species Agreement Between Methods\n(Which species are identified as polyploid - Real Data)',
-                    fontsize=16, fontweight='bold', y=0.98)
+        ax.set_xlabel('Method', fontsize=13, fontweight='bold')
+        ax.set_ylabel('Method', fontsize=13, fontweight='bold')
+        ax.set_title('Polyploid Species Identification Agreement\n(Lower = More Agreement)',
+                    fontsize=15, fontweight='bold', pad=20)
 
         plt.tight_layout()
         fig.savefig(self.plots_dir / "08_polyploid_identification_agreement.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "08_polyploid_identification_agreement.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_dataset_agreement_ranking(self):
+        """Rank datasets by mean pairwise method agreement (lower distance = more agreement)"""
+        if self.valid_comparisons.empty:
+            return
+
+        # Use multiple key metrics to compute overall agreement
+        agreement_metrics = ['rf_distance', 'polyploid_species_jaccard', 'ret_leaf_jaccard.dist']
+        available_metrics = [m for m in agreement_metrics
+                            if m in self.valid_comparisons['metric'].values]
+
+        if not available_metrics:
+            print("  WARNING: No agreement metrics available for dataset ranking")
+            return
+
+        # Compute mean distance per network across all method pairs and metrics
+        metric_data = self.valid_comparisons[self.valid_comparisons['metric'].isin(available_metrics)]
+        network_means = metric_data.groupby('network')['value'].mean().sort_values()
+
+        fig, ax = plt.subplots(figsize=(12, max(6, len(network_means) * 0.4)))
+
+        colors = ['#2E8B57' if v < 0.3 else '#DE8F05' if v < 0.6 else '#DC143C'
+                  for v in network_means.values]
+        bars = ax.barh(network_means.index, network_means.values,
+                      color=colors, alpha=0.8, edgecolor='black', linewidth=1)
+
+        # Add value labels
+        for bar, val in zip(bars, network_means.values):
+            ax.text(val + 0.01, bar.get_y() + bar.get_height() / 2.,
+                   f'{val:.3f}', ha='left', va='center', fontsize=10, fontweight='bold')
+
+        ax.set_xlabel('Mean Pairwise Distance Across Methods\n(Lower = Higher Agreement)',
+                     fontsize=13, fontweight='bold')
+        ax.set_ylabel('Dataset', fontsize=13, fontweight='bold')
+        ax.set_title('Dataset Ranking by Method Agreement\n'
+                    f'(Averaged over: {", ".join(available_metrics)})',
+                    fontsize=15, fontweight='bold', pad=20)
+        ax.grid(True, alpha=0.25, axis='x', linestyle='--')
+
+        # Legend for color coding
+        from matplotlib.patches import Patch
+        legend_elements = [
+            Patch(facecolor='#2E8B57', edgecolor='black', label='High agreement (<0.3)'),
+            Patch(facecolor='#DE8F05', edgecolor='black', label='Moderate (0.3-0.6)'),
+            Patch(facecolor='#DC143C', edgecolor='black', label='Low agreement (>0.6)')
+        ]
+        ax.legend(handles=legend_elements, loc='lower right', fontsize=10)
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "09_dataset_agreement_ranking.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "09_dataset_agreement_ranking.png", bbox_inches='tight', dpi=300)
+        plt.close()
+
+    def plot_reticulation_counts_per_dataset(self):
+        """Show inferred reticulation count per method per dataset"""
+        if self.valid_comparisons.empty:
+            return
+
+        # num_rets_diff gives the DIFFERENCE, but we can also look at the raw bias
+        # num_rets_bias = method1_rets - method2_rets (signed)
+        # We need the raw counts. Extract from ploidy_diff or num_rets columns.
+        # Actually, the comparison data only has pairwise metrics, not raw per-method values.
+        # We can reconstruct relative counts from num_rets_bias if available.
+
+        # Use num_rets_bias to reconstruct relative reticulation counts
+        bias_data = self.valid_comparisons[self.valid_comparisons['metric'] == 'num_rets_bias']
+
+        if bias_data.empty:
+            print("  WARNING: No num_rets_bias data for reticulation count reconstruction")
+            return
+
+        # For each network, reconstruct relative reticulation counts
+        # If method1 - method2 = bias, we set method1 = bias (relative to method2=0)
+        # Then optimize to find consistent values
+        networks = bias_data['network'].unique()
+        all_records = []
+
+        for network in networks:
+            net_data = bias_data[bias_data['network'] == network]
+            methods = sorted(set(net_data['method1'].unique()) | set(net_data['method2'].unique()))
+
+            if len(methods) < 2:
+                continue
+
+            # Use least squares to reconstruct counts: for each pair, r[m1] - r[m2] = bias
+            # Set up system: minimize sum of (r[m1] - r[m2] - bias)^2 with mean(r) = 0
+            method_idx = {m: i for i, m in enumerate(methods)}
+            n = len(methods)
+
+            # Simple approach: set first method to 0, solve for rest
+            ret_counts = np.zeros(n)
+            solved = {0}
+
+            # Iteratively solve
+            for _ in range(n):
+                for _, row in net_data.iterrows():
+                    i = method_idx[row['method1']]
+                    j = method_idx[row['method2']]
+                    if i in solved and j not in solved:
+                        ret_counts[j] = ret_counts[i] - row['value']
+                        solved.add(j)
+                    elif j in solved and i not in solved:
+                        ret_counts[i] = ret_counts[j] + row['value']
+                        solved.add(i)
+
+            # Shift so minimum is 0 (relative counts)
+            ret_counts -= ret_counts.min()
+
+            for m, idx in method_idx.items():
+                all_records.append({
+                    'network': network,
+                    'method': m,
+                    'inferred_reticulations': ret_counts[idx]
+                })
+
+        if not all_records:
+            return
+
+        df = pd.DataFrame(all_records)
+
+        # Pivot for grouped bar chart
+        pivot = df.pivot_table(index='network', columns='method', values='inferred_reticulations')
+
+        fig, ax = plt.subplots(figsize=(max(14, len(pivot) * 0.8), 7))
+
+        # Use method colors
+        method_order = [m for m in METHOD_COLORS if m in pivot.columns]
+        remaining = [m for m in pivot.columns if m not in method_order]
+        method_order.extend(remaining)
+        pivot = pivot[[m for m in method_order if m in pivot.columns]]
+
+        colors = [METHOD_COLORS.get(m, '#CCCCCC') for m in pivot.columns]
+        pivot.plot(kind='bar', ax=ax, color=colors, width=0.8, edgecolor='black', linewidth=0.5)
+
+        ax.set_ylabel('Relative Inferred Reticulations', fontsize=13, fontweight='bold')
+        ax.set_xlabel('Dataset', fontsize=13, fontweight='bold')
+        ax.set_title('Inferred Reticulation Count by Method and Dataset\n(Relative scale per dataset, 0 = fewest reticulations)',
+                    fontsize=15, fontweight='bold', pad=20)
+        ax.legend(title='Method', bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.grid(True, alpha=0.25, axis='y', linestyle='--')
+        plt.xticks(rotation=45, ha='right')
+
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "10_reticulation_counts_per_dataset.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "10_reticulation_counts_per_dataset.png", bbox_inches='tight', dpi=300)
         plt.close()
 
     def generate_all_figures(self):
@@ -625,7 +678,12 @@ class RealDataAnalyzer:
 
         # Pairwise comparisons
         print("Plotting pairwise comparisons...")
-        metrics_to_plot = ['edit_distance_multree', 'rf_distance', 'num_rets_diff', 'polyploid_species_jaccard']
+        metrics_to_plot = [
+            'edit_distance_multree', 'rf_distance', 'num_rets_diff',
+            'polyploid_species_jaccard',
+            'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist',
+            'ploidy_diff.dist'
+        ]
         for metric in metrics_to_plot:
             print(f"  {metric}...")
             self.plot_pairwise_heatmap(metric)
@@ -647,8 +705,16 @@ class RealDataAnalyzer:
         print("Plotting polyploid identification agreement...")
         self.plot_polyploid_agreement()
 
+        # Dataset agreement ranking
+        print("Plotting dataset agreement ranking...")
+        self.plot_dataset_agreement_ranking()
+
+        # Reticulation counts per dataset
+        print("Plotting reticulation counts per dataset...")
+        self.plot_reticulation_counts_per_dataset()
+
         print(f"\n{'='*80}")
-        print(f"✓ Figure generation complete!")
+        print(f"Figure generation complete!")
         print(f"  Plots saved to: {self.plots_dir}")
         print(f"{'='*80}\n")
 
