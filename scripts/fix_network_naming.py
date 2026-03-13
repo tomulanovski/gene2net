@@ -32,6 +32,11 @@ import argparse
 from collections import defaultdict
 
 
+def is_alloppnet_method(method_name):
+    """Check if a method name refers to AlloppNET (handles spelling variants)."""
+    return 'allop' in method_name.lower()
+
+
 def extract_leaf_names(tree_str):
     """Extract all leaf names from a Newick tree string.
 
@@ -149,24 +154,35 @@ def build_alloppnet_rename_map(alloppnet_names, canonical_names):
         if name in canonical_names:
             continue  # Already matches
 
-        # Try stripping trailing digit first
-        stripped = re.sub(r'\d+$', '', name)
+        # Try progressively stripping trailing digits (1 digit, 2 digits, etc.)
+        # This handles RSC040 -> RSC04 (strip 1 digit) vs madagascariense0 -> madagascariense
+        best_match = None
+        for n_strip in range(1, 5):
+            if len(name) <= n_strip:
+                break
+            if not name[-n_strip:].isdigit():
+                break
+            stripped = name[:-n_strip]
 
-        # Try direct match after stripping digits
-        if stripped in canonical_names:
-            rename_map[name] = stripped
-            continue
+            # Direct match
+            if stripped in canonical_names:
+                best_match = stripped
+                break
 
-        # Try removing underscores + stripping digits
-        no_underscore = stripped.replace('_', '')
-        if no_underscore in canonical_names:
-            rename_map[name] = no_underscore
-            continue
+            # Remove underscores
+            no_us = stripped.replace('_', '')
+            if no_us in canonical_names:
+                best_match = no_us
+                break
 
-        # Try normalized matching (case-insensitive, no underscores)
-        norm = no_underscore.lower()
-        if norm in canonical_normalized:
-            rename_map[name] = canonical_normalized[norm]
+            # Case-insensitive + no underscores
+            norm = no_us.lower()
+            if norm in canonical_normalized:
+                best_match = canonical_normalized[norm]
+                break
+
+        if best_match:
+            rename_map[name] = best_match
             continue
 
         # Try with original name (no digit stripping) but remove underscores
@@ -180,10 +196,32 @@ def build_alloppnet_rename_map(alloppnet_names, canonical_names):
             rename_map[name] = canonical_normalized[norm_orig]
             continue
 
-        # If we stripped digits and it doesn't match anything canonical,
-        # still strip the digits (polyploid appearing twice)
-        if stripped != name:
-            rename_map[name] = stripped
+        # Try prefix matching: AlloppNET name (without underscores) is a prefix of a canonical name
+        # e.g., cf_pinnatum -> cfpinnatum is prefix of cfpinnatumDLA2015
+        no_us_name = name.replace('_', '')
+        prefix_matches = [cn for cn in canonical_names if cn.startswith(no_us_name)]
+        if len(prefix_matches) == 1:
+            rename_map[name] = prefix_matches[0]
+            continue
+
+        # Also try prefix match after stripping trailing digits
+        found_prefix = False
+        for n_strip in range(1, 3):
+            if len(name) <= n_strip or not name[-n_strip:].isdigit():
+                break
+            stripped_no_us = name[:-n_strip].replace('_', '')
+            prefix_matches = [cn for cn in canonical_names if cn.startswith(stripped_no_us)]
+            if len(prefix_matches) == 1:
+                rename_map[name] = prefix_matches[0]
+                found_prefix = True
+                break
+
+        if not found_prefix:
+            # Last resort: if name ends in a single digit, strip it
+            # (polyploid appearing twice with suffix 0/1)
+            match = re.match(r'^(.+?)(\d)$', name)
+            if match:
+                rename_map[name] = match.group(1)
 
     return rename_map
 
@@ -249,8 +287,15 @@ def find_issues(dataset_name, methods_data):
         return issues
 
     # Get canonical names from non-AlloppNET methods
-    non_alloppnet = {m: d['unique_leaves'] for m, d in methods_data.items() if m != 'alloppnet'}
-    alloppnet_data = methods_data.get('alloppnet')
+    # Find the actual alloppnet method name (could be 'allopnet', 'alloppnet', etc.)
+    alloppnet_key = None
+    for m in methods_data:
+        if is_alloppnet_method(m):
+            alloppnet_key = m
+            break
+
+    non_alloppnet = {m: d['unique_leaves'] for m, d in methods_data.items() if not is_alloppnet_method(m)}
+    alloppnet_data = methods_data.get(alloppnet_key) if alloppnet_key else None
 
     # Check consistency among non-AlloppNET methods
     if len(non_alloppnet) > 1:
@@ -312,7 +357,13 @@ def fix_dataset(dataset_name, methods_data, issues, dry_run=False):
             if not rename_map:
                 continue
 
-            alloppnet_data = methods_data.get('alloppnet')
+            # Find the actual alloppnet key
+            alloppnet_key = None
+            for m in methods_data:
+                if is_alloppnet_method(m):
+                    alloppnet_key = m
+                    break
+            alloppnet_data = methods_data.get(alloppnet_key) if alloppnet_key else None
             if not alloppnet_data:
                 continue
 
