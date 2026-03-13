@@ -89,6 +89,14 @@ def run_pipeline(config_dict: dict, args):
     inventory_scanner = ResultInventory(config_dict)
     inventory_df = inventory_scanner.create_full_inventory()
 
+    # Filter to comparable networks only (if specified in config)
+    if comparable_networks:
+        excluded = set(inventory_df['network'].unique()) - set(comparable_networks)
+        if excluded:
+            print(f"Filtering to {len(comparable_networks)} comparable networks "
+                  f"(excluding {len(excluded)}: {', '.join(sorted(excluded))})")
+        inventory_df = inventory_df[inventory_df['network'].isin(comparable_networks)].copy()
+
     # Generate report
     completion_report = inventory_scanner.get_completion_report(inventory_df)
     inventory_scanner.print_completion_report(completion_report)
