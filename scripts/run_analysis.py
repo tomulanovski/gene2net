@@ -15,6 +15,7 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 import yaml
+import pandas as pd
 
 # Add scripts directory to path for imports (must be first to avoid conflicts)
 scripts_dir = Path(__file__).parent.resolve()
@@ -113,6 +114,41 @@ def run_pipeline(config_dict: dict, args):
         return inventory_df, None
 
     # ========================================================================
+    # PHASE 1b: Collect Per-Method Network Statistics
+    # ========================================================================
+    print(f"\n{'='*80}")
+    print(f"PHASE 1b: Collect Per-Method Network Statistics")
+    print(f"{'='*80}\n")
+
+    available = inventory_df[inventory_df['exists']].copy()
+    available = available[available['method'] != 'paper']
+    method_stats_records = []
+    for _, row in available.iterrows():
+        try:
+            engine_tmp = ComparisonEngine(str(cache_dir))
+            rt = engine_tmp.load_network(row['network_path'])
+            if rt is not None:
+                lc = rt.get_leaf_counts()
+                polyploids = {k: v for k, v in lc.items() if v > 1}
+                method_stats_records.append({
+                    'network': row['network'],
+                    'method': row['method'],
+                    'reticulation_count': rt.get_reticulation_count(),
+                    'num_species': len(lc),
+                    'num_polyploids': len(polyploids),
+                })
+                print(f"  {row['network']}/{row['method']}: "
+                      f"{rt.get_reticulation_count()} rets, {len(lc)} species, "
+                      f"{len(polyploids)} polyploids")
+        except Exception as e:
+            print(f"  {row['network']}/{row['method']}: ERROR - {e}")
+
+    method_stats_df = pd.DataFrame(method_stats_records)
+    method_stats_file = output_dir / "method_network_stats.csv"
+    method_stats_df.to_csv(method_stats_file, index=False)
+    print(f"\nMethod stats saved to: {method_stats_file}")
+
+    # ========================================================================
     # PHASE 2: Compute Pairwise Comparisons
     # ========================================================================
     print(f"\n{'='*80}")
@@ -157,7 +193,8 @@ def run_pipeline(config_dict: dict, args):
             comparisons_file=str(comparisons_file),
             inventory_file=str(inventory_file),
             output_dir=str(output_dir),
-            comparable_networks=comparable_networks
+            comparable_networks=comparable_networks,
+            method_stats_file=str(method_stats_file)
         )
         analyzer.generate_all_figures()
 

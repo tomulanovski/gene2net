@@ -51,7 +51,7 @@ class RealDataAnalyzer:
     """Analyze and visualize results for real data pairwise comparisons"""
 
     def __init__(self, comparisons_file: str, inventory_file: str, output_dir: str,
-                 comparable_networks: list = None):
+                 comparable_networks: list = None, method_stats_file: str = None):
         """
         Initialize analyzer
 
@@ -60,6 +60,7 @@ class RealDataAnalyzer:
             inventory_file: Path to inventory CSV
             output_dir: Output directory for plots
             comparable_networks: List of network names to use for completion rate calculation
+            method_stats_file: Path to per-method network stats CSV (reticulation counts etc.)
         """
         self.output_dir = Path(output_dir)
         self.plots_dir = self.output_dir / "plots"
@@ -67,6 +68,7 @@ class RealDataAnalyzer:
         self.plots_dir.mkdir(parents=True, exist_ok=True)
         self.tables_dir.mkdir(parents=True, exist_ok=True)
         self.comparable_networks = comparable_networks
+        self.method_stats = pd.read_csv(method_stats_file) if method_stats_file else None
 
         # Load data
         self.comparisons = pd.read_csv(comparisons_file)
@@ -615,78 +617,22 @@ class RealDataAnalyzer:
         plt.close()
 
     def plot_reticulation_counts_per_dataset(self):
-        """Show inferred reticulation count per method per dataset"""
-        if self.valid_comparisons.empty:
+        """Show actual inferred reticulation count per method per dataset"""
+        if self.method_stats is None or self.method_stats.empty:
+            print("  WARNING: No method_network_stats data for reticulation count plot")
             return
 
-        # num_rets_diff gives the DIFFERENCE, but we can also look at the raw bias
-        # num_rets_bias = method1_rets - method2_rets (signed)
-        # We need the raw counts. Extract from ploidy_diff or num_rets columns.
-        # Actually, the comparison data only has pairwise metrics, not raw per-method values.
-        # We can reconstruct relative counts from num_rets_bias if available.
-
-        # Use num_rets_bias to reconstruct relative reticulation counts
-        bias_data = self.valid_comparisons[self.valid_comparisons['metric'] == 'num_rets_bias']
-
-        if bias_data.empty:
-            print("  WARNING: No num_rets_bias data for reticulation count reconstruction")
-            return
-
-        # For each network, reconstruct relative reticulation counts
-        # If method1 - method2 = bias, we set method1 = bias (relative to method2=0)
-        # Then optimize to find consistent values
-        networks = bias_data['network'].unique()
-        all_records = []
-
-        for network in networks:
-            net_data = bias_data[bias_data['network'] == network]
-            methods = sorted(set(net_data['method1'].unique()) | set(net_data['method2'].unique()))
-
-            if len(methods) < 2:
-                continue
-
-            # Use least squares to reconstruct counts: for each pair, r[m1] - r[m2] = bias
-            # Set up system: minimize sum of (r[m1] - r[m2] - bias)^2 with mean(r) = 0
-            method_idx = {m: i for i, m in enumerate(methods)}
-            n = len(methods)
-
-            # Simple approach: set first method to 0, solve for rest
-            ret_counts = np.zeros(n)
-            solved = {0}
-
-            # Iteratively solve
-            for _ in range(n):
-                for _, row in net_data.iterrows():
-                    i = method_idx[row['method1']]
-                    j = method_idx[row['method2']]
-                    if i in solved and j not in solved:
-                        ret_counts[j] = ret_counts[i] - row['value']
-                        solved.add(j)
-                    elif j in solved and i not in solved:
-                        ret_counts[i] = ret_counts[j] + row['value']
-                        solved.add(i)
-
-            # Shift so minimum is 0 (relative counts)
-            ret_counts -= ret_counts.min()
-
-            for m, idx in method_idx.items():
-                all_records.append({
-                    'network': network,
-                    'method': m,
-                    'inferred_reticulations': ret_counts[idx]
-                })
-
-        if not all_records:
-            return
-
-        df = pd.DataFrame(all_records)
+        df = self.method_stats.copy()
 
         # Pivot for grouped bar chart
-        pivot = df.pivot_table(index='network', columns='method', values='inferred_reticulations')
+        pivot = df.pivot_table(index='network', columns='method', values='reticulation_count')
+
+        if pivot.empty:
+            return
 
         fig, ax = plt.subplots(figsize=(max(14, len(pivot) * 0.8), 7))
 
-        # Use method colors
+        # Use method colors in consistent order
         method_order = [m for m in METHOD_COLORS if m in pivot.columns]
         remaining = [m for m in pivot.columns if m not in method_order]
         method_order.extend(remaining)
@@ -695,12 +641,13 @@ class RealDataAnalyzer:
         colors = [METHOD_COLORS.get(m, '#CCCCCC') for m in pivot.columns]
         pivot.plot(kind='bar', ax=ax, color=colors, width=0.8, edgecolor='black', linewidth=0.5)
 
-        ax.set_ylabel('Relative Inferred Reticulations', fontsize=13, fontweight='bold')
+        ax.set_ylabel('Inferred Reticulations', fontsize=13, fontweight='bold')
         ax.set_xlabel('Dataset', fontsize=13, fontweight='bold')
-        ax.set_title('Inferred Reticulation Count by Method and Dataset\n(Relative scale per dataset, 0 = fewest reticulations)',
+        ax.set_title('Inferred Reticulation Count by Method and Dataset',
                     fontsize=15, fontweight='bold', pad=20)
         ax.legend(title='Method', bbox_to_anchor=(1.05, 1), loc='upper left')
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
+        ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
         plt.xticks(rotation=45, ha='right')
 
         plt.tight_layout()
