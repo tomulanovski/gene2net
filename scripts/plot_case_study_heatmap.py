@@ -149,7 +149,15 @@ def main():
                  fontsize=15, fontweight='bold', y=1.02)
     plt.tight_layout()
 
-    output_path = args.output or f'{args.dataset}_heatmap.pdf'
+    # Default output: analysis/real_data_summary/plots/{dataset}/
+    if args.output:
+        output_path = args.output
+    else:
+        from pathlib import Path
+        plots_dir = Path(args.comparisons_csv).parent / 'plots' / args.dataset
+        plots_dir.mkdir(parents=True, exist_ok=True)
+        output_path = str(plots_dir / 'pairwise_heatmap.pdf')
+
     fig.savefig(output_path, dpi=args.dpi, bbox_inches='tight')
     print(f"Saved: {output_path}")
 
