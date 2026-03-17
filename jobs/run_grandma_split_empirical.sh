@@ -156,7 +156,7 @@ python "$GRANDMA_SPLIT_SCRIPT" \
     -s "$SPECIES_TREE" \
     -o "$OUTPUT_DIR" \
     -m split \
-    -c 15   \
+    -c 8   \
     -i 50 \
     -p ${SLURM_CPUS_PER_TASK} \
     --plot \
