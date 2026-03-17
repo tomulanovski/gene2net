@@ -17,7 +17,7 @@ methods:
     output_file: "network.tre"
   grandma_split:
     directory: "grandma_split"
-    output_file: "network.tre"
+    output_file: "final_multree.tre"
   alloppnet:
     directory: "allopnet"
     output_file: "network.tre"
