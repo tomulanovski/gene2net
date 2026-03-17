@@ -140,8 +140,8 @@ class ReticulateTree:
 
     @staticmethod
     def is_reticulation_node(G, node):
-        ''' Check if a DAG node is a reticulation node. '''
-        return G.in_degree(node) > 1
+        ''' Check if a DAG node is a reticulation node (including autopolyploidy nodes). '''
+        return G.in_degree(node) > 1 or G.nodes[node].get('autopolyploidy', False)
 
     # ───── MODULE: From simple tree to network ─────
 
@@ -245,6 +245,10 @@ class ReticulateTree:
             preds = list(G.predecessors(node))
             succs = list(G.successors(node))
 
+            # Skip autopolyploidy nodes - they represent WGD events and should be preserved
+            if G.nodes[node].get('autopolyploidy', False):
+                continue
+
             # Here we can't use `is_reticulation_node` because it checks in-degree > 1,
             # which is still not the case for these temporary reticulation nodes (to be removed).
             if 'ete' not in G.nodes[node] and len(preds) == 1 and len(succs) == 1:
@@ -327,6 +331,10 @@ class ReticulateTree:
                     iso_parent = iso.up
                     iso_pid = id(iso_parent) if iso_parent else None
 
+                    # Detect autopolyploidy: identical subtrees under the same parent
+                    if iso_pid == pid:
+                        G.nodes[retic_node]['autopolyploidy'] = True
+
                     # If the DAG contains the edge we expect, replace it so the parent's edge now goes to the retic node
                     if iso_pid and G.has_edge(iso_pid, id(iso)):
                         G.remove_edge(iso_pid, id(iso))
@@ -405,9 +413,15 @@ class ReticulateTree:
 
                     for iso in isomorphic_trees[1:]:
                         iso_parent = iso.up
-                        if iso_parent and G.has_edge(id(iso_parent), id(iso)):
-                            G.remove_edge(id(iso_parent), id(iso))
-                            G.add_edge(id(iso_parent), retic_node)
+                        iso_pid = id(iso_parent) if iso_parent else None
+
+                        # Detect autopolyploidy: identical subtrees under the same parent
+                        if iso_pid == pid:
+                            G.nodes[retic_node]['autopolyploidy'] = True
+
+                        if iso_parent and G.has_edge(iso_pid, id(iso)):
+                            G.remove_edge(iso_pid, id(iso))
+                            G.add_edge(iso_pid, retic_node)
                         G.remove_nodes_from([id(n) for n in iso.traverse()])
 
         cls._simplify_redundant_reticulations(G)
@@ -753,10 +767,12 @@ class ReticulateTree:
         for ret in self.retnodes:
             parents = list(self.dag.predecessors(ret))
             if len(parents) != 2:
-                # Not a proper binary reticulation
-                #raise ValueError(f'Reticulation node {ret} does not have exactly two parents: {parents}')
-                print(f'Warning: Reticulation node {ret} does not have exactly two parents: {parents}')
-                print('This indicates that a Strict MUL-to-Net mode was used on a malformed inference.')
+                if self.dag.nodes[ret].get('autopolyploidy', False):
+                    # Autopolyploidy node has 1 parent - this is expected
+                    pass
+                else:
+                    print(f'Warning: Reticulation node {ret} does not have exactly two parents: {parents}')
+                    print('This indicates that a Strict MUL-to-Net mode was used on a malformed inference.')
 
             clades = []
             for parent in parents:
