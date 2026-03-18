@@ -121,12 +121,14 @@ def generate_one_mul_tree(index, tree_height=10_000_000.0, mock=False):
         # Use SimPhy birth-death (published simulator — Mallo et al. 2016)
         with tempfile.TemporaryDirectory() as tmpdir:
             simphy_dir = os.path.join(tmpdir, f"simphy_sp_{index}")
+            print(f"  Running SimPhy for species tree (n={n_species}, seed={seed})...")
             species_tree = run_simphy_species_tree(
                 n_species=n_species,
                 output_dir=simphy_dir,
                 tree_height=tree_height,
                 seed=seed,
             )
+            print(f"  SimPhy generated tree with {len(species_tree.get_leaves())} leaves")
 
     # Rename leaves to sp_0, sp_1, ... for consistency
     for i, leaf in enumerate(sorted(species_tree.get_leaves(), key=lambda l: l.name)):
