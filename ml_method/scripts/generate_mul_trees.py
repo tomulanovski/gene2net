@@ -130,9 +130,10 @@ def generate_one_mul_tree(index, tree_height=10_000_000.0, mock=False):
             )
             print(f"  SimPhy generated tree with {len(species_tree.get_leaves())} leaves")
 
-    # Rename leaves to sp_0, sp_1, ... for consistency
+    # Rename leaves to sp00, sp01, ... (zero-padded, no underscores to avoid substring issues)
+    n_digits = len(str(n_species - 1))
     for i, leaf in enumerate(sorted(species_tree.get_leaves(), key=lambda l: l.name)):
-        leaf.name = f"sp_{i}"
+        leaf.name = f"sp{i:0{n_digits}d}"
 
     # Add random WGD events
     mul_tree = species_tree.copy("deepcopy")
