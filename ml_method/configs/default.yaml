@@ -1,0 +1,23 @@
+model:
+  embed_dim: 64
+  num_gat_layers: 3
+  num_attention_heads: 8
+  conv_type: gat          # options: gat, gcn, gin, sage
+  dropout: 0.2
+
+training:
+  lr: 1e-3
+  weight_decay: 1e-4
+  batch_size: 4
+  max_epochs: 200
+  patience: 20
+  num_gene_trees: 300
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+  lambda_wgd: 1.0
+  lambda_partner: 1.0
+  lambda_count: 0.1
+
+data:
+  max_species: 100
+  max_ploidy: 10

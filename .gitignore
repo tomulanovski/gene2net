@@ -22,6 +22,10 @@ simulations/analysis/**/cache/
 !simulations/md_files/**
 !simulations/*.md
 
+# --- Keep ml_method folder ---
+!ml_method/
+!ml_method/**
+
 # --- Always keep key files ---
 !.gitignore
 !README.md
