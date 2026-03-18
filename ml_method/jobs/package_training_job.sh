@@ -10,6 +10,8 @@
 
 set -euo pipefail
 
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
+
 CONDA_PATH=/groups/itay_mayrose/tomulanovski/miniconda3
 source "$CONDA_PATH/etc/profile.d/conda.sh"
 conda activate gene2net
