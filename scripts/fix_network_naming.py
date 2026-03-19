@@ -279,6 +279,70 @@ def analyze_dataset(dataset_path, dataset_name):
     return methods
 
 
+def detect_genus_prefix(method_names, canonical_names):
+    """Detect if a method's leaf names have a genus prefix not present in canonical names.
+
+    For example, if method has ['Brachypodiumsylvaticum', 'Brachypodiumdistachyon']
+    and canonical has ['sylvaticum', 'distachyon'], returns 'Brachypodium'.
+    Returns None if no common prefix is detected.
+    """
+    if not method_names or not canonical_names:
+        return None
+
+    unique_method = set(method_names)
+    # Check if any method names already match canonical - if so, no prefix issue
+    if unique_method & canonical_names:
+        return None
+
+    # Find the longest common prefix among all method names
+    sorted_names = sorted(unique_method)
+    if len(sorted_names) < 2:
+        return None
+
+    first, last = sorted_names[0], sorted_names[-1]
+    prefix = ""
+    for i, c in enumerate(first):
+        if i < len(last) and first[i] == last[i]:
+            prefix += c
+        else:
+            break
+
+    if len(prefix) < 3:
+        return None
+
+    # Check if stripping the prefix maps most method names to canonical names
+    matches = 0
+    for name in unique_method:
+        stripped = name[len(prefix):]
+        if stripped in canonical_names:
+            matches += 1
+
+    # Require at least 50% match rate
+    if matches / len(unique_method) >= 0.5:
+        return prefix
+
+    return None
+
+
+def build_prefix_rename_map(method_names, canonical_names, prefix):
+    """Build rename map by stripping a genus prefix from method names.
+
+    Returns dict mapping old names to canonical names.
+    """
+    rename_map = {}
+    for name in set(method_names):
+        if name.startswith(prefix):
+            stripped = name[len(prefix):]
+            if stripped in canonical_names:
+                rename_map[name] = stripped
+            else:
+                # Try case-insensitive match
+                canonical_lower = {cn.lower(): cn for cn in canonical_names}
+                if stripped.lower() in canonical_lower:
+                    rename_map[name] = canonical_lower[stripped.lower()]
+    return rename_map
+
+
 def find_issues(dataset_name, methods_data):
     """Find naming issues within a dataset across methods."""
     issues = []
@@ -297,12 +361,50 @@ def find_issues(dataset_name, methods_data):
     non_alloppnet = {m: d['unique_leaves'] for m, d in methods_data.items() if not is_alloppnet_method(m)}
     alloppnet_data = methods_data.get(alloppnet_key) if alloppnet_key else None
 
-    # Check consistency among non-AlloppNET methods
+    # Build canonical names from all non-AlloppNET methods that don't have prefix issues
+    # First pass: find methods with potential prefix issues
+    # Use the method with the most overlap with others as the canonical source
+    canonical = set()
+    for names in non_alloppnet.values():
+        canonical.update(names)
+
+    # Check each method for genus prefix naming (e.g., grandma_split with "Brachypodium" prefix)
+    for method_name, method_data in methods_data.items():
+        if is_alloppnet_method(method_name):
+            continue  # AlloppNET handled separately below
+
+        method_unique = set(method_data['unique_leaves'])
+        # Build canonical from OTHER methods only
+        other_canonical = set()
+        for m, d in methods_data.items():
+            if m != method_name and not is_alloppnet_method(m):
+                other_canonical.update(d['unique_leaves'])
+
+        if not other_canonical:
+            continue
+
+        # Check if this method has a genus prefix
+        prefix = detect_genus_prefix(method_data['leaves'], other_canonical)
+        if prefix:
+            rename_map = build_prefix_rename_map(method_data['leaves'], other_canonical, prefix)
+            if rename_map:
+                issues.append({
+                    'type': 'prefix_naming',
+                    'method': method_name,
+                    'prefix': prefix,
+                    'extra_names': sorted(method_unique - other_canonical),
+                    'rename_map': rename_map
+                })
+
+    # Check consistency among non-AlloppNET methods (excluding already-flagged prefix issues)
+    prefix_methods = {i['method'] for i in issues if i['type'] == 'prefix_naming'}
     if len(non_alloppnet) > 1:
         method_names = list(non_alloppnet.keys())
         for i in range(len(method_names)):
             for j in range(i + 1, len(method_names)):
                 m1, m2 = method_names[i], method_names[j]
+                if m1 in prefix_methods or m2 in prefix_methods:
+                    continue  # Already handled by prefix detection
                 s1 = set(non_alloppnet[m1])
                 s2 = set(non_alloppnet[m2])
                 only_in_1 = s1 - s2
@@ -352,30 +454,34 @@ def fix_dataset(dataset_name, methods_data, issues, dry_run=False):
     fixes_applied = []
 
     for issue in issues:
-        if issue['type'] == 'alloppnet_naming' and 'rename_map' in issue:
+        if issue['type'] in ('alloppnet_naming', 'prefix_naming') and 'rename_map' in issue:
             rename_map = issue['rename_map']
             if not rename_map:
                 continue
 
-            # Find the actual alloppnet key
-            alloppnet_key = None
-            for m in methods_data:
-                if is_alloppnet_method(m):
-                    alloppnet_key = m
-                    break
-            alloppnet_data = methods_data.get(alloppnet_key) if alloppnet_key else None
-            if not alloppnet_data:
+            # Determine which method to fix
+            if issue['type'] == 'alloppnet_naming':
+                target_key = None
+                for m in methods_data:
+                    if is_alloppnet_method(m):
+                        target_key = m
+                        break
+            else:
+                target_key = issue['method']
+
+            target_data = methods_data.get(target_key) if target_key else None
+            if not target_data:
                 continue
 
-            tree_file = alloppnet_data['tree_file']
-            original_content = alloppnet_data['tree_content']
+            tree_file = target_data['tree_file']
+            original_content = target_data['tree_content']
             new_content = apply_rename_to_tree(original_content, rename_map)
 
             if new_content != original_content:
                 fixes_applied.append({
                     'file': tree_file,
                     'rename_map': rename_map,
-                    'method': 'alloppnet'
+                    'method': target_key
                 })
 
                 if not dry_run:
@@ -444,6 +550,16 @@ def main():
                     print(f"    Only in {m1}: {issue['only_in_first']}")
                 if issue['only_in_second']:
                     print(f"    Only in {m2}: {issue['only_in_second']}")
+
+            elif issue['type'] == 'prefix_naming':
+                method = issue['method']
+                prefix = issue['prefix']
+                print(f"\n  Genus prefix naming in {method} (prefix: '{prefix}'):")
+                print(f"    Names not matching other methods: {issue['extra_names']}")
+                if issue.get('rename_map'):
+                    print(f"    Proposed renames:")
+                    for old, new in sorted(issue['rename_map'].items()):
+                        print(f"      {old} -> {new}")
 
             elif issue['type'] == 'alloppnet_naming':
                 print(f"\n  AlloppNET naming issues:")
