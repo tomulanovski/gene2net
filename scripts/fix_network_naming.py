@@ -243,6 +243,19 @@ def apply_rename_to_tree(tree_str, rename_map):
     return result
 
 
+# Map of method directory names to their output filenames
+METHOD_OUTPUT_FILES = {
+    'grampa': 'network.tre',
+    'polyphest': 'network.tre',
+    'padre': 'network.tre',
+    'mpallop': 'network.tre',
+    'grandma_split': 'final_multree.tre',
+    'allopnet': 'network.tre',
+    'alloppnet': 'network.tre',
+    'paper': 'network.tre',
+}
+
+
 def analyze_dataset(dataset_path, dataset_name):
     """Analyze naming consistency for one dataset."""
     networks_dir = os.path.join(dataset_path, 'networks')
@@ -252,10 +265,17 @@ def analyze_dataset(dataset_path, dataset_name):
     methods = {}
     for method_name in os.listdir(networks_dir):
         method_dir = os.path.join(networks_dir, method_name)
-        tree_file = os.path.join(method_dir, 'network.tre')
+        # Look up the correct output filename for this method
+        output_file = METHOD_OUTPUT_FILES.get(method_name, 'network.tre')
+        tree_file = os.path.join(method_dir, output_file)
 
         if not os.path.isfile(tree_file):
-            continue
+            # Fallback: try network.tre if method-specific file not found
+            fallback = os.path.join(method_dir, 'network.tre')
+            if os.path.isfile(fallback):
+                tree_file = fallback
+            else:
+                continue
 
         with open(tree_file) as f:
             content = f.read().strip()
