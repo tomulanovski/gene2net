@@ -101,8 +101,11 @@ for replicate in $(seq 1 $NUM_REPS); do
         continue
     fi
 
+    # Strip SimPhy suffixes: sp00_0_0 -> sp00, sp01_1_0 -> sp01, etc.
+    sed -i 's/\(sp[0-9]\+\)_[0-9]\+_[0-9]\+/\1/g' "$GENE_TREES_FILE"
+
     total_trees=$(wc -l < "$GENE_TREES_FILE")
-    echo "  Collected ${tree_count} files, ${total_trees} gene trees total"
+    echo "  Collected ${tree_count} files, ${total_trees} gene trees (suffixes stripped)"
 
     # Step 2: Run ASTRAL
     SPECIES_TREE_FILE="${REP_DIR}/astral_species.tre"
