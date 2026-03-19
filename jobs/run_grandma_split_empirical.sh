@@ -162,7 +162,6 @@ python "$GRANDMA_SPLIT_SCRIPT" \
     --plot \
     --debug \
     --v 3 \
-    --overwrite
 
 exit_code=$?
 end_time=$(date +%s)
