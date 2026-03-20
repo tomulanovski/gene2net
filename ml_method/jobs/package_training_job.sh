@@ -14,7 +14,7 @@ export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 
 CONDA_PATH=/groups/itay_mayrose/tomulanovski/miniconda3
 source "$CONDA_PATH/etc/profile.d/conda.sh"
-conda activate gene2net
+conda activate final_project
 
 BASE_DIR="/groups/itay_mayrose/tomulanovski/gene2net/ml_method"
 export PYTHONPATH="${PYTHONPATH:-}:${BASE_DIR}"
