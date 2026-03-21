@@ -133,22 +133,21 @@ def analyze_mul_trees(directory, relaxed_threshold=0.2):
             # Find the maximum number of copies any single species has
             max_copies = max(leaf_counts.values()) if leaf_counts else 0
 
-            # --- 3. COUNT AUTOPOLYPLOIDIZATION EVENTS (in MUL-tree before folding) ---
-            # This counts the number of WGD events, not the number of autopolyploid species
-            # E.g., Ding_2023 has 1 event (Rch clade duplication) → 7 autopolyploid species
-            num_auto_events = count_autopolyploid_events(rt_strict.tree)
+            # --- 3. COUNT AUTOPOLYPLOIDIZATION EVENTS ---
+            # Now counted during folding: auto = copies under same parent, allo = different parents
+            num_auto_events = rt_strict.get_auto_event_count()
 
             # --- 4. GET RELAXED STATS ---
             rt_relaxed = ReticulateTree(content, is_multree=True, threshold=relaxed_threshold, normalize=True)
             stats_relaxed = rt_relaxed.measure(printout=False)
 
             # --- 5. CALCULATE POLYPLOIDIZATION EVENTS ---
-            # H_Strict = reticulations in network = allopolyploid/hybridization events
-            # Num_Auto_Events = autopolyploidization events (WGD creating identical clades)
-            h_strict = stats_strict['reticulation_count']
+            # H_Strict = allo events only (hybridization/allopolyploidization)
+            # H_Relaxed = total events from relaxed folding
+            h_strict = rt_strict.get_allo_event_count()
             h_relaxed = stats_relaxed['reticulation_count']
 
-            # Total WGD = autopolyploidization + allopolyploidization (reticulations)
+            # Total WGD = autopolyploidization + allopolyploidization
             total_wgd = num_auto_events + h_strict
 
             # --- 6. COMPILE ROW ---

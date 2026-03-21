@@ -323,6 +323,9 @@ class ReticulateTree:
                 pid = id(parent_leader)
                 nid_leader = id(leader)
 
+                # Count distinct parents among alive nodes for event classification
+                alive_parents = [pid]  # leader's parent (leader is always alive at this point)
+
                 # Insert reticulation node above leader in G
                 retic_node = cls._insert_reticulation(G, pid, nid_leader)
 
@@ -330,6 +333,10 @@ class ReticulateTree:
                 for iso in group_nodes[1:]:
                     iso_parent = iso.up
                     iso_pid = id(iso_parent) if iso_parent else None
+
+                    # Track parent only if this iso is still alive in the DAG
+                    if iso_pid and id(iso) in G:
+                        alive_parents.append(iso_pid)
 
                     # Detect autopolyploidy: identical subtrees under the same parent
                     if iso_pid == pid:
@@ -343,6 +350,12 @@ class ReticulateTree:
                     # Remove the isomorphic subtree nodes from the DAG (exactly as before)
                     to_delete = [id(n) for n in iso.traverse()]
                     G.remove_nodes_from(to_delete)
+
+                # Store event counts: auto = copies under same parent, allo = connections between parents
+                k = len(alive_parents)
+                d = len(set(alive_parents))
+                G.nodes[retic_node]['auto_events'] = k - d
+                G.nodes[retic_node]['allo_events'] = d - 1
 
         # Remove reticulation nodes that have exactly one predecessor and one successor
         cls._simplify_redundant_reticulations(G)
@@ -409,11 +422,19 @@ class ReticulateTree:
 
                     pid = id(parent_leader)
                     nid_leader = id(leader)
+
+                    # Count distinct parents among alive nodes for event classification
+                    alive_parents = [pid]  # leader's parent
+
                     retic_node = cls._insert_reticulation(G, pid, nid_leader)
 
                     for iso in isomorphic_trees[1:]:
                         iso_parent = iso.up
                         iso_pid = id(iso_parent) if iso_parent else None
+
+                        # Track parent only if this iso is still alive in the DAG
+                        if iso_pid and id(iso) in G:
+                            alive_parents.append(iso_pid)
 
                         # Detect autopolyploidy: identical subtrees under the same parent
                         if iso_pid == pid:
@@ -423,6 +444,12 @@ class ReticulateTree:
                             G.remove_edge(iso_pid, id(iso))
                             G.add_edge(iso_pid, retic_node)
                         G.remove_nodes_from([id(n) for n in iso.traverse()])
+
+                    # Store event counts
+                    k = len(alive_parents)
+                    d = len(set(alive_parents))
+                    G.nodes[retic_node]['auto_events'] = k - d
+                    G.nodes[retic_node]['allo_events'] = d - 1
 
         cls._simplify_redundant_reticulations(G)
         return G
@@ -726,7 +753,34 @@ class ReticulateTree:
         return [n for n in self.dag.nodes() if self.is_reticulation_node(self.dag, n)]
     
     def get_reticulation_count(self):
-        return len(self.retnodes)
+        '''
+        Count total reticulation events (auto + allo).
+        Uses event counts stored during folding when available,
+        falls back to in_degree - 1 for extended Newick input.
+        '''
+        count = 0
+        for n in self.retnodes:
+            if 'auto_events' in self.dag.nodes[n]:
+                count += self.dag.nodes[n]['auto_events'] + self.dag.nodes[n]['allo_events']
+            else:
+                # Extended Newick input: no folding, use in-degree
+                count += max(self.dag.in_degree(n) - 1, 1)
+        return count
+
+    def get_auto_event_count(self):
+        '''Count autopolyploidization events (copies under same parent).'''
+        return sum(self.dag.nodes[n].get('auto_events', 0) for n in self.retnodes)
+
+    def get_allo_event_count(self):
+        '''Count allopolyploidization events (copies under different parents).'''
+        count = 0
+        for n in self.retnodes:
+            if 'allo_events' in self.dag.nodes[n]:
+                count += self.dag.nodes[n]['allo_events']
+            else:
+                # Extended Newick input: all events assumed allo
+                count += max(self.dag.in_degree(n) - 1, 1)
+        return count
     
     def get_reticulation_leaves(self):
         '''
