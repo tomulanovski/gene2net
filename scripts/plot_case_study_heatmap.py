@@ -91,9 +91,13 @@ def main():
     parser.add_argument('comparisons_csv', help='Path to comparisons_raw.csv')
     parser.add_argument('--dataset', required=True, help='Dataset name (e.g., Wu_2015)')
     parser.add_argument('--metrics', nargs='+',
-                        default=['edit_distance_multree', 'polyploid_species_jaccard'],
-                        help='Metrics to plot (default: edit_distance_multree polyploid_species_jaccard)')
+                        default=['edit_distance_multree', 'ret_leaf_jaccard.dist',
+                                 'ret_sisters_jaccard.dist', 'polyploid_species_jaccard',
+                                 'num_rets_diff'],
+                        help='Metrics to plot')
     parser.add_argument('--output', help='Output directory (default: plots/{dataset}/ next to CSV)')
+    parser.add_argument('--combined', action='store_true',
+                        help='Also generate a single combined figure with all metrics side by side')
     parser.add_argument('--dpi', type=int, default=300)
 
     args = parser.parse_args()
@@ -127,12 +131,8 @@ def main():
         plots_dir = Path(args.comparisons_csv).parent / 'plots' / args.dataset
     plots_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate one figure per metric
-    for metric in available_metrics:
-        df_metric = df_dataset[df_dataset['metric'] == metric]
-        matrix = make_symmetric_matrix(df_metric, all_methods)
-
-        # Determine scale
+    # Helper to get scale and format for a metric
+    def get_scale(metric, matrix):
         valid_vals = matrix[~np.isnan(matrix) & ~np.eye(len(all_methods), dtype=bool)]
         if len(valid_vals) > 0:
             vmax = max(1.0, np.nanmax(valid_vals)) if metric == 'num_rets_diff' else 1.0
@@ -140,22 +140,51 @@ def main():
         else:
             vmax = 1.0
             fmt = '.2f'
+        return vmax, fmt
 
+    # Generate one figure per metric
+    for metric in available_metrics:
+        df_metric = df_dataset[df_dataset['metric'] == metric]
+        matrix = make_symmetric_matrix(df_metric, all_methods)
+        vmax, fmt = get_scale(metric, matrix)
         title = METRIC_DISPLAY.get(metric, metric)
 
         fig, ax = plt.subplots(1, 1, figsize=(6, 5.5))
         im = plot_heatmap(ax, matrix, display_labels, title, vmin=0, vmax=vmax, fmt=fmt)
-
-        # Add colorbar
         cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, shrink=0.8)
         cbar.ax.tick_params(labelsize=9)
-
         plt.tight_layout()
 
-        # Save PDF and PNG
         safe_metric = metric.replace('.', '_')
         pdf_path = plots_dir / f'{safe_metric}.pdf'
         png_path = plots_dir / f'{safe_metric}.png'
+        fig.savefig(str(pdf_path), dpi=args.dpi, bbox_inches='tight')
+        fig.savefig(str(png_path), dpi=args.dpi, bbox_inches='tight')
+        print(f"Saved: {pdf_path}")
+        plt.close(fig)
+
+    # Generate combined figure with all metrics side by side
+    if args.combined and len(available_metrics) > 1:
+        n_panels = len(available_metrics)
+        fig_width = 5.5 * n_panels + 1.5
+        fig, axes = plt.subplots(1, n_panels, figsize=(fig_width, 5.5))
+        if n_panels == 1:
+            axes = [axes]
+
+        for idx, metric in enumerate(available_metrics):
+            df_metric = df_dataset[df_dataset['metric'] == metric]
+            matrix = make_symmetric_matrix(df_metric, all_methods)
+            vmax, fmt = get_scale(metric, matrix)
+            title = METRIC_DISPLAY.get(metric, metric)
+
+            im = plot_heatmap(axes[idx], matrix, display_labels, title, vmin=0, vmax=vmax, fmt=fmt)
+            cbar = fig.colorbar(im, ax=axes[idx], fraction=0.046, pad=0.04, shrink=0.8)
+            cbar.ax.tick_params(labelsize=9)
+
+        plt.tight_layout()
+
+        pdf_path = plots_dir / 'combined_heatmaps.pdf'
+        png_path = plots_dir / 'combined_heatmaps.png'
         fig.savefig(str(pdf_path), dpi=args.dpi, bbox_inches='tight')
         fig.savefig(str(png_path), dpi=args.dpi, bbox_inches='tight')
         print(f"Saved: {pdf_path}")
