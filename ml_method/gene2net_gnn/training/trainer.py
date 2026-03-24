@@ -97,26 +97,26 @@ class Trainer:
         self.config = config
 
         self.loss_fn = Gene2NetLoss(
-            lambda_wgd=config.get("lambda_wgd", 1.0),
-            lambda_partner=config.get("lambda_partner", 1.0),
-            lambda_count=config.get("lambda_count", 0.1),
-            focal_alpha=config.get("focal_alpha", 0.25),
-            focal_gamma=config.get("focal_gamma", 2.0),
+            lambda_wgd=float(config.get("lambda_wgd", 1.0)),
+            lambda_partner=float(config.get("lambda_partner", 1.0)),
+            lambda_count=float(config.get("lambda_count", 0.1)),
+            focal_alpha=float(config.get("focal_alpha", 0.25)),
+            focal_gamma=float(config.get("focal_gamma", 2.0)),
         )
 
         self.optimizer = Adam(
             model.parameters(),
-            lr=config.get("lr", 1e-3),
-            weight_decay=config.get("weight_decay", 1e-4),
+            lr=float(config.get("lr", 1e-3)),
+            weight_decay=float(config.get("weight_decay", 1e-4)),
         )
         self.scheduler = ReduceLROnPlateau(
             self.optimizer, mode="min", factor=0.5, patience=10
         )
 
-        self.max_gene_trees = config.get("num_gene_trees", 300)
-        self.patience = config.get("patience", 20)
-        self.max_epochs = config.get("max_epochs", 200)
-        self.accumulation_steps = max(1, config.get("batch_size", 1))
+        self.max_gene_trees = int(config.get("num_gene_trees", 300))
+        self.patience = int(config.get("patience", 20))
+        self.max_epochs = int(config.get("max_epochs", 200))
+        self.accumulation_steps = max(1, int(config.get("batch_size", 1)))
 
     def train_epoch(self, train_samples: List[Gene2NetSample]):
         self.model.train()

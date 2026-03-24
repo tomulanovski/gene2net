@@ -57,7 +57,7 @@ def main():
 
     # Determine dimensions from data and config
     data_config = config.get("data", {})
-    max_species = data_config.get("max_species", 80)
+    max_species = int(data_config.get("max_species", 80))
     sample = train_samples[0]
     handcrafted_dim = sample.species_tree_node_features.shape[1]
 
@@ -65,12 +65,12 @@ def main():
     model_config = config.get("model", {})
     model = Gene2NetModel(
         n_species=max_species,
-        embed_dim=model_config.get("embed_dim", 64),
-        n_attention_heads=model_config.get("num_attention_heads", 8),
-        n_gat_layers=model_config.get("num_gat_layers", 3),
+        embed_dim=int(model_config.get("embed_dim", 64)),
+        n_attention_heads=int(model_config.get("num_attention_heads", 8)),
+        n_gat_layers=int(model_config.get("num_gat_layers", 3)),
         handcrafted_dim=handcrafted_dim,
-        conv_type=model_config.get("conv_type", "gat"),
-        dropout=model_config.get("dropout", 0.2),
+        conv_type=str(model_config.get("conv_type", "gat")),
+        dropout=float(model_config.get("dropout", 0.2)),
     )
     print(f"Model: {sum(p.numel() for p in model.parameters())} parameters")
 
