@@ -144,7 +144,7 @@ def main():
 
         n_wgd = 0
         if sample.labels and sample.labels.wgd_counts is not None:
-            n_wgd = int((sample.labels.wgd_counts > 0).sum())
+            n_wgd = sum(1 for c in sample.labels.wgd_counts if c > 0)
 
         print(f"[{idx:04d}] species={sample.n_species}, "
               f"gene_trees={len(sample.gene_tree_edge_indices)}, "
