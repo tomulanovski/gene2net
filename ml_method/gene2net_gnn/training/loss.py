@@ -4,18 +4,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def focal_loss(logits, targets, alpha=0.25, gamma=2.0):
-    """Focal loss for class imbalance.
+def focal_loss(logits, targets, alpha=0.25, gamma=2.0, class_weights=None):
+    """Focal loss for class imbalance with per-class weights.
 
     Args:
         logits: [B, C] raw logits
         targets: [B] class indices
-        alpha: weighting factor
+        alpha: base weighting factor
         gamma: focusing parameter (higher = more focus on hard examples)
+        class_weights: [C] per-class weights (e.g., upweight rare WGD classes)
     Returns:
         scalar loss
     """
-    ce_loss = F.cross_entropy(logits, targets, reduction='none')
+    if class_weights is not None:
+        ce_loss = F.cross_entropy(logits, targets, weight=class_weights, reduction='none')
+    else:
+        ce_loss = F.cross_entropy(logits, targets, reduction='none')
     pt = torch.exp(-ce_loss)  # probability of correct class
     focal_weight = alpha * (1 - pt) ** gamma
     return (focal_weight * ce_loss).mean()
@@ -27,21 +31,31 @@ class Gene2NetLoss(nn.Module):
     L = lambda_wgd * L_wgd + lambda_partner * L_partner + lambda_count * L_count
     """
     def __init__(self, lambda_wgd=1.0, lambda_partner=1.0, lambda_count=0.1,
-                 focal_alpha=0.25, focal_gamma=2.0):
+                 focal_alpha=0.25, focal_gamma=2.0,
+                 wgd_class_weights=None):
         super().__init__()
         self.lambda_wgd = lambda_wgd
         self.lambda_partner = lambda_partner
         self.lambda_count = lambda_count
         self.focal_alpha = focal_alpha
         self.focal_gamma = focal_gamma
+        # Class weights: [weight_for_0_events, weight_for_1, weight_for_2, weight_for_3]
+        # Higher weight for rare classes forces the model to pay attention to WGD edges
+        if wgd_class_weights is not None:
+            self.register_buffer("wgd_class_weights", torch.tensor(wgd_class_weights, dtype=torch.float))
+        else:
+            # Default: heavily upweight WGD classes
+            self.register_buffer("wgd_class_weights", torch.tensor([1.0, 10.0, 10.0, 10.0], dtype=torch.float))
 
     def wgd_loss(self, wgd_logits, wgd_targets, mask):
         """Focal loss on WGD count prediction, masked for unmappable edges."""
         if mask.sum() == 0:
             return torch.tensor(0.0, device=wgd_logits.device)
+        weights = self.wgd_class_weights.to(wgd_logits.device)
         return focal_loss(
             wgd_logits[mask], wgd_targets[mask],
-            alpha=self.focal_alpha, gamma=self.focal_gamma
+            alpha=self.focal_alpha, gamma=self.focal_gamma,
+            class_weights=weights,
         )
 
     def partner_loss(self, partner_logits, partner_targets, wgd_mask):

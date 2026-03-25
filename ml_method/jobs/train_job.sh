@@ -15,6 +15,7 @@ source "$CONDA_PATH/etc/profile.d/conda.sh"
 conda activate final_project
 
 export PYTHONPATH="${PYTHONPATH:-}:${BASE_DIR}"
+export PYTHONUNBUFFERED=1
 
 echo "============================================================================"
 echo "Gene2Net-GNN Training"

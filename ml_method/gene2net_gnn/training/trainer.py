@@ -195,12 +195,14 @@ class Trainer:
 
             self.scheduler.step(val_loss)
 
+            current_lr = self.optimizer.param_groups[0]['lr']
             print(f"Epoch {epoch+1}/{self.max_epochs} | "
                   f"Train Loss: {train_loss:.4f} | "
                   f"Val Loss: {val_loss:.4f} | "
                   f"WGD F1: {val_metrics['wgd_f1']:.3f} | "
                   f"Partner Acc: {val_metrics['partner_acc']:.3f} | "
-                  f"Count Err: {val_metrics['count_error']:.1f}")
+                  f"Count Err: {val_metrics['count_error']:.1f} | "
+                  f"LR: {current_lr:.6f}")
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss

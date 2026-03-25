@@ -6,17 +6,17 @@ model:
   dropout: 0.2
 
 training:
-  lr: 1e-3
-  weight_decay: 1e-4
+  lr: 0.0003              # reduced from 1e-3 — val loss was jumping
+  weight_decay: 0.0001
   batch_size: 4
   max_epochs: 200
-  patience: 20
+  patience: 30            # increased from 20 — give more time to converge
   num_gene_trees: 300
-  focal_alpha: 0.25
-  focal_gamma: 2.0
+  focal_alpha: 0.5        # increased from 0.25 — stronger focus on hard examples
+  focal_gamma: 3.0        # increased from 2.0 — even more focus on misclassified WGD edges
   lambda_wgd: 1.0
-  lambda_partner: 1.0
-  lambda_count: 0.1
+  lambda_partner: 0.5     # reduced — partner loss was dominating early training
+  lambda_count: 0.5       # increased from 0.1 — count error was too high
 
 data:
   max_species: 100
