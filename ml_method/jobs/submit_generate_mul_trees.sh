@@ -41,6 +41,9 @@ mkdir -p "$LOG_DIR" "$OUTPUT_DIR"
 INDEX_OFFSET=0
 if ls "$OUTPUT_DIR"/mul_tree_*.nex &>/dev/null; then
     HIGHEST=$(ls "$OUTPUT_DIR"/mul_tree_*.nex | sed 's/.*mul_tree_\([0-9]*\)\.nex/\1/' | sort -n | tail -1)
+    # Strip leading zeros to avoid bash octal interpretation
+    HIGHEST=$(echo "$HIGHEST" | sed 's/^0*//')
+    HIGHEST=${HIGHEST:-0}
     INDEX_OFFSET=$((HIGHEST + 1))
 fi
 
