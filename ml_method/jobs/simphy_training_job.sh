@@ -51,7 +51,8 @@ conda activate gene2net || { echo "ERROR: Could not activate gene2net"; exit 1; 
 SIMPHY_BIN="/groups/itay_mayrose/tomulanovski/gene2net/simulations/simulators/simphy/SimPhy_1.0.2/bin/simphy_lnx64"
 PICKLE_FILE="/groups/itay_mayrose/tomulanovski/gene2net/simulations/distributions/substitution_rates.pkl"
 
-IDX=$(printf "%04d" "$SLURM_ARRAY_TASK_ID")
+TREE_INDEX=$(( SLURM_ARRAY_TASK_ID + ${INDEX_OFFSET:-0} ))
+IDX=$(printf "%04d" "$TREE_INDEX")
 SPECIES_TREE="${MUL_TREES_DIR}/mul_tree_${IDX}.nex"
 OUTPUT_BASE="${MUL_TREES_DIR}/simphy/${CONFIGURATION}/${IDX}"
 
@@ -162,7 +163,7 @@ run_simphy() {
     return 0
 }
 
-BASE_SEED=$((SLURM_ARRAY_TASK_ID * 100000 + 42))
+BASE_SEED=$((TREE_INDEX * 100000 + 42))
 MAX_RETRIES=10
 
 # Clean previous output

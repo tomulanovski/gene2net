@@ -45,7 +45,8 @@ if ! command -v $ASTRAL_CMD &> /dev/null; then
     exit 1
 fi
 
-IDX=$(printf "%04d" "$SLURM_ARRAY_TASK_ID")
+TREE_INDEX=$(( SLURM_ARRAY_TASK_ID + ${INDEX_OFFSET:-0} ))
+IDX=$(printf "%04d" "$TREE_INDEX")
 SIMPHY_DIR="${MUL_TREES_DIR}/simphy/${CONFIGURATION}/${IDX}"
 
 echo "============================================================================"
