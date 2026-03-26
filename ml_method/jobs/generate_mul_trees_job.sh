@@ -19,7 +19,8 @@ conda activate gene2net
 
 export PYTHONPATH="${PYTHONPATH:-}:/groups/itay_mayrose/tomulanovski/gene2net/ml_method"
 
+INDEX=$(( SLURM_ARRAY_TASK_ID + ${INDEX_OFFSET:-0} ))
+
 python "$SCRIPT" \
-    --index "$SLURM_ARRAY_TASK_ID" \
-    --output-dir "$OUTPUT_DIR" \
-    --tree-height "$TREE_HEIGHT"
+    --index "$INDEX" \
+    --output-dir "$OUTPUT_DIR"
