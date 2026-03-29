@@ -17,7 +17,7 @@
 # ==============================================================================
 
 BASE_DIR="/groups/itay_mayrose/tomulanovski/gene2net/ml_method"
-DEFAULT_DATA="${BASE_DIR}/data/mul_trees/training/ils_low"
+DEFAULT_DATA="${BASE_DIR}/data/mul_trees_2k/training/ils_low"
 
 # Parse arguments
 DATA_DIR=""
