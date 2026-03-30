@@ -40,14 +40,14 @@ if [ "$USE_GENERAL" = true ]; then
     QOS="public"
     GPU_FLAG="gpu:1"
     MEM="64G"
-    TIME="08:00:00"
+    TIME="3-00:00:00"
 else
     PARTITION="gpu-rotemhsh-pool"
     ACCOUNT="--account=itaym-users_v2"
     QOS="owner"
     GPU_FLAG="gpu:1"
     MEM="48G"
-    TIME="08:00:00"
+    TIME="3-00:00:00"
 fi
 
 LOG_DIR="${BASE_DIR}/logs"
