@@ -164,6 +164,7 @@ python "$GRANDMA_SPLIT_SCRIPT" \
     -o "$OUTPUT_DIR" \
     -m split \
     -x "$PLOIDY_FILE" \
+    --strict_constraint \
     -c 15   \
     -i 50 \
     -p ${SLURM_CPUS_PER_TASK} \
