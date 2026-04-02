@@ -3,12 +3,12 @@
 # Submit Phase 1 training: features-only GNN for binary WGD detection
 #
 # USAGE:
-#   ./submit_train_phase1.sh [DATA_DIR] [--general]
+#   ./submit_train_phase1.sh [DATA_DIR] [--general] [--config CONFIG] [--output-dir DIR]
 #
 # EXAMPLES:
-#   ./submit_train_phase1.sh                                    # default data, rotem GPU
-#   ./submit_train_phase1.sh /path/to/training/ils_low          # custom data
-#   ./submit_train_phase1.sh --general                          # general GPU pool
+#   ./submit_train_phase1.sh                                              # defaults
+#   ./submit_train_phase1.sh --config configs/phase1_cw6.yaml --output-dir output/phase1_cw6
+#   ./submit_train_phase1.sh --general
 # ==============================================================================
 
 BASE_DIR="/groups/itay_mayrose/tomulanovski/gene2net/ml_method"
@@ -17,13 +17,16 @@ DEFAULT_DATA="${BASE_DIR}/data/mul_trees_2k/training/ils_low"
 # Parse arguments
 DATA_DIR=""
 USE_GENERAL=false
+CONFIG="${BASE_DIR}/configs/phase1.yaml"
+OUTPUT_DIR="${BASE_DIR}/output/phase1"
 
-for arg in "$@"; do
-    if [ "$arg" == "--general" ]; then
-        USE_GENERAL=true
-    elif [ -z "$DATA_DIR" ]; then
-        DATA_DIR="$arg"
-    fi
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --general) USE_GENERAL=true; shift;;
+        --config) CONFIG="${BASE_DIR}/$2"; shift 2;;
+        --output-dir) OUTPUT_DIR="${BASE_DIR}/$2"; shift 2;;
+        *) [ -z "$DATA_DIR" ] && DATA_DIR="$1"; shift;;
+    esac
 done
 
 DATA_DIR="${DATA_DIR:-$DEFAULT_DATA}"
@@ -52,10 +55,9 @@ echo "================================================"
 echo "Phase 1: Features-only GNN Training"
 echo "================================================"
 echo "Data: ${DATA_DIR}"
+echo "Config: ${CONFIG}"
+echo "Output: ${OUTPUT_DIR}"
 echo "Partition: ${PARTITION}"
-echo "QoS: ${QOS}"
-echo "Config: ${BASE_DIR}/configs/phase1.yaml"
-echo "Output: ${BASE_DIR}/output/phase1"
 echo "================================================"
 
 sbatch \
@@ -69,5 +71,5 @@ sbatch \
     ${ACCOUNT} \
     --qos=${QOS} \
     --gres=${GPU_FLAG} \
-    --export=ALL,DATA_DIR="${DATA_DIR}",BASE_DIR="${BASE_DIR}" \
+    --export=ALL,DATA_DIR="${DATA_DIR}",BASE_DIR="${BASE_DIR}",CONFIG="${CONFIG}",OUTPUT_DIR="${OUTPUT_DIR}" \
     "${BASE_DIR}/jobs/train_phase1_job.sh"

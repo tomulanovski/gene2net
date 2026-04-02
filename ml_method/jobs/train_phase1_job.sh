@@ -22,8 +22,8 @@ echo "==========================================================================
 echo "Phase 1: Features-only GNN Training"
 echo "============================================================================"
 echo "Data: ${DATA_DIR}"
-echo "Config: ${BASE_DIR}/configs/phase1.yaml"
-echo "Output: ${BASE_DIR}/output/phase1"
+echo "Config: ${CONFIG:-${BASE_DIR}/configs/phase1.yaml}"
+echo "Output: ${OUTPUT_DIR:-${BASE_DIR}/output/phase1}"
 echo "Device: $(python -c 'import torch; print("cuda" if torch.cuda.is_available() else "cpu")')"
 echo "GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null || echo 'N/A')"
 echo "Date: $(date)"
@@ -31,5 +31,5 @@ echo "==========================================================================
 
 python "${BASE_DIR}/scripts/train_phase1.py" \
     --data-dir "${DATA_DIR}" \
-    --config "${BASE_DIR}/configs/phase1.yaml" \
-    --output-dir "${BASE_DIR}/output/phase1"
+    --config "${CONFIG:-${BASE_DIR}/configs/phase1.yaml}" \
+    --output-dir "${OUTPUT_DIR:-${BASE_DIR}/output/phase1}"

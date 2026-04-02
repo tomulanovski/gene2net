@@ -1,0 +1,21 @@
+# Phase 1 variant: lower positive class weight (6.0 instead of 12.0)
+# Should make model more conservative → higher precision, potentially higher F1
+
+model:
+  node_feat_dim: 13
+  edge_feat_dim: 4
+  hidden_dim: 64
+  n_gat_layers: 3
+  n_gat_heads: 4
+  dropout: 0.2
+
+training:
+  lr: 0.001
+  weight_decay: 0.0001
+  batch_size: 8
+  max_epochs: 100            # shorter — we know it plateaus early
+  patience: 30
+  pos_class_weight: 6.0      # lower than 12.0 → more conservative predictions
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+  val_split: 0.2
