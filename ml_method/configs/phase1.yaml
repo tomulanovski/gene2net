@@ -1,0 +1,21 @@
+# Phase 1: Features-only GNN for binary WGD detection
+# No gene tree encoder — uses only hand-crafted features + species tree GAT
+
+model:
+  node_feat_dim: 13          # 8 copy count + 5 clustering summary
+  edge_feat_dim: 4           # concordance, branch_length, clade_size, depth
+  hidden_dim: 64
+  n_gat_layers: 3
+  n_gat_heads: 4
+  dropout: 0.2
+
+training:
+  lr: 0.001
+  weight_decay: 0.0001
+  batch_size: 8              # gradient accumulation steps
+  max_epochs: 200
+  patience: 30
+  pos_class_weight: 12.0     # matches the ~12:1 class imbalance
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+  val_split: 0.2
