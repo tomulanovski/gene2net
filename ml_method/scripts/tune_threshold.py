@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--data-dir", required=True)
     parser.add_argument("--model-dir", default=None)
     parser.add_argument("--config", default=None)
+    parser.add_argument("--max-samples", type=int, default=400, help="Max val samples to use")
     args = parser.parse_args()
 
     base_dir = os.path.join(os.path.dirname(__file__), "..")
@@ -63,29 +64,30 @@ def main():
     model = model.to(device)
     model.eval()
 
-    # Load dataset, use same split as training
+    # Load dataset indices, use same split as training (without loading all into memory)
     dataset = Gene2NetDataset(args.data_dir)
-    all_samples = []
-    for i in range(len(dataset)):
-        try:
-            sample = dataset[i]
-            if sample.labels is not None:
-                all_samples.append(sample)
-        except Exception:
-            pass
+    n_total = len(dataset)
 
+    # Reproduce the same train/val split
+    indices = list(range(n_total))
     random.seed(42)
-    random.shuffle(all_samples)
-    n_val = int(len(all_samples) * 0.2)
-    val_samples = all_samples[:n_val]
-    print(f"Val samples: {len(val_samples)}")
+    random.shuffle(indices)
+    n_val = int(n_total * 0.2)
+    val_indices = indices[:min(n_val, args.max_samples)]
+    print(f"Val samples: {len(val_indices)}")
 
-    # Collect all predictions and targets
+    # Collect all predictions and targets (one at a time to save memory)
     all_probs = []
     all_targets = []
 
     with torch.no_grad():
-        for sample in val_samples:
+        for i, idx in enumerate(val_indices):
+            try:
+                sample = dataset[idx]
+            except Exception:
+                continue
+            if sample.labels is None:
+                continue
             prepared = prepare_sample(sample, torch.device(device))
             if prepared is None:
                 continue
@@ -95,6 +97,12 @@ def main():
             probs = torch.softmax(wgd_logits, dim=-1)[:, 1]  # P(WGD)
             all_probs.append(probs[mask].cpu().numpy())
             all_targets.append(targets[mask].cpu().numpy())
+
+            # Free memory
+            del sample, prepared, inputs, targets, mask, wgd_logits, probs
+
+            if (i + 1) % 100 == 0:
+                print(f"  Processed {i+1}/{len(val_indices)}")
 
     probs = np.concatenate(all_probs)
     targets = np.concatenate(all_targets)
