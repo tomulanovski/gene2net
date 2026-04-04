@@ -1,0 +1,24 @@
+# WGD Detector: GIN gene tree encoder + GAT species tree
+# This model learns directly from gene tree structure instead of hand-crafted features
+
+model:
+  n_species: 200         # auto-detected from data, this is upper bound
+  node_feat_dim: 13
+  edge_feat_dim: 4
+  hidden_dim: 64
+  n_gin_layers: 2
+  n_gat_layers: 3
+  n_gat_heads: 4
+  dropout: 0.2
+
+training:
+  lr: 0.001
+  weight_decay: 0.0001
+  batch_size: 4           # smaller batch — each sample has many gene trees
+  max_epochs: 100
+  patience: 30
+  pos_class_weight: 6.0
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+  val_split: 0.2
+  max_gene_trees: 0       # 0 = use all gene trees (subsample per epoch if > 0)
