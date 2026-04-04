@@ -1,16 +1,14 @@
-"""GIN-based gene tree encoder for WGD detection.
+"""Gene tree feature extraction for WGD detection.
 
-Encodes gene trees using Graph Isomorphism Network (GIN), pools per species
-and per clade, then aggregates across gene trees to produce per-edge
-representations for the species tree.
+Computes per-edge contrast features from gene tree copy counts.
+The key WGD signal is the CONTRAST between copy counts below an edge
+vs outside — WGD edges show ~2x copies below vs ~1x outside.
 
-GIN is chosen over GCN because it's provably more expressive at distinguishing
-tree topologies — critical for detecting WHERE paralogs sit in gene trees.
+This replaces the GIN encoder which learned topology but couldn't
+distinguish WGD edges from their ancestors (both show elevated copies).
 
-Output per edge: [GIN embeddings (2*embed_dim) | copy count stats (6)]
-  - GIN embeddings: mean + std of learned topology features across gene trees
-  - Copy count stats: mean + std of (avg_copies, max_copies, frac_duplicated)
-    These capture the explicit duplication signal that mean-pooling erases.
+Also retains a GIN encoder for learned topology features that may
+capture patterns beyond simple copy counts.
 """
 import torch
 import torch.nn as nn
@@ -18,21 +16,22 @@ from torch_geometric.nn import GINConv
 from torch_geometric.utils import scatter
 from typing import Dict, List, Set
 
-N_COPY_FEATURES = 6  # mean/std of: avg_copies, max_copies, frac_duplicated
+# 10 contrast features + 6 copy count stats from GIN
+N_CONTRAST_FEATURES = 10
 
 
 class GeneTreeGIN(nn.Module):
-    """Encode gene trees with GIN and aggregate per species tree edge.
+    """Encode gene trees with GIN + compute contrast features per edge.
 
-    Architecture:
-        1. Species embedding: each species gets a learnable embedding
-        2. GIN layers: 2-layer GIN with residual connections
-        3. Species pooling: scatter-based pooling per (gene tree, species)
-        4. Clade pooling: vectorized gather + mean per species tree edge
-        5. Gene tree aggregation: mean + std across gene trees per edge
-        6. Copy count statistics: avg_copies, max_copies, frac_duplicated
+    Two complementary feature sources:
+        1. GIN learned embeddings: topology-aware features (mean+std per edge)
+        2. Contrast features: below-vs-outside copy count comparison
 
-    Output dimension: 2 * embed_dim + 6
+    The contrast features capture the primary WGD signal that the GIN
+    pooling erases: the ratio of copy counts in the child clade vs the
+    rest of the tree.
+
+    Output dimension: 2 * embed_dim + N_CONTRAST_FEATURES
     """
 
     def __init__(
@@ -45,10 +44,9 @@ class GeneTreeGIN(nn.Module):
         super().__init__()
         self.n_species = n_species
         self.embed_dim = embed_dim
-        self.output_dim = 2 * embed_dim + N_COPY_FEATURES
+        self.output_dim = 2 * embed_dim + N_CONTRAST_FEATURES
 
         # Species embedding for gene tree leaves
-        # +1 for internal nodes (index n_species)
         self.species_emb = nn.Embedding(n_species + 1, embed_dim)
         self.internal_idx = n_species
 
@@ -66,6 +64,127 @@ class GeneTreeGIN(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
+    def _compute_copy_counts(
+        self,
+        gene_tree_species_ids: List[torch.Tensor],
+        gene_tree_leaf_masks: List[torch.Tensor],
+        device: torch.device,
+    ):
+        """Compute copy count per (gene_tree, species) via scatter.
+
+        Returns:
+            sp_count_2d: [n_gt, n_species] copy counts.
+            sp_valid_2d: [n_gt, n_species] boolean validity mask.
+        """
+        n_gt = len(gene_tree_species_ids)
+        all_sp = []
+        all_gt = []
+
+        for i in range(n_gt):
+            sp = gene_tree_species_ids[i]
+            mask = gene_tree_leaf_masks[i]
+            valid = mask & (sp >= 0)
+            valid_sp = sp[valid]
+            all_sp.append(valid_sp)
+            all_gt.append(torch.full_like(valid_sp, i))
+
+        all_sp_cat = torch.cat(all_sp)
+        all_gt_cat = torch.cat(all_gt)
+        composite = all_gt_cat * self.n_species + all_sp_cat
+        pool_size = n_gt * self.n_species
+
+        sp_count = scatter(torch.ones(all_sp_cat.shape[0], device=device),
+                           composite, dim=0, dim_size=pool_size, reduce='sum')
+        sp_count_2d = sp_count.view(n_gt, self.n_species)
+        sp_valid_2d = sp_count_2d > 0
+
+        return sp_count_2d, sp_valid_2d
+
+    def _compute_contrast_features(
+        self,
+        sp_count_2d: torch.Tensor,
+        sp_valid_2d: torch.Tensor,
+        edge_clades: Dict[int, Set[int]],
+        n_edges: int,
+        device: torch.device,
+    ) -> torch.Tensor:
+        """Compute below-vs-outside contrast features per edge.
+
+        For each edge, for each gene tree:
+        - avg_copies_below: mean copy count for species in clade
+        - avg_copies_outside: mean copy count for species outside clade
+        - copy_ratio: below / outside (WGD → ~2.0, non-WGD → ~1.0)
+        - frac_dup_below: fraction of clade species with >1 copy
+        - frac_dup_outside: fraction of outside species with >1 copy
+
+        Then aggregate across gene trees: mean + std of each.
+
+        Returns:
+            contrast_features: [n_edges, 10]
+        """
+        n_gt = sp_count_2d.shape[0]
+        all_species = set(range(self.n_species))
+        contrast = torch.zeros(n_edges, N_CONTRAST_FEATURES, device=device)
+
+        for edge_idx in range(n_edges):
+            clade_sp = edge_clades.get(edge_idx, set())
+            if not clade_sp:
+                continue
+
+            below = [sp for sp in clade_sp if sp < self.n_species]
+            outside = [sp for sp in (all_species - clade_sp) if sp < self.n_species]
+
+            if not below or not outside:
+                continue
+
+            below_t = torch.tensor(below, dtype=torch.long, device=device)
+            outside_t = torch.tensor(outside, dtype=torch.long, device=device)
+
+            # Copy counts: [n_gt, n_below] and [n_gt, n_outside]
+            counts_below = sp_count_2d[:, below_t]
+            counts_outside = sp_count_2d[:, outside_t]
+            valid_below = sp_valid_2d[:, below_t]
+            valid_outside = sp_valid_2d[:, outside_t]
+
+            n_valid_below = valid_below.sum(dim=1).float()
+            n_valid_outside = valid_outside.sum(dim=1).float()
+            gt_has_data = (n_valid_below > 0) & (n_valid_outside > 0)
+
+            if gt_has_data.sum() == 0:
+                continue
+
+            # Per gene tree stats (masking invalid species)
+            avg_below = (counts_below * valid_below.float()).sum(dim=1) / n_valid_below.clamp(min=1)
+            avg_outside = (counts_outside * valid_outside.float()).sum(dim=1) / n_valid_outside.clamp(min=1)
+            copy_ratio = avg_below / avg_outside.clamp(min=0.1)
+            frac_dup_below = ((counts_below > 1) & valid_below).sum(dim=1).float() / n_valid_below.clamp(min=1)
+            frac_dup_outside = ((counts_outside > 1) & valid_outside).sum(dim=1).float() / n_valid_outside.clamp(min=1)
+
+            # Filter to gene trees with data on both sides
+            ab = avg_below[gt_has_data]
+            cr = copy_ratio[gt_has_data]
+            fdb = frac_dup_below[gt_has_data]
+            fdo = frac_dup_outside[gt_has_data]
+            dup_contrast = fdb - fdo
+
+            n = gt_has_data.sum().float()
+            z = torch.tensor(0.0, device=device)
+
+            contrast[edge_idx] = torch.stack([
+                ab.mean(),
+                ab.std() if n > 1 else z,
+                cr.mean(),
+                cr.std() if n > 1 else z,
+                fdb.mean(),
+                fdb.std() if n > 1 else z,
+                fdo.mean(),
+                fdo.std() if n > 1 else z,
+                dup_contrast.mean(),
+                dup_contrast.std() if n > 1 else z,
+            ])
+
+        return contrast
+
     def forward(
         self,
         gene_tree_edge_indices: List[torch.Tensor],
@@ -74,11 +193,11 @@ class GeneTreeGIN(nn.Module):
         edge_clades: Dict[int, Set[int]],
         n_edges: int,
     ) -> torch.Tensor:
-        """Encode gene trees and aggregate per species tree edge.
+        """Encode gene trees and compute contrast features per edge.
 
         Returns:
-            edge_gene_features: [n_edges, 2*embed_dim + 6] with GIN embeddings
-                and copy count statistics per edge.
+            edge_features: [n_edges, 2*embed_dim + 10] with GIN embeddings
+                and contrast features.
         """
         device = self.species_emb.weight.device
         n_gt = len(gene_tree_edge_indices)
@@ -86,7 +205,17 @@ class GeneTreeGIN(nn.Module):
         if n_gt == 0:
             return torch.zeros(n_edges, self.output_dim, device=device)
 
-        # --- Step 1: Batch all gene trees via manual concatenation ---
+        # --- Copy counts (used by both GIN pooling and contrast features) ---
+        sp_count_2d, sp_valid_2d = self._compute_copy_counts(
+            gene_tree_species_ids, gene_tree_leaf_masks, device
+        )
+
+        # --- Contrast features (the key WGD signal) ---
+        contrast_feats = self._compute_contrast_features(
+            sp_count_2d, sp_valid_2d, edge_clades, n_edges, device
+        )
+
+        # --- GIN encoding ---
         all_emb_ids = []
         all_sp_ids = []
         all_leaf_masks = []
@@ -118,102 +247,57 @@ class GeneTreeGIN(nn.Module):
         # GIN message passing
         x = self.species_emb(emb_ids)
         for gin, norm in zip(self.gin_layers, self.gin_norms):
-            x = x + gin(x, edge_index)  # residual
+            x = x + gin(x, edge_index)
             x = norm(x)
             x = self.dropout(x)
 
-        # --- Step 2: Vectorized species pooling with scatter ---
+        # Vectorized species pooling with scatter
         valid_leaf = leaf_mask & (sp_ids >= 0)
         leaf_idx = valid_leaf.nonzero(as_tuple=True)[0]
 
-        if leaf_idx.shape[0] == 0:
-            return torch.zeros(n_edges, self.output_dim, device=device)
+        gin_features = torch.zeros(n_edges, 2 * self.embed_dim, device=device)
 
-        leaf_x = x[leaf_idx]                # [N_leaves, embed_dim]
-        leaf_gt = batch_vec[leaf_idx]        # [N_leaves] gene tree index
-        leaf_sp = sp_ids[leaf_idx]           # [N_leaves] species index
+        if leaf_idx.shape[0] > 0:
+            leaf_x = x[leaf_idx]
+            leaf_gt = batch_vec[leaf_idx]
+            leaf_sp = sp_ids[leaf_idx]
 
-        # Composite key for (gene_tree, species) pairs
-        composite = leaf_gt * self.n_species + leaf_sp
-        pool_size = n_gt * self.n_species
+            composite = leaf_gt * self.n_species + leaf_sp
+            pool_size = n_gt * self.n_species
+            species_pool = scatter(leaf_x, composite, dim=0,
+                                    dim_size=pool_size, reduce='mean')
+            sp_pool_2d = species_pool.view(n_gt, self.n_species, self.embed_dim)
 
-        # Scatter mean: pool all leaves of same species in same gene tree
-        species_pool = scatter(leaf_x, composite, dim=0,
-                               dim_size=pool_size, reduce='mean')
-        # Copy count per (gt, species) — this IS the duplication signal
-        sp_count = scatter(torch.ones(leaf_idx.shape[0], device=device),
-                           composite, dim=0, dim_size=pool_size, reduce='sum')
+            for edge_idx in range(n_edges):
+                clade_sp = edge_clades.get(edge_idx, set())
+                if not clade_sp:
+                    continue
 
-        # Reshape to [n_gt, n_species, ...] for efficient indexing
-        sp_pool_2d = species_pool.view(n_gt, self.n_species, self.embed_dim)
-        sp_count_2d = sp_count.view(n_gt, self.n_species)  # [n_gt, n_species]
-        sp_valid_2d = sp_count_2d > 0
+                sp_list = [sp for sp in clade_sp if sp < self.n_species]
+                if not sp_list:
+                    continue
 
-        # --- Step 3: Clade pooling per edge + copy count stats ---
-        edge_features = torch.zeros(n_edges, self.output_dim, device=device)
+                sp_tensor = torch.tensor(sp_list, dtype=torch.long, device=device)
+                clade_embs = sp_pool_2d[:, sp_tensor]
+                clade_valid = sp_valid_2d[:, sp_tensor]
 
-        for edge_idx in range(n_edges):
-            clade_sp = edge_clades.get(edge_idx, set())
-            if not clade_sp:
-                continue
+                n_valid_per_gt = clade_valid.sum(dim=1)
+                gt_has_data = n_valid_per_gt > 0
 
-            sp_list = [sp for sp in clade_sp if sp < self.n_species]
-            if not sp_list:
-                continue
+                if gt_has_data.sum() == 0:
+                    continue
 
-            sp_tensor = torch.tensor(sp_list, dtype=torch.long, device=device)
+                masked_embs = clade_embs * clade_valid.unsqueeze(-1).float()
+                gt_means = masked_embs.sum(dim=1) / n_valid_per_gt.unsqueeze(-1).clamp(min=1)
+                valid_means = gt_means[gt_has_data]
 
-            # Gather embeddings: [n_gt, n_clade_sp, embed_dim]
-            clade_embs = sp_pool_2d[:, sp_tensor]
-            # Gather copy counts: [n_gt, n_clade_sp]
-            clade_counts = sp_count_2d[:, sp_tensor]
-            # Validity: [n_gt, n_clade_sp]
-            clade_valid = sp_valid_2d[:, sp_tensor]
+                mean_emb = valid_means.mean(dim=0)
+                if valid_means.shape[0] > 1:
+                    std_emb = valid_means.std(dim=0)
+                else:
+                    std_emb = torch.zeros(self.embed_dim, device=device)
 
-            # Number of valid species per gene tree
-            n_valid_per_gt = clade_valid.sum(dim=1)  # [n_gt]
-            gt_has_data = n_valid_per_gt > 0
+                gin_features[edge_idx] = torch.cat([mean_emb, std_emb])
 
-            if gt_has_data.sum() == 0:
-                continue
-
-            # --- GIN embedding aggregation ---
-            masked_embs = clade_embs * clade_valid.unsqueeze(-1).float()
-            gt_means = masked_embs.sum(dim=1) / n_valid_per_gt.unsqueeze(-1).clamp(min=1)
-            valid_means = gt_means[gt_has_data]  # [n_valid_gt, embed_dim]
-
-            mean_emb = valid_means.mean(dim=0)
-            if valid_means.shape[0] > 1:
-                std_emb = valid_means.std(dim=0)
-            else:
-                std_emb = torch.zeros(self.embed_dim, device=device)
-
-            # --- Copy count statistics per gene tree ---
-            # Only consider valid (present) species
-            masked_counts = clade_counts * clade_valid.float()  # [n_gt, n_clade_sp]
-
-            # avg copies per species in clade (per gene tree)
-            avg_copies = masked_counts.sum(dim=1) / n_valid_per_gt.clamp(min=1)  # [n_gt]
-            # max copies in clade (per gene tree)
-            # Set invalid to 0 so they don't affect max
-            max_copies = masked_counts.max(dim=1).values  # [n_gt]
-            # fraction of clade species with >1 copy (duplicated)
-            n_dup = (masked_counts > 1).sum(dim=1).float()  # [n_gt]
-            frac_dup = n_dup / n_valid_per_gt.clamp(min=1)  # [n_gt]
-
-            # Filter to gene trees with data
-            avg_c = avg_copies[gt_has_data]
-            max_c = max_copies[gt_has_data]
-            frac_d = frac_dup[gt_has_data]
-
-            # Aggregate across gene trees: mean + std
-            n_valid = gt_has_data.sum().float()
-            copy_stats = torch.stack([
-                avg_c.mean(), avg_c.std() if n_valid > 1 else torch.tensor(0.0, device=device),
-                max_c.mean(), max_c.std() if n_valid > 1 else torch.tensor(0.0, device=device),
-                frac_d.mean(), frac_d.std() if n_valid > 1 else torch.tensor(0.0, device=device),
-            ])  # [6]
-
-            edge_features[edge_idx] = torch.cat([mean_emb, std_emb, copy_stats])
-
-        return edge_features
+        # Concatenate GIN embeddings + contrast features
+        return torch.cat([gin_features, contrast_feats], dim=-1)
