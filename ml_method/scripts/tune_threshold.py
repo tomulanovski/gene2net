@@ -1,10 +1,11 @@
-"""Tune decision threshold on validation set using saved Phase 1 model.
+"""Tune decision threshold on validation set using saved model.
 
 Instead of argmax (implicit threshold=0.5), find the threshold on the WGD
 class probability that maximizes F1.
 
 Usage:
     python scripts/tune_threshold.py --data-dir /path/to/training/ils_low --model-dir output/phase1
+    python scripts/tune_threshold.py --data-dir /path/to/training/ils_low --model-dir output/wgd_detector --model-type wgd
 """
 import argparse
 import os
@@ -18,37 +19,34 @@ import yaml
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from gene2net_gnn.data.dataset import Gene2NetDataset
-from gene2net_gnn.model.species_gnn_v2 import SpeciesTreeGNNv2
-from gene2net_gnn.training.trainer_phase1 import prepare_sample
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", required=True)
-    parser.add_argument("--model-dir", default=None)
-    parser.add_argument("--config", default=None)
-    parser.add_argument("--max-samples", type=int, default=400, help="Max val samples to use")
-    args = parser.parse_args()
-
-    base_dir = os.path.join(os.path.dirname(__file__), "..")
-    model_dir = args.model_dir or os.path.join(base_dir, "output", "phase1")
-    config_path = args.config or os.path.join(base_dir, "configs", "phase1.yaml")
-
-    with open(config_path) as f:
-        config = yaml.safe_load(f)
-    model_config = config.get("model", {})
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    # Load model
-    model = SpeciesTreeGNNv2(
-        node_feat_dim=int(model_config.get("node_feat_dim", 13)),
-        edge_feat_dim=int(model_config.get("edge_feat_dim", 4)),
-        hidden_dim=int(model_config.get("hidden_dim", 64)),
-        n_gat_layers=int(model_config.get("n_gat_layers", 3)),
-        n_gat_heads=int(model_config.get("n_gat_heads", 4)),
-        dropout=float(model_config.get("dropout", 0.2)),
-    )
+def load_model_and_prepare_fn(model_type, model_config, model_dir, device):
+    """Load model and return (model, prepare_sample_fn) based on model type."""
+    if model_type == "wgd":
+        from gene2net_gnn.model.wgd_detector import WGDDetector
+        from gene2net_gnn.training.trainer_wgd import prepare_sample
+        model = WGDDetector(
+            n_species=int(model_config.get("n_species", 200)),
+            node_feat_dim=int(model_config.get("node_feat_dim", 13)),
+            edge_feat_dim=int(model_config.get("edge_feat_dim", 4)),
+            hidden_dim=int(model_config.get("hidden_dim", 64)),
+            n_gin_layers=int(model_config.get("n_gin_layers", 2)),
+            n_gat_layers=int(model_config.get("n_gat_layers", 3)),
+            n_gat_heads=int(model_config.get("n_gat_heads", 4)),
+            dropout=float(model_config.get("dropout", 0.2)),
+        )
+    else:
+        from gene2net_gnn.model.species_gnn_v2 import SpeciesTreeGNNv2
+        from gene2net_gnn.training.trainer_phase1 import prepare_sample
+        model = SpeciesTreeGNNv2(
+            node_feat_dim=int(model_config.get("node_feat_dim", 13)),
+            edge_feat_dim=int(model_config.get("edge_feat_dim", 4)),
+            hidden_dim=int(model_config.get("hidden_dim", 64)),
+            n_gat_layers=int(model_config.get("n_gat_layers", 3)),
+            n_gat_heads=int(model_config.get("n_gat_heads", 4)),
+            dropout=float(model_config.get("dropout", 0.2)),
+        )
 
     # Try best_f1_model first, then best_model
     for model_name in ["best_f1_model.pt", "best_model.pt"]:
@@ -59,10 +57,42 @@ def main():
             break
     else:
         print("ERROR: No model found")
-        return
+        return None, None
 
     model = model.to(device)
     model.eval()
+    return model, prepare_sample
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data-dir", required=True)
+    parser.add_argument("--model-dir", default=None)
+    parser.add_argument("--config", default=None)
+    parser.add_argument("--model-type", default="phase1", choices=["phase1", "wgd"],
+                        help="Model type: phase1 or wgd")
+    parser.add_argument("--max-samples", type=int, default=400, help="Max val samples to use")
+    args = parser.parse_args()
+
+    base_dir = os.path.join(os.path.dirname(__file__), "..")
+
+    # Set defaults based on model type
+    if args.model_type == "wgd":
+        model_dir = args.model_dir or os.path.join(base_dir, "output", "wgd_detector")
+        config_path = args.config or os.path.join(base_dir, "configs", "wgd_detector.yaml")
+    else:
+        model_dir = args.model_dir or os.path.join(base_dir, "output", "phase1")
+        config_path = args.config or os.path.join(base_dir, "configs", "phase1.yaml")
+
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
+    model_config = config.get("model", {})
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    model, prepare_sample = load_model_and_prepare_fn(args.model_type, model_config, model_dir, device)
+    if model is None:
+        return
 
     # Load dataset indices, use same split as training (without loading all into memory)
     dataset = Gene2NetDataset(args.data_dir)
