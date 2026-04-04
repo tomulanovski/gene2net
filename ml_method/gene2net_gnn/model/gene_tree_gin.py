@@ -9,8 +9,8 @@ tree topologies — critical for detecting WHERE paralogs sit in gene trees.
 """
 import torch
 import torch.nn as nn
-from torch_geometric.nn import GINConv, global_mean_pool
-from torch_geometric.data import Data, Batch
+from torch_geometric.nn import GINConv
+from torch_geometric.utils import scatter
 from typing import Dict, List, Set
 
 
@@ -20,8 +20,8 @@ class GeneTreeGIN(nn.Module):
     Architecture:
         1. Species embedding: each species gets a learnable embedding
         2. GIN layers: 2-layer GIN with residual connections
-        3. Species pooling: pool leaf embeddings per species per gene tree
-        4. Clade pooling: pool species embeddings per clade (species tree edge)
+        3. Species pooling: scatter-based pooling per (gene tree, species)
+        4. Clade pooling: vectorized gather + mean per species tree edge
         5. Gene tree aggregation: mean + std across gene trees per edge
 
     Args:
@@ -85,84 +85,78 @@ class GeneTreeGIN(nn.Module):
                 features per species tree edge (mean + std).
         """
         device = self.species_emb.weight.device
-        n_gene_trees = len(gene_tree_edge_indices)
+        n_gt = len(gene_tree_edge_indices)
 
-        if n_gene_trees == 0:
+        if n_gt == 0:
             return torch.zeros(n_edges, 2 * self.embed_dim, device=device)
 
-        # --- Step 1: Batch all gene trees and run GIN ---
-        data_list = []
-        tree_offsets = []  # track node offsets per tree in the batch
+        # --- Step 1: Batch all gene trees via manual concatenation ---
+        # (Avoids Data/Batch overhead from PyG)
+        all_emb_ids = []
+        all_sp_ids = []
+        all_leaf_masks = []
+        batch_ids = []
+        all_ei = []
         offset = 0
 
-        for gt_idx in range(n_gene_trees):
-            ei = gene_tree_edge_indices[gt_idx].to(device)
-            sp_ids = gene_tree_species_ids[gt_idx].to(device)
-            n_nodes = sp_ids.shape[0]
+        for i in range(n_gt):
+            sp = gene_tree_species_ids[i]
+            n_nodes = sp.shape[0]
 
-            # Map species_ids to embedding indices
-            # -1 (internal) → self.internal_idx
-            emb_ids = sp_ids.clone()
+            emb_ids = sp.clone()
             emb_ids[emb_ids < 0] = self.internal_idx
-            # Clamp to valid range
             emb_ids = emb_ids.clamp(0, self.internal_idx)
 
-            data_list.append(Data(
-                edge_index=ei,
-                emb_ids=emb_ids,
-                sp_ids=sp_ids,
-                leaf_mask=gene_tree_leaf_masks[gt_idx].to(device),
-                num_nodes=n_nodes,
-            ))
-            tree_offsets.append(offset)
+            all_emb_ids.append(emb_ids)
+            all_sp_ids.append(sp)
+            all_leaf_masks.append(gene_tree_leaf_masks[i])
+            batch_ids.append(torch.full((n_nodes,), i, dtype=torch.long, device=device))
+            all_ei.append(gene_tree_edge_indices[i] + offset)
             offset += n_nodes
 
-        batch = Batch.from_data_list(data_list)
-
-        # Initial node features from species embeddings
-        x = self.species_emb(batch.emb_ids)
+        edge_index = torch.cat(all_ei, dim=1)
+        emb_ids = torch.cat(all_emb_ids)
+        sp_ids = torch.cat(all_sp_ids)
+        leaf_mask = torch.cat(all_leaf_masks)
+        batch_vec = torch.cat(batch_ids)
 
         # GIN message passing
+        x = self.species_emb(emb_ids)
         for gin, norm in zip(self.gin_layers, self.gin_norms):
-            x = x + gin(x, batch.edge_index)  # residual
+            x = x + gin(x, edge_index)  # residual
             x = norm(x)
             x = self.dropout(x)
 
-        # --- Step 2: Pool per species per gene tree ---
-        # For each gene tree, for each species, mean-pool leaf embeddings
-        # Result: per_species_emb[gt_idx][sp_idx] = embedding
+        # --- Step 2: Vectorized species pooling with scatter ---
+        # Instead of Python loops over nodes, use scatter_mean with composite key
+        valid_leaf = leaf_mask & (sp_ids >= 0)
+        leaf_idx = valid_leaf.nonzero(as_tuple=True)[0]
 
-        per_gt_species_emb = []
-        for gt_idx in range(n_gene_trees):
-            start = tree_offsets[gt_idx]
-            end = tree_offsets[gt_idx + 1] if gt_idx + 1 < n_gene_trees else x.shape[0]
-            gt_x = x[start:end]
-            gt_sp_ids = batch.sp_ids[start:end]
-            gt_leaf_mask = batch.leaf_mask[start:end]
+        if leaf_idx.shape[0] == 0:
+            return torch.zeros(n_edges, 2 * self.embed_dim, device=device)
 
-            # Pool leaves by species
-            species_embs = {}
-            for node_idx in range(gt_x.shape[0]):
-                if not gt_leaf_mask[node_idx]:
-                    continue
-                sp = gt_sp_ids[node_idx].item()
-                if sp < 0:
-                    continue
-                if sp not in species_embs:
-                    species_embs[sp] = []
-                species_embs[sp].append(gt_x[node_idx])
+        leaf_x = x[leaf_idx]                # [N_leaves, embed_dim]
+        leaf_gt = batch_vec[leaf_idx]        # [N_leaves] gene tree index
+        leaf_sp = sp_ids[leaf_idx]           # [N_leaves] species index
 
-            # Mean pool per species
-            pooled = {}
-            for sp, embs in species_embs.items():
-                pooled[sp] = torch.stack(embs).mean(dim=0)
+        # Composite key for (gene_tree, species) pairs
+        composite = leaf_gt * self.n_species + leaf_sp
+        pool_size = n_gt * self.n_species
 
-            per_gt_species_emb.append(pooled)
+        # Scatter mean: pool all leaves of same species in same gene tree
+        species_pool = scatter(leaf_x, composite, dim=0,
+                               dim_size=pool_size, reduce='mean')
+        # Track which (gt, sp) pairs have valid data
+        sp_count = scatter(torch.ones(leaf_idx.shape[0], device=device),
+                           composite, dim=0, dim_size=pool_size, reduce='sum')
 
-        # --- Step 3: Pool per clade and aggregate across gene trees ---
-        # For each species tree edge, collect clade embeddings from each
-        # gene tree, then compute mean + std across gene trees
+        # Reshape to [n_gt, n_species, embed_dim] for efficient indexing
+        sp_pool_2d = species_pool.view(n_gt, self.n_species, self.embed_dim)
+        sp_valid_2d = sp_count.view(n_gt, self.n_species) > 0
 
+        # --- Step 3: Clade pooling per edge, aggregated across gene trees ---
+        # For each edge, gather clade species embeddings from all gene trees,
+        # then compute mean + std across gene trees
         edge_features = torch.zeros(n_edges, 2 * self.embed_dim, device=device)
 
         for edge_idx in range(n_edges):
@@ -170,19 +164,39 @@ class GeneTreeGIN(nn.Module):
             if not clade_sp:
                 continue
 
-            gt_clade_embs = []
-            for gt_idx in range(n_gene_trees):
-                sp_embs = per_gt_species_emb[gt_idx]
-                # Collect embeddings for species in this clade
-                present = [sp_embs[sp] for sp in clade_sp if sp in sp_embs]
-                if present:
-                    # Mean pool across clade species
-                    gt_clade_embs.append(torch.stack(present).mean(dim=0))
+            sp_list = [sp for sp in clade_sp if sp < self.n_species]
+            if not sp_list:
+                continue
 
-            if gt_clade_embs:
-                stacked = torch.stack(gt_clade_embs)  # [n_valid_gt, embed_dim]
-                mean_emb = stacked.mean(dim=0)
-                std_emb = stacked.std(dim=0) if stacked.shape[0] > 1 else torch.zeros_like(mean_emb)
-                edge_features[edge_idx] = torch.cat([mean_emb, std_emb])
+            sp_tensor = torch.tensor(sp_list, dtype=torch.long, device=device)
+
+            # Gather: [n_gt, n_clade_sp, embed_dim]
+            clade_embs = sp_pool_2d[:, sp_tensor]
+            # Validity: [n_gt, n_clade_sp]
+            clade_valid = sp_valid_2d[:, sp_tensor]
+
+            # Number of valid species per gene tree
+            n_valid_per_gt = clade_valid.sum(dim=1)  # [n_gt]
+            gt_has_data = n_valid_per_gt > 0
+
+            if gt_has_data.sum() == 0:
+                continue
+
+            # Mean pool over clade species per gene tree (masking invalid)
+            masked_embs = clade_embs * clade_valid.unsqueeze(-1).float()
+            gt_means = masked_embs.sum(dim=1) / n_valid_per_gt.unsqueeze(-1).clamp(min=1)
+            # gt_means: [n_gt, embed_dim]
+
+            # Keep only gene trees that had data
+            valid_means = gt_means[gt_has_data]  # [n_valid_gt, embed_dim]
+
+            # Aggregate across gene trees: mean + std
+            mean_emb = valid_means.mean(dim=0)
+            if valid_means.shape[0] > 1:
+                std_emb = valid_means.std(dim=0)
+            else:
+                std_emb = torch.zeros(self.embed_dim, device=device)
+
+            edge_features[edge_idx] = torch.cat([mean_emb, std_emb])
 
         return edge_features
