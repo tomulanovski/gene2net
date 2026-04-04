@@ -75,8 +75,9 @@ class WGDDetector(nn.Module):
         # Edge embedding MLP:
         # parent node [hidden_dim] + child node [hidden_dim]
         # + hand-crafted edge features [edge_feat_dim]
-        # + gene tree features [2 * hidden_dim]
-        edge_input_dim = 2 * hidden_dim + edge_feat_dim + 2 * hidden_dim
+        # + gene tree features [output_dim from GIN: 2*hidden_dim + copy count stats]
+        gene_tree_out_dim = self.gene_tree_encoder.output_dim
+        edge_input_dim = 2 * hidden_dim + edge_feat_dim + gene_tree_out_dim
         self.edge_mlp = nn.Sequential(
             nn.Linear(edge_input_dim, hidden_dim),
             nn.ReLU(),
