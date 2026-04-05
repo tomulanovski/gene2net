@@ -5,7 +5,7 @@ check_pipeline_status.py - Comprehensive pipeline status checker
 Validates SimPhy simulations and phylogenetic network inference pipeline steps:
 - SimPhy simulations (1000 trees per replicate)
 - Sequence alignments (1000 alignments per replicate)
-- Input preparation for GRAMPA, Polyphest, MPSUGAR, PADRE, AlloppNET
+- Input preparation for GRAMPA, Polyphest, MPSUGAR, PADRE, AlloppNET, GRANDMA_SPLIT
 - Method outputs and results
 
 Usage:
@@ -94,6 +94,10 @@ METHOD_FILES = {
     'alloppnet': {
         'prep': ['taxa_table.txt', 'ploidy_level.json'],  # Also has ~1000 .nex files
         'run': ['alloppnet_result.tre', 'sampledmultrees.txt', 'alloppnet.XML']  # alloppnet_result.tre created by postprocess_results.py
+    },
+    'grandma_split': {
+        'prep': ['grampa_trees.tre', 'species.tre'],  # Reuses GRAMPA inputs
+        'run': ['final_multree.tre']
     }
 }
 
@@ -324,6 +328,9 @@ def check_method_inputs(config: str, method: str, verbose: bool = False) -> List
                 input_dir = os.path.join(BASE_DIR, network, "processed", config, "padre_input", f"replicate_{replicate}")
             elif method == 'alloppnet':
                 input_dir = os.path.join(BASE_DIR, network, "processed", config, "alloppnet_input", f"replicate_{replicate}")
+            elif method == 'grandma_split':
+                # Reuses GRAMPA inputs
+                input_dir = os.path.join(BASE_DIR, network, "processed", config, "grampa_input", f"replicate_{replicate}")
             else:
                 continue
 
@@ -414,6 +421,8 @@ def check_method_outputs(config: str, method: str, percentile: int = 60,
                 output_dir = os.path.join(BASE_DIR, network, "processed", config, "padre_input", f"replicate_{replicate}")
             elif method == 'alloppnet':
                 output_dir = os.path.join(BASE_DIR, network, "results", config, "alloppnet", f"replicate_{replicate}")
+            elif method == 'grandma_split':
+                output_dir = os.path.join(BASE_DIR, network, "results", config, "grandma_split", f"replicate_{replicate}")
             else:
                 continue
 
@@ -594,7 +603,7 @@ Examples:
     parser.add_argument('config', help='Configuration name (e.g., conf_ils_low_10M)')
     parser.add_argument('--step', choices=['simphy', 'sequences', 'prep', 'run', 'all'], default='all',
                        help='Which step to check (default: all)')
-    parser.add_argument('--method', choices=['grampa', 'polyphest', 'mpsugar', 'padre', 'alloppnet', 'all'], default='all',
+    parser.add_argument('--method', choices=['grampa', 'polyphest', 'mpsugar', 'padre', 'alloppnet', 'grandma_split', 'all'], default='all',
                        help='Which method to check (default: all)')
     parser.add_argument('--verbose', '-v', action='store_true',
                        help='Show detailed results including successful runs')
@@ -635,7 +644,7 @@ Examples:
 
     # Check method inputs (prep step)
     if args.step in ['prep', 'all']:
-        methods = ['grampa', 'polyphest', 'mpsugar', 'padre', 'alloppnet'] if args.method == 'all' else [args.method]
+        methods = ['grampa', 'polyphest', 'mpsugar', 'padre', 'alloppnet', 'grandma_split'] if args.method == 'all' else [args.method]
 
         for i, method in enumerate(methods, start=1):
             print(f"\n[{i+2}/{len(methods)+2}] Checking {method.upper()} inputs...")
@@ -647,7 +656,7 @@ Examples:
 
     # Check method outputs (run step)
     if args.step in ['run', 'all']:
-        methods = ['grampa', 'polyphest', 'mpsugar', 'padre', 'alloppnet'] if args.method == 'all' else [args.method]
+        methods = ['grampa', 'polyphest', 'mpsugar', 'padre', 'alloppnet', 'grandma_split'] if args.method == 'all' else [args.method]
 
         for i, method in enumerate(methods, start=1):
             print(f"\n[{i+2}/{len(methods)+2}] Checking {method.upper()} outputs...")
