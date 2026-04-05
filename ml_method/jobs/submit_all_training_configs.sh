@@ -26,7 +26,7 @@ STEP=${2:-simphy}
 
 BASE_DIR="/groups/itay_mayrose/tomulanovski/gene2net/ml_method"
 N_TREES=2000
-START=0
+BATCH_SIZE=1000  # SLURM max array size limit
 
 # ============================================================================
 # Configuration table: CONFIG_NAME  NE  DUP_RATE  LOSS_RATE
@@ -51,7 +51,7 @@ echo "============================================================"
 echo "Training Data Generation — All Configs"
 echo "============================================================"
 echo "MUL-trees dir: ${MUL_TREES_DIR}"
-echo "Trees: ${N_TREES} (indices ${START}-$((START + N_TREES - 1)))"
+echo "Trees: ${N_TREES} (batches of ${BATCH_SIZE})"
 echo "Step: ${STEP}"
 echo "Configs: ${#CONFIGS[@]} (+ ils_low already done)"
 echo "============================================================"
@@ -62,25 +62,34 @@ for config_line in "${CONFIGS[@]}"; do
 
     echo "--- ${CONFIG} (Ne=${NE}, dup=${DUP}, loss=${LOSS}) ---"
 
-    case "$STEP" in
-        simphy)
-            "${BASE_DIR}/jobs/submit_simphy_training.sh" \
-                "$N_TREES" "$MUL_TREES_DIR" "$START" \
-                "$CONFIG" "$NE" 500 1 "$DUP" "$LOSS"
-            ;;
-        astral)
-            "${BASE_DIR}/jobs/submit_astral_training.sh" \
-                "$N_TREES" "$MUL_TREES_DIR" "$START" "$CONFIG"
-            ;;
-        package)
-            "${BASE_DIR}/jobs/submit_package_training.sh" \
-                "$N_TREES" "$MUL_TREES_DIR" "$START" "$CONFIG"
-            ;;
-        *)
-            echo "Unknown step: ${STEP}. Use: simphy, astral, package"
-            exit 1
-            ;;
-    esac
+    # Submit in batches to stay within SLURM array size limit
+    START=0
+    while [ $START -lt $N_TREES ]; do
+        REMAINING=$((N_TREES - START))
+        BATCH=$((REMAINING < BATCH_SIZE ? REMAINING : BATCH_SIZE))
+
+        case "$STEP" in
+            simphy)
+                "${BASE_DIR}/jobs/submit_simphy_training.sh" \
+                    "$BATCH" "$MUL_TREES_DIR" "$START" \
+                    "$CONFIG" "$NE" 500 1 "$DUP" "$LOSS"
+                ;;
+            astral)
+                "${BASE_DIR}/jobs/submit_astral_training.sh" \
+                    "$BATCH" "$MUL_TREES_DIR" "$START" "$CONFIG"
+                ;;
+            package)
+                "${BASE_DIR}/jobs/submit_package_training.sh" \
+                    "$BATCH" "$MUL_TREES_DIR" "$START" "$CONFIG"
+                ;;
+            *)
+                echo "Unknown step: ${STEP}. Use: simphy, astral, package"
+                exit 1
+                ;;
+        esac
+
+        START=$((START + BATCH_SIZE))
+    done
 
     echo ""
 done
