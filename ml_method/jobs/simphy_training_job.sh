@@ -26,9 +26,9 @@ NE="${NE_VAL:-200000}"
 NUM_TREES="${NUM_GENE_TREES:-500}"
 NUM_REPS="${NUM_REPLICATES:-1}"
 
-# Gene dup/loss — default 0 for training (pure ILS)
-DUPLICATION_RATE=0
-LOSS_RATE=0
+# Gene dup/loss — default 0 (configurable via DUP_RATE / LOSS_RATE env vars)
+DUPLICATION_RATE="${DUP_RATE:-0}"
+LOSS_RATE="${LOSS_RATE_VAL:-0}"
 TRANSFER_RATE=0
 GC_RATE=0
 GENERATION_TIME=1
@@ -75,6 +75,7 @@ echo "SimPhy Training - MUL-tree ${IDX}"
 echo "============================================================================"
 echo "Species tree: ${SPECIES_TREE}"
 echo "Config: ${CONFIGURATION} | Ne: ${NE}"
+echo "Dup rate: ${DUPLICATION_RATE} | Loss rate: ${LOSS_RATE}"
 echo "Gene trees: ${NUM_TREES} | Replicates: ${NUM_REPS}"
 echo "Output: ${OUTPUT_BASE}"
 echo "Date: $(date)"
