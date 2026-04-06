@@ -397,6 +397,29 @@ def check_method_inputs(config: str, method: str, verbose: bool = False) -> List
 
     return results
 
+GRANDMA_LOG_WARNING_PATTERNS = [
+    "Final tree contains non-unique node labels",
+    "original input species tree topology or node names were NOT perfectly preserved",
+]
+
+def check_grandma_log(log_file: str) -> List[str]:
+    """Check grandma.log for warning patterns that indicate a bad run"""
+    warnings = []
+    if not os.path.exists(log_file):
+        warnings.append("grandma.log not found")
+        return warnings
+
+    try:
+        with open(log_file, 'r') as f:
+            content = f.read()
+        for pattern in GRANDMA_LOG_WARNING_PATTERNS:
+            if pattern in content:
+                warnings.append(pattern)
+    except Exception as e:
+        warnings.append(f"Could not read grandma.log: {e}")
+
+    return warnings
+
 def check_method_outputs(config: str, method: str, percentile: int = 60,
                         iterations: int = 500, chains: int = 1,
                         verbose: bool = False) -> List[ValidationResult]:
@@ -452,6 +475,15 @@ def check_method_outputs(config: str, method: str, percentile: int = 60,
                     else:
                         status = 'FAILED'
                         details = "Output files exist but have errors"
+
+                    # GRANDMA_SPLIT: check log for warning signs even if output exists
+                    if method == 'grandma_split' and status == 'SUCCESS':
+                        log_file = os.path.join(output_dir, "grandma.log")
+                        warnings = check_grandma_log(log_file)
+                        if warnings:
+                            status = 'WARNING'
+                            details = f"Output present but log warnings: {'; '.join(warnings)}"
+                            errors.extend(warnings)
                 else:
                     # Fallback: check for any result files (shouldn't reach here now)
                     result_files = glob.glob(os.path.join(output_dir, "*.nwk")) + \
@@ -488,6 +520,7 @@ def print_summary(results: List[ValidationResult], title: str):
     failed = sum(1 for r in results if r.status == 'FAILED')
     missing = sum(1 for r in results if r.status == 'MISSING')
     partial = sum(1 for r in results if r.status == 'PARTIAL')
+    warning = sum(1 for r in results if r.status == 'WARNING')
 
     success_rate = (success / total * 100) if total > 0 else 0
 
@@ -501,6 +534,8 @@ def print_summary(results: List[ValidationResult], title: str):
     print(f"Checking: {num_networks} networks × {num_replicates} replicates = {total} combinations")
     print(f"")
     print(f"Success:  {success:3d} / {total:3d} ({success_rate:5.1f}%)")
+    if warning > 0:
+        print(f"Warning:  {warning:3d} / {total:3d} ({warning/total*100:5.1f}%)")
     if partial > 0:
         print(f"Partial:  {partial:3d} / {total:3d} ({partial/total*100:5.1f}%)")
     if failed > 0:
@@ -526,7 +561,7 @@ def print_detailed_results(results: List[ValidationResult], show_success: bool =
         all_success = all(r.status == 'SUCCESS' for r in network_results)
 
         if all_success and not show_success:
-            continue  # Skip successful networks unless requested
+            continue  # Skip successful networks unless requested (WARNING is always shown)
 
         print(f"\n{network}:")
         print(f"{'-'*80}")
@@ -536,7 +571,8 @@ def print_detailed_results(results: List[ValidationResult], show_success: bool =
                 'SUCCESS': '✓',
                 'PARTIAL': '~',
                 'FAILED': '✗',
-                'MISSING': '?'
+                'MISSING': '?',
+                'WARNING': '⚠'
             }.get(result.status, '?')
 
             print(f"  Replicate {result.replicate}: [{status_symbol}] {result.status:8s} - {result.details}")
