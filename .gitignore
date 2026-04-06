@@ -21,6 +21,7 @@ simulations/analysis/**/cache/
 !simulations/md_files/
 !simulations/md_files/**
 !simulations/*.md
+!simulations/summary_config.yaml
 
 # --- Keep ml_method folder ---
 !ml_method/
