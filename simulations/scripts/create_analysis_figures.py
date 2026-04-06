@@ -49,7 +49,8 @@ METHOD_COLORS = {
     'polyphest_p90': '#CC78BC', # Pink
     'mpsugar': '#8B4513',       # Saddle Brown (darker, distinct from orange)
     'padre': '#ECE133',         # Yellow
-    'alloppnet': '#DC143C'      # Crimson/Red
+    'alloppnet': '#DC143C',      # Crimson/Red
+    'grandma_split': '#56B4E9'   # Light Blue
 }
 
 # Markers for better distinction
@@ -61,7 +62,8 @@ METHOD_MARKERS = {
     'polyphest_p90': 'D',
     'mpsugar': 'v',
     'padre': 'P',
-    'alloppnet': 'X'
+    'alloppnet': 'X',
+    'grandma_split': 'd'        # Diamond
 }
 
 
