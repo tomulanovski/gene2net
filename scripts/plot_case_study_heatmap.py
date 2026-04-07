@@ -276,20 +276,25 @@ def main():
                 cmap_upper='YlOrRd', cmap_lower='YlGnBu'
             )
 
-            # Add two colorbars — one on each side to avoid overlap
+            # Add two thin colorbars stacked on the right, no text labels
             import matplotlib.cm as cm
+            from mpl_toolkits.axes_grid1 import make_axes_locatable
+            divider = make_axes_locatable(ax)
+            cax_u = divider.append_axes("right", size="4%", pad=0.15)
+            cax_l = divider.append_axes("right", size="4%", pad=0.3)
             sm_upper = cm.ScalarMappable(cmap=cmap_u, norm=norm)
             sm_lower = cm.ScalarMappable(cmap=cmap_l, norm=norm)
-            cbar_u = fig.colorbar(sm_upper, ax=ax, fraction=0.03, pad=0.06, location='right')
-            cbar_u.set_label(f'Upper: {title_upper.replace(chr(10), " ")}', fontsize=9)
-            cbar_u.ax.tick_params(labelsize=8)
-            cbar_l = fig.colorbar(sm_lower, ax=ax, fraction=0.03, pad=0.06, location='left')
-            cbar_l.set_label(f'Lower: {title_lower.replace(chr(10), " ")}', fontsize=9)
-            cbar_l.ax.tick_params(labelsize=8)
+            fig.colorbar(sm_upper, cax=cax_u)
+            fig.colorbar(sm_lower, cax=cax_l)
+            cax_u.tick_params(labelsize=8)
+            cax_l.tick_params(labelsize=8)
 
-            # Title — dataset name only
-            ax.set_title(f'{args.dataset.replace("_", " ")}',
-                         fontsize=13, fontweight='bold', pad=12)
+            # Title with legend for which color is which
+            title_u_clean = title_upper.replace(chr(10), " ")
+            title_l_clean = title_lower.replace(chr(10), " ")
+            ax.set_title(f'{args.dataset.replace("_", " ")}\n'
+                         f'Upper \u25b3: {title_u_clean}  |  Lower \u25bd: {title_l_clean}',
+                         fontsize=11, fontweight='bold', pad=12)
 
             plt.tight_layout()
             safe_u = upper_metric.replace('.', '_')
