@@ -24,7 +24,7 @@ METHOD_DISPLAY = {
     'padre': 'PADRE',
     'mpallop': 'AlloppNET',
     'alloppnet': 'AlloppNET',
-    'grandma_split': 'GRAMPA Iterative',
+    'grandma_split': r'GRAMPA$^{Iter}$',
 }
 
 # Display names for metrics
@@ -155,7 +155,8 @@ def plot_split_heatmap(ax, matrix_upper, matrix_lower, labels,
 def main():
     parser = argparse.ArgumentParser(description='Generate case study pairwise heatmap')
     parser.add_argument('comparisons_csv', help='Path to comparisons_raw.csv')
-    parser.add_argument('--dataset', required=True, help='Dataset name (e.g., Wu_2015)')
+    parser.add_argument('--dataset', required=True,
+                        help='Dataset name (e.g., Wu_2015)')
     parser.add_argument('--metrics', nargs='+',
                         default=['edit_distance_multree', 'ret_leaf_jaccard.dist',
                                  'ret_sisters_jaccard.dist', 'ploidy_diff.dist',
@@ -267,7 +268,7 @@ def main():
             title_upper = METRIC_DISPLAY.get(upper_metric, upper_metric)
             title_lower = METRIC_DISPLAY.get(lower_metric, lower_metric)
 
-            fig, ax = plt.subplots(1, 1, figsize=(7, 6.5))
+            fig, ax = plt.subplots(1, 1, figsize=(8, 7))
             cmap_u, cmap_l, norm = plot_split_heatmap(
                 ax, matrix_upper, matrix_lower, display_labels,
                 title_upper, title_lower,
@@ -275,21 +276,20 @@ def main():
                 cmap_upper='YlOrRd', cmap_lower='YlGnBu'
             )
 
-            # Add two colorbars
+            # Add two colorbars — one on each side to avoid overlap
             import matplotlib.cm as cm
             sm_upper = cm.ScalarMappable(cmap=cmap_u, norm=norm)
             sm_lower = cm.ScalarMappable(cmap=cmap_l, norm=norm)
-            cbar_u = fig.colorbar(sm_upper, ax=ax, fraction=0.023, pad=0.08, location='right')
-            cbar_u.set_label(title_upper.replace('\n', ' '), fontsize=10)
+            cbar_u = fig.colorbar(sm_upper, ax=ax, fraction=0.03, pad=0.06, location='right')
+            cbar_u.set_label(f'Upper: {title_upper.replace(chr(10), " ")}', fontsize=9)
             cbar_u.ax.tick_params(labelsize=8)
-            cbar_l = fig.colorbar(sm_lower, ax=ax, fraction=0.023, pad=0.12, location='right')
-            cbar_l.set_label(title_lower.replace('\n', ' '), fontsize=10)
+            cbar_l = fig.colorbar(sm_lower, ax=ax, fraction=0.03, pad=0.06, location='left')
+            cbar_l.set_label(f'Lower: {title_lower.replace(chr(10), " ")}', fontsize=9)
             cbar_l.ax.tick_params(labelsize=8)
 
-            # Title
-            ax.set_title(f'Upper: {title_upper.replace(chr(10), " ")}  |  '
-                         f'Lower: {title_lower.replace(chr(10), " ")}',
-                         fontsize=12, fontweight='bold', pad=12)
+            # Title — dataset name only
+            ax.set_title(f'{args.dataset.replace("_", " ")}',
+                         fontsize=13, fontweight='bold', pad=12)
 
             plt.tight_layout()
             safe_u = upper_metric.replace('.', '_')
