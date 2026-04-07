@@ -289,12 +289,8 @@ def main():
             cax_u.tick_params(labelsize=8)
             cax_l.tick_params(labelsize=8)
 
-            # Title with legend for which color is which
-            title_u_clean = title_upper.replace(chr(10), " ")
-            title_l_clean = title_lower.replace(chr(10), " ")
-            ax.set_title(f'{args.dataset.replace("_", " ")}\n'
-                         f'Upper \u25b3: {title_u_clean}  |  Lower \u25bd: {title_l_clean}',
-                         fontsize=11, fontweight='bold', pad=12)
+            # No title — dataset name and metric labels go in the thesis caption
+            ax.set_title('', pad=0)
 
             plt.tight_layout()
             safe_u = upper_metric.replace('.', '_')
