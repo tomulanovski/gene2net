@@ -172,7 +172,7 @@ class ConfigurationAnalyzer:
         # Clean old plots and tables before generating new ones
         self._clean_output_directories()
 
-        total_plots = 48  # Updated: added Jaccard distribution boxplots, per-method correlations, and per-network bias
+        total_plots = 43  # Updated: removed 5 RF distance plots (RF not well-defined for MUL-trees)
         plot_num = 0
 
         # ========================================================================
@@ -300,30 +300,24 @@ class ConfigurationAnalyzer:
             'Max_Copies', 'Maximum Copies per Species', 'edit_distance_multree',
             'Edit Distance (MUL-tree)', '14_faceted_editdist_multree_vs_max_copies')
 
-        # RF Distance plots (PRIMARY METRIC)
-        plot_num += 1
-        print(f"[{plot_num}/{total_plots}] RF Distance vs Num Species (combined)...")
-        self.plot_accuracy_vs_characteristic_combined(
-            'Num_Species', 'Number of Species', 'rf_distance',
-            'Robinson-Foulds Distance (MUL-tree)', '15_combined_rf_vs_num_species')
-
-        plot_num += 1
-        print(f"[{plot_num}/{total_plots}] RF Distance vs Num Species (faceted)...")
-        self.plot_accuracy_vs_characteristic_faceted(
-            'Num_Species', 'Number of Species', 'rf_distance',
-            'Robinson-Foulds Distance (MUL-tree)', '15_faceted_rf_vs_num_species')
-
-        plot_num += 1
-        print(f"[{plot_num}/{total_plots}] RF Distance vs H_Strict (combined)...")
-        self.plot_accuracy_vs_characteristic_combined(
-            'H_Strict', 'Number of Reticulations (Holm Fold)', 'rf_distance',
-            'Robinson-Foulds Distance (MUL-tree)', '16_combined_rf_vs_h_strict')
-
-        plot_num += 1
-        print(f"[{plot_num}/{total_plots}] RF Distance vs H_Strict (faceted)...")
-        self.plot_accuracy_vs_characteristic_faceted(
-            'H_Strict', 'Number of Reticulations (Holm Fold)', 'rf_distance',
-            'Robinson-Foulds Distance (MUL-tree)', '16_faceted_rf_vs_h_strict')
+        # RF Distance plots — DISABLED: RF distance is not well-defined for MUL-trees
+        # (bipartitions with duplicated leaf labels lose information via set deduplication)
+        # plot_num += 1
+        # self.plot_accuracy_vs_characteristic_combined(
+        #     'Num_Species', 'Number of Species', 'rf_distance',
+        #     'Robinson-Foulds Distance (MUL-tree)', '15_combined_rf_vs_num_species')
+        # plot_num += 1
+        # self.plot_accuracy_vs_characteristic_faceted(
+        #     'Num_Species', 'Number of Species', 'rf_distance',
+        #     'Robinson-Foulds Distance (MUL-tree)', '15_faceted_rf_vs_num_species')
+        # plot_num += 1
+        # self.plot_accuracy_vs_characteristic_combined(
+        #     'H_Strict', 'Number of Reticulations (Holm Fold)', 'rf_distance',
+        #     'Robinson-Foulds Distance (MUL-tree)', '16_combined_rf_vs_h_strict')
+        # plot_num += 1
+        # self.plot_accuracy_vs_characteristic_faceted(
+        #     'H_Strict', 'Number of Reticulations (Holm Fold)', 'rf_distance',
+        #     'Robinson-Foulds Distance (MUL-tree)', '16_faceted_rf_vs_h_strict')
 
         # ========================================================================
         # CATEGORY 3: ADVANCED METRICS (Jaccard, Polyploid F1)
@@ -400,7 +394,7 @@ class ConfigurationAnalyzer:
         self.plot_edit_distance_distribution()
         
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] 3-Way Distance Metric Comparison...")
+        print(f"[{plot_num}/{total_plots}] Distance Metric Comparison...")
         self.plot_distance_metrics_comparison()
 
         plot_num += 1
@@ -409,11 +403,11 @@ class ConfigurationAnalyzer:
                                       'Edit Distance (MUL-tree)',
                                       '08b_edit_distance_multree_distribution')
 
-        plot_num += 1
-        print(f"[{plot_num}/{total_plots}] RF Distance Distribution...")
-        self.plot_metric_distribution('rf_distance',
-                                      'Robinson-Foulds Distance (MUL-tree)',
-                                      '08c_rf_distance_distribution')
+        # RF Distance Distribution — DISABLED: RF not well-defined for MUL-trees
+        # plot_num += 1
+        # self.plot_metric_distribution('rf_distance',
+        #                               'Robinson-Foulds Distance (MUL-tree)',
+        #                               '08c_rf_distance_distribution')
 
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Per-Network Completion Breakdown...")
@@ -909,7 +903,7 @@ class ConfigurationAnalyzer:
         plt.close()
 
     def plot_distance_metrics_comparison(self):
-        """Compare all three distance metrics side-by-side: Network ED, MUL-tree ED, and RF"""
+        """Compare distance metrics side-by-side: Network ED and MUL-tree ED"""
         if self.metrics is None:
             return
 
@@ -917,14 +911,14 @@ class ConfigurationAnalyzer:
         if len(methods) == 0:
             return
 
-        # Collect data for all three metrics
+        # Collect data for distance metrics (RF disabled: not well-defined for MUL-trees)
         metrics_to_compare = {
             'edit_distance': 'Network Edit Distance',
             'edit_distance_multree': 'MUL-tree Edit Distance',
-            'rf_distance': 'RF Distance (MUL-tree)'
+            # 'rf_distance': 'RF Distance (MUL-tree)',  # Disabled: RF not well-defined for MUL-trees
         }
-        
-        fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+
+        fig, axes = plt.subplots(1, len(metrics_to_compare), figsize=(7 * len(metrics_to_compare), 6))
         
         for idx, (metric_name, metric_label) in enumerate(metrics_to_compare.items()):
             ax = axes[idx]
@@ -986,12 +980,12 @@ class ConfigurationAnalyzer:
             ax.tick_params(axis='x', rotation=0, labelsize=10)
             
             # Highlight if this is the primary metric
-            if metric_name in ['edit_distance_multree', 'rf_distance']:
+            if metric_name in ['edit_distance_multree']:
                 ax.patch.set_edgecolor('#2E8B57')
                 ax.patch.set_linewidth(3)
         
-        fig.suptitle(f'Distance Metrics Comparison (ILS {self.ils_level})\n' + 
-                    'Green border = Primary metrics (MUL-tree based)',
+        fig.suptitle(f'Distance Metrics Comparison ({self.ils_level})\n' +
+                    'Green border = Primary metric (MUL-tree based)',
                     fontsize=16, fontweight='bold', y=1.02)
         
         plt.tight_layout()
@@ -2021,17 +2015,16 @@ class ConfigurationAnalyzer:
             else:
                 mean_ed = std_ed = median_ed = np.nan
             
-            # Also get RF distance
-            method_rf = self.metrics[
-                (self.metrics['method'] == method) &
-                (self.metrics['metric'] == 'rf_distance')
-            ]
-            
-            if len(method_rf) > 0:
-                mean_rf = method_rf['mean'].mean()
-                median_rf = method_rf['mean'].median()
-            else:
-                mean_rf = median_rf = np.nan
+            # RF distance — DISABLED: not well-defined for MUL-trees
+            # method_rf = self.metrics[
+            #     (self.metrics['method'] == method) &
+            #     (self.metrics['metric'] == 'rf_distance')
+            # ]
+            # if len(method_rf) > 0:
+            #     mean_rf = method_rf['mean'].mean()
+            #     median_rf = method_rf['mean'].median()
+            # else:
+            #     mean_rf = median_rf = np.nan
 
             # Reticulation absolute error (MAE)
             method_ret = self.metrics[
@@ -2065,8 +2058,8 @@ class ConfigurationAnalyzer:
                 'Mean_Edit_Distance_MULtree': mean_ed,
                 'Median_Edit_Distance_MULtree': median_ed,
                 'Std_Edit_Distance_MULtree': std_ed,
-                'Mean_RF_Distance': mean_rf,
-                'Median_RF_Distance': median_rf,
+                # 'Mean_RF_Distance': mean_rf,  # Disabled: RF not well-defined for MUL-trees
+                # 'Median_RF_Distance': median_rf,
                 'Mean_Reticulation_MAE': mean_ret_err,
                 'Median_Reticulation_MAE': median_ret_err,
                 'Mean_Reticulation_Bias': mean_ret_bias,
@@ -2120,16 +2113,16 @@ class ConfigurationAnalyzer:
                 else:
                     row[f'{method}_EditDist_MULtree'] = np.nan
                 
-                # RF distance
-                method_rf = self.metrics[
-                    (self.metrics['method'] == method) &
-                    (self.metrics['network'] == network) &
-                    (self.metrics['metric'] == 'rf_distance')
-                ]
-                if len(method_rf) > 0:
-                    row[f'{method}_RF'] = method_rf['mean'].values[0]
-                else:
-                    row[f'{method}_RF'] = np.nan
+                # RF distance — DISABLED: not well-defined for MUL-trees
+                # method_rf = self.metrics[
+                #     (self.metrics['method'] == method) &
+                #     (self.metrics['network'] == network) &
+                #     (self.metrics['metric'] == 'rf_distance')
+                # ]
+                # if len(method_rf) > 0:
+                #     row[f'{method}_RF'] = method_rf['mean'].values[0]
+                # else:
+                #     row[f'{method}_RF'] = np.nan
 
             network_data.append(row)
 
