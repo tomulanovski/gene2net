@@ -285,7 +285,7 @@ def main():
             sm_upper = cm.ScalarMappable(cmap=cmap_u, norm=norm)
             sm_lower = cm.ScalarMappable(cmap=cmap_l, norm=norm)
             fig.colorbar(sm_upper, cax=cax_u)
-            cax_u.set_ticks([])  # No ticks on the left bar
+            cax_u.set_yticks([])  # No ticks on the left bar
             cb_l = fig.colorbar(sm_lower, cax=cax_l)
             cax_l.tick_params(labelsize=8)
 
