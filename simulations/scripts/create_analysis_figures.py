@@ -248,57 +248,57 @@ class ConfigurationAnalyzer:
         # CATEGORY 2: EDIT DISTANCE (ACCURACY) vs NETWORK CHARACTERISTICS
         # ========================================================================
         print("\n" + "="*80)
-        print("CATEGORY 2: MUL-tree Accuracy Metrics vs Network Characteristics")
+        print("CATEGORY 2: Accuracy Metrics vs Network Characteristics")
         print("="*80)
 
-        # MUL-tree Edit Distance plots (PRIMARY METRIC)
+        # Edit Distance plots (PRIMARY METRIC)
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] MUL-tree Edit Distance vs Num Species (combined)...")
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs Num Species (combined)...")
         self.plot_accuracy_vs_characteristic_combined(
             'Num_Species', 'Number of Species', 'edit_distance_multree',
-            'Edit Distance (MUL-tree)', '11_combined_editdist_multree_vs_num_species')
+            'Edit Distance', '11_combined_editdist_multree_vs_num_species')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] MUL-tree Edit Distance vs Num Species (faceted)...")
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs Num Species (faceted)...")
         self.plot_accuracy_vs_characteristic_faceted(
             'Num_Species', 'Number of Species', 'edit_distance_multree',
-            'Edit Distance (MUL-tree)', '11_faceted_editdist_multree_vs_num_species')
+            'Edit Distance', '11_faceted_editdist_multree_vs_num_species')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] MUL-tree Edit Distance vs H_Strict (combined)...")
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs H_Strict (combined)...")
         self.plot_accuracy_vs_characteristic_combined(
             'H_Strict', 'Number of Reticulations (Holm Fold)', 'edit_distance_multree',
-            'Edit Distance (MUL-tree)', '12_combined_editdist_multree_vs_h_strict')
+            'Edit Distance', '12_combined_editdist_multree_vs_h_strict')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] MUL-tree Edit Distance vs H_Strict (faceted)...")
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs H_Strict (faceted)...")
         self.plot_accuracy_vs_characteristic_faceted(
             'H_Strict', 'Number of Reticulations (Holm Fold)', 'edit_distance_multree',
-            'Edit Distance (MUL-tree)', '12_faceted_editdist_multree_vs_h_strict')
+            'Edit Distance', '12_faceted_editdist_multree_vs_h_strict')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] MUL-tree Edit Distance vs Num Polyploids (combined)...")
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs Num Polyploids (combined)...")
         self.plot_accuracy_vs_characteristic_combined(
             'Num_Polyploids', 'Number of Polyploid Species', 'edit_distance_multree',
-            'Edit Distance (MUL-tree)', '13_combined_editdist_multree_vs_polyploids')
+            'Edit Distance', '13_combined_editdist_multree_vs_polyploids')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] MUL-tree Edit Distance vs Num Polyploids (faceted)...")
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs Num Polyploids (faceted)...")
         self.plot_accuracy_vs_characteristic_faceted(
             'Num_Polyploids', 'Number of Polyploid Species', 'edit_distance_multree',
-            'Edit Distance (MUL-tree)', '13_faceted_editdist_multree_vs_polyploids')
+            'Edit Distance', '13_faceted_editdist_multree_vs_polyploids')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] MUL-tree Edit Distance vs Max Copies (combined)...")
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs Max Copies (combined)...")
         self.plot_accuracy_vs_characteristic_combined(
             'Max_Copies', 'Maximum Copies per Species', 'edit_distance_multree',
-            'Edit Distance (MUL-tree)', '14_combined_editdist_multree_vs_max_copies')
+            'Edit Distance', '14_combined_editdist_multree_vs_max_copies')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] MUL-tree Edit Distance vs Max Copies (faceted)...")
+        print(f"[{plot_num}/{total_plots}] Edit Distance vs Max Copies (faceted)...")
         self.plot_accuracy_vs_characteristic_faceted(
             'Max_Copies', 'Maximum Copies per Species', 'edit_distance_multree',
-            'Edit Distance (MUL-tree)', '14_faceted_editdist_multree_vs_max_copies')
+            'Edit Distance', '14_faceted_editdist_multree_vs_max_copies')
 
         # RF Distance plots — DISABLED: RF distance is not well-defined for MUL-trees
         # (bipartitions with duplicated leaf labels lose information via set deduplication)
@@ -330,28 +330,28 @@ class ConfigurationAnalyzer:
         print(f"[{plot_num}/{total_plots}] Reticulation Leaf Jaccard vs H_Strict (combined)...")
         self.plot_jaccard_vs_characteristic_combined(
             'H_Strict', 'Number of Reticulations (Holm Fold)',
-            'ret_leaf_jaccard', 'Reticulation Leaf Set Jaccard',
+            'ret_leaf_jaccard', 'Reticulation Leaf Distance',
             '21_combined_ret_leaf_jaccard_vs_h_strict')
 
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Reticulation Leaf Jaccard vs H_Strict (faceted)...")
         self.plot_jaccard_vs_characteristic_faceted(
             'H_Strict', 'Number of Reticulations (Holm Fold)',
-            'ret_leaf_jaccard', 'Reticulation Leaf Set Jaccard',
+            'ret_leaf_jaccard', 'Reticulation Leaf Distance',
             '21_faceted_ret_leaf_jaccard_vs_h_strict')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Sister Relationship Jaccard vs H_Strict (combined)...")
+        print(f"[{plot_num}/{total_plots}] Sister-Taxa Distance vs H_Strict (combined)...")
         self.plot_jaccard_vs_characteristic_combined(
             'H_Strict', 'Number of Reticulations (Holm Fold)',
-            'ret_sisters_jaccard', 'Sister Relationship Jaccard',
+            'ret_sisters_jaccard', 'Sister-Taxa Distance',
             '22_combined_ret_sisters_jaccard_vs_h_strict')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Sister Relationship Jaccard vs H_Strict (faceted)...")
+        print(f"[{plot_num}/{total_plots}] Sister-Taxa Distance vs H_Strict (faceted)...")
         self.plot_jaccard_vs_characteristic_faceted(
             'H_Strict', 'Number of Reticulations (Holm Fold)',
-            'ret_sisters_jaccard', 'Sister Relationship Jaccard',
+            'ret_sisters_jaccard', 'Sister-Taxa Distance',
             '22_faceted_ret_sisters_jaccard_vs_h_strict')
 
         plot_num += 1
@@ -361,13 +361,13 @@ class ConfigurationAnalyzer:
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Reticulation Leaf Jaccard Distribution...")
         self.plot_metric_distribution('ret_leaf_jaccard.dist',
-                                      'Reticulation Leaf Set Distance',
+                                      'Reticulation Leaf Distance',
                                       '08d_ret_leaf_jaccard_distribution')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Sister Relationship Jaccard Distribution...")
+        print(f"[{plot_num}/{total_plots}] Sister-Taxa Distance Distribution...")
         self.plot_metric_distribution('ret_sisters_jaccard.dist',
-                                      'Sister Relationship Distance',
+                                      'Sister-Taxa Distance',
                                       '08e_ret_sisters_jaccard_distribution')
 
         # ========================================================================
@@ -390,7 +390,7 @@ class ConfigurationAnalyzer:
         self.plot_reticulation_error_distribution()
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] MUL-tree Edit Distance Distribution...")
+        print(f"[{plot_num}/{total_plots}] Edit Distance Distribution...")
         self.plot_edit_distance_distribution()
         
         plot_num += 1
@@ -398,9 +398,9 @@ class ConfigurationAnalyzer:
         self.plot_distance_metrics_comparison()
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Edit Distance MUL-tree Distribution...")
+        print(f"[{plot_num}/{total_plots}] Edit Distance Distribution...")
         self.plot_metric_distribution('edit_distance_multree',
-                                      'Edit Distance (MUL-tree)',
+                                      'Edit Distance',
                                       '08b_edit_distance_multree_distribution')
 
         # RF Distance Distribution — DISABLED: RF not well-defined for MUL-trees
@@ -605,7 +605,7 @@ class ConfigurationAnalyzer:
             axes[idx].set_visible(False)
 
         fig.suptitle(f'Completion Rate vs {char_label} (ILS {self.ils_level})',
-                    fontsize=16, fontweight='bold', y=0.995)
+                    fontsize=16, fontweight='bold', y=1.02)
 
         plt.tight_layout()
         fig.savefig(self.plots_individual_dir / f"{fig_prefix}_{char_col.lower()}.pdf", bbox_inches='tight')
@@ -671,7 +671,7 @@ class ConfigurationAnalyzer:
 
         axes[0].set_ylabel('Completion Rate (%)', fontsize=12, fontweight='bold')
         fig.suptitle(f'Folding Method Comparison: Completion Rates (ILS {self.ils_level})',
-                    fontsize=16, fontweight='bold', y=0.995)
+                    fontsize=16, fontweight='bold', y=1.02)
 
         plt.tight_layout()
         fig.savefig(self.plots_dir / "05_folding_completion_comparison.pdf", bbox_inches='tight')
@@ -722,7 +722,7 @@ class ConfigurationAnalyzer:
                       label=f'Mean bias = {mean_bias:+.2f}')
             ax.axvline(0, color='black', linestyle='-', linewidth=1.5, alpha=0.5)
 
-            ax.set_xlabel('Reticulation Count Bias\n(+ = Over-estimation)', fontsize=11, fontweight='bold')
+            ax.set_xlabel('Reticulation Bias\n(+ = Over-estimation)', fontsize=11, fontweight='bold')
             ax.set_title(f'{method}\nMAE = {mae:.2f}', fontsize=12, fontweight='bold')
             ax.legend(fontsize=10)
             ax.grid(True, alpha=0.25, axis='y')
@@ -732,8 +732,8 @@ class ConfigurationAnalyzer:
             axes[idx].set_visible(False)
 
         axes[0].set_ylabel('Frequency', fontsize=11, fontweight='bold')
-        fig.suptitle(f'Reticulation Count Bias by Method (ILS {self.ils_level})',
-                    fontsize=15, fontweight='bold', y=0.995)
+        fig.suptitle(f'Reticulation Bias by Method (ILS {self.ils_level})',
+                    fontsize=15, fontweight='bold', y=1.02)
 
         plt.tight_layout()
         fig.savefig(self.plots_dir / "06_reticulation_bias_histogram.pdf", bbox_inches='tight')
@@ -814,11 +814,11 @@ class ConfigurationAnalyzer:
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
 
-        # Add mean bias annotations
+        # Add mean bias annotations — place inside plot area, below the title
         for i, (method, mean_bias) in enumerate(zip(labels, mean_biases), 1):
             sign = '+' if mean_bias >= 0 else ''
-            ax.text(i, ax.get_ylim()[1] * 0.95, f'{sign}{mean_bias:.1f}%',
-                   ha='center', va='top', fontsize=10, fontweight='bold',
+            ax.text(i, ax.get_ylim()[1] * 0.88, f'{sign}{mean_bias:.1f}%',
+                   ha='center', va='top', fontsize=9, fontweight='bold',
                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='gray', alpha=0.8))
 
         ax.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.5, label='Perfect accuracy (0%)')
@@ -826,7 +826,7 @@ class ConfigurationAnalyzer:
         if use_percentage:
             ylabel = 'Reticulation Error (%)\n(Inferred - True) / True × 100\n[Positive = Over-estimation]'
         else:
-            ylabel = 'Reticulation Count Bias\n(Inferred - True)\n[Positive = Over-estimation]'
+            ylabel = 'Reticulation Bias\n(Inferred - True)\n[Positive = Over-estimation]'
         
         ax.set_ylabel(ylabel, fontsize=14, fontweight='bold')
         ax.set_xlabel('Method', fontsize=14, fontweight='bold')
@@ -834,12 +834,12 @@ class ConfigurationAnalyzer:
         if use_percentage:
             title = f'Reticulation Error Distribution - Percentage Bias (ILS {self.ils_level})\nMean percentage bias shown above each box'
         else:
-            title = f'Reticulation Count Bias Distribution (ILS {self.ils_level})\nMean bias shown above each box'
+            title = f'Reticulation Bias Distribution (ILS {self.ils_level})\nMean bias shown above each box'
         
         ax.set_title(title, fontsize=15, fontweight='bold', pad=20)
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
-        ax.legend(fontsize=11)
-        plt.xticks(rotation=0, fontsize=12)
+        ax.legend(fontsize=10, loc='lower right')
+        plt.xticks(rotation=45, ha='right', fontsize=11)
 
         plt.tight_layout()
         fig.savefig(self.plots_dir / "07_reticulation_bias_boxplot.pdf", bbox_inches='tight')
@@ -889,13 +889,13 @@ class ConfigurationAnalyzer:
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
 
-        ax.set_ylabel(f'Edit Distance ({metric_type})\n(0 = identical, 1 = very different)', 
+        ax.set_ylabel(f'Edit Distance\n(0 = identical, 1 = very different)',
                      fontsize=14, fontweight='bold')
         ax.set_xlabel('Method', fontsize=14, fontweight='bold')
-        ax.set_title(f'Edit Distance Distribution - {metric_type} (ILS {self.ils_level})',
+        ax.set_title(f'Edit Distance Distribution ({self.ils_level})',
                     fontsize=15, fontweight='bold', pad=20)
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
-        plt.xticks(rotation=0, fontsize=12)
+        plt.xticks(rotation=45, ha='right', fontsize=11)
 
         plt.tight_layout()
         fig.savefig(self.plots_dir / "08_edit_distance_multree_boxplot.pdf", bbox_inches='tight')
@@ -914,12 +914,14 @@ class ConfigurationAnalyzer:
         # Collect data for distance metrics (RF disabled: not well-defined for MUL-trees)
         metrics_to_compare = {
             'edit_distance': 'Network Edit Distance',
-            'edit_distance_multree': 'MUL-tree Edit Distance',
+            'edit_distance_multree': 'Edit Distance',
             # 'rf_distance': 'RF Distance (MUL-tree)',  # Disabled: RF not well-defined for MUL-trees
         }
 
-        fig, axes = plt.subplots(1, len(metrics_to_compare), figsize=(7 * len(metrics_to_compare), 6))
-        
+        n_metrics = len(metrics_to_compare)
+        fig, axes = plt.subplots(1, n_metrics, figsize=(7 * n_metrics, 6), squeeze=False)
+        axes = axes.flatten()
+
         for idx, (metric_name, metric_label) in enumerate(metrics_to_compare.items()):
             ax = axes[idx]
             
@@ -977,7 +979,8 @@ class ConfigurationAnalyzer:
             ax.set_xlabel('Method', fontsize=12, fontweight='bold')
             ax.set_title(metric_label, fontsize=13, fontweight='bold', pad=15)
             ax.grid(True, alpha=0.25, axis='y', linestyle='--')
-            ax.tick_params(axis='x', rotation=0, labelsize=10)
+            ax.tick_params(axis='x', rotation=45, labelsize=10)
+            plt.setp(ax.get_xticklabels(), ha='right')
             
             # Highlight if this is the primary metric
             if metric_name in ['edit_distance_multree']:
@@ -1031,10 +1034,10 @@ class ConfigurationAnalyzer:
 
         ax.set_ylabel(metric_label, fontsize=14, fontweight='bold')
         ax.set_xlabel('Method', fontsize=14, fontweight='bold')
-        ax.set_title(f'{metric_label} Distribution (ILS {self.ils_level})',
+        ax.set_title(f'{metric_label} Distribution ({self.ils_level})',
                     fontsize=15, fontweight='bold', pad=20)
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
-        plt.xticks(rotation=0, fontsize=12)
+        plt.xticks(rotation=45, ha='right', fontsize=11)
 
         # Add GRAMPA footnote on Jaccard distribution plots
         if 'jaccard' in metric_name:
@@ -1099,8 +1102,9 @@ class ConfigurationAnalyzer:
         ax.set_title(f'Per-Network Completion Rates (ILS {self.ils_level})',
                     fontsize=15, fontweight='bold', pad=20)
         ax.set_xticks(x + width * len(methods) / 2)
-        ax.set_xticklabels(networks_sorted, rotation=90, fontsize=8)
-        ax.legend(fontsize=10, ncol=len(methods))
+        ax.set_xticklabels(networks_sorted, rotation=45, ha='right', fontsize=9)
+        ax.legend(fontsize=9, ncol=min(len(methods), 4), loc='upper right',
+                 framealpha=0.9, edgecolor='gray')
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
         ax.set_ylim(0, 105)
 
@@ -1209,13 +1213,14 @@ class ConfigurationAnalyzer:
 
         ax.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.5, label='Perfect accuracy (0%)')
         ax.set_xlabel('Network (sorted by H_Strict)', fontsize=13, fontweight='bold')
-        ax.set_ylabel('Reticulation Bias (%)\n(Inferred - True) / True × 100', 
+        ax.set_ylabel('Reticulation Bias (%)\n(Inferred - True) / True × 100',
                      fontsize=13, fontweight='bold')
-        ax.set_title(f'Per-Network Reticulation Bias (ILS {self.ils_level})',
+        ax.set_title(f'Per-Network Reticulation Bias ({self.ils_level})',
                     fontsize=15, fontweight='bold', pad=20)
         ax.set_xticks(x + width * len(methods) / 2)
-        ax.set_xticklabels(networks_sorted, rotation=90, fontsize=8)
-        ax.legend(fontsize=10, ncol=len(methods) + 1)
+        ax.set_xticklabels(networks_sorted, rotation=45, ha='right', fontsize=9)
+        ax.legend(fontsize=9, ncol=min(len(methods) + 1, 5), loc='best',
+                 framealpha=0.9, edgecolor='gray')
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
         
         # Ensure y-axis shows both positive and negative values with proper tick labels
@@ -1332,7 +1337,7 @@ class ConfigurationAnalyzer:
             else:
                 ret_biases.append(np.nan)
 
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 13))
 
         colors = [METHOD_COLORS.get(m, '#000000') for m in methods]
 
@@ -1341,22 +1346,24 @@ class ConfigurationAnalyzer:
         ax1.set_ylabel('Completion Rate (%)', fontsize=13, fontweight='bold')
         ax1.set_xlabel('Method', fontsize=13, fontweight='bold')
         ax1.set_title('Completion Rate', fontsize=14, fontweight='bold', pad=15)
-        ax1.set_ylim(0, 105)
+        ax1.set_ylim(0, 115)  # Extra room for value labels
         ax1.grid(True, alpha=0.25, axis='y', linestyle='--')
-        ax1.tick_params(axis='x', rotation=0)
+        ax1.tick_params(axis='x', rotation=45, labelsize=10)
+        plt.setp(ax1.get_xticklabels(), ha='right')
 
         for bar, val in zip(bars1, completion_rates):
             height = bar.get_height()
             ax1.text(bar.get_x() + bar.get_width()/2., height,
                     f'{val:.1f}%', ha='center', va='bottom', fontsize=10, fontweight='bold')
 
-        # Edit distance (MUL-tree)
+        # Edit distance
         bars2 = ax2.bar(methods, edit_distances, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
-        ax2.set_ylabel('Mean Edit Distance (MUL-tree)', fontsize=13, fontweight='bold')
+        ax2.set_ylabel('Mean Edit Distance', fontsize=13, fontweight='bold')
         ax2.set_xlabel('Method', fontsize=13, fontweight='bold')
-        ax2.set_title('MUL-tree Accuracy (lower = better)', fontsize=14, fontweight='bold', pad=15)
+        ax2.set_title('Edit Distance (lower = better)', fontsize=14, fontweight='bold', pad=15)
         ax2.grid(True, alpha=0.25, axis='y', linestyle='--')
-        ax2.tick_params(axis='x', rotation=0)
+        ax2.tick_params(axis='x', rotation=45, labelsize=10)
+        plt.setp(ax2.get_xticklabels(), ha='right')
 
         for bar, val in zip(bars2, edit_distances):
             if not np.isnan(val):
@@ -1370,7 +1377,8 @@ class ConfigurationAnalyzer:
         ax3.set_xlabel('Method', fontsize=13, fontweight='bold')
         ax3.set_title('Reticulation Count: Absolute Error', fontsize=14, fontweight='bold', pad=15)
         ax3.grid(True, alpha=0.25, axis='y', linestyle='--')
-        ax3.tick_params(axis='x', rotation=0)
+        ax3.tick_params(axis='x', rotation=45, labelsize=10)
+        plt.setp(ax3.get_xticklabels(), ha='right')
 
         for bar, val in zip(bars3, ret_errors):
             if not np.isnan(val):
@@ -1396,8 +1404,9 @@ class ConfigurationAnalyzer:
         ax4.set_title('Reticulation Count: Percentage Bias\n[+ = Over-estimation, - = Under-estimation]', 
                      fontsize=14, fontweight='bold', pad=15)
         ax4.grid(True, alpha=0.25, axis='y', linestyle='--')
-        ax4.tick_params(axis='x', rotation=0)
-        ax4.legend(fontsize=11)
+        ax4.tick_params(axis='x', rotation=45, labelsize=10)
+        plt.setp(ax4.get_xticklabels(), ha='right')
+        ax4.legend(fontsize=10, loc='lower right')
 
         for bar, val in zip(bars4, ret_biases):
             if not np.isnan(val):
@@ -1408,10 +1417,10 @@ class ConfigurationAnalyzer:
                 ax4.text(bar.get_x() + bar.get_width()/2., height + offset * (ax4.get_ylim()[1] - ax4.get_ylim()[0]),
                         f'{sign}{val:.1f}%', ha='center', va=va, fontsize=9, fontweight='bold')
 
-        fig.suptitle(f'Method Performance Summary (ILS {self.ils_level})',
-                    fontsize=16, fontweight='bold', y=0.995)
+        fig.suptitle(f'Method Performance Summary ({self.ils_level})',
+                    fontsize=16, fontweight='bold', y=1.02)
 
-        plt.tight_layout()
+        plt.tight_layout(rect=[0, 0, 1, 0.97])
         fig.savefig(self.plots_dir / "10_method_summary.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "10_method_summary.png", bbox_inches='tight', dpi=300)
         plt.close()
@@ -1726,7 +1735,7 @@ class ConfigurationAnalyzer:
             precisions.append(precision)
             recalls.append(recall)
 
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
 
         colors = [METHOD_COLORS.get(m, '#000000') for m in methods]
 
@@ -1735,16 +1744,17 @@ class ConfigurationAnalyzer:
         ax1.set_ylabel('F1 Score', fontsize=13, fontweight='bold')
         ax1.set_xlabel('Method', fontsize=13, fontweight='bold')
         ax1.set_title('Polyploid Identification F1 Score', fontsize=14, fontweight='bold', pad=15)
-        ax1.set_ylim(0, 1.05)
+        ax1.set_ylim(0, 1.15)  # Extra room for value labels
         ax1.grid(True, alpha=0.25, axis='y', linestyle='--')
-        # Add reference line for perfect score only
         ax1.axhline(y=1.0, color='green', linestyle='--', linewidth=1.5, alpha=0.5, label='Perfect (F1=1.0)')
-        ax1.legend(fontsize=9)
+        ax1.legend(fontsize=9, loc='lower right')
+        ax1.tick_params(axis='x', rotation=45, labelsize=10)
+        plt.setp(ax1.get_xticklabels(), ha='right')
 
         for bar, val in zip(bars1, f1_scores):
             height = bar.get_height()
-            ax1.text(bar.get_x() + bar.get_width()/2., height,
-                    f'{val:.3f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
+            ax1.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                    f'{val:.3f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
 
         # Precision and Recall
         x = np.arange(len(methods))
@@ -1755,25 +1765,25 @@ class ConfigurationAnalyzer:
 
         ax2.set_ylabel('Score', fontsize=13, fontweight='bold')
         ax2.set_xlabel('Method', fontsize=13, fontweight='bold')
-        ax2.set_title('Polyploid Identification: Precision vs Recall', fontsize=14, fontweight='bold', pad=15)
+        ax2.set_title('Precision vs Recall', fontsize=14, fontweight='bold', pad=15)
         ax2.set_xticks(x)
-        ax2.set_xticklabels(methods)
-        ax2.set_ylim(0, 1.05)
+        ax2.set_xticklabels(methods, rotation=45, ha='right', fontsize=10)
+        ax2.set_ylim(0, 1.15)  # Extra room for value labels
         ax2.grid(True, alpha=0.25, axis='y', linestyle='--')
-        ax2.legend(fontsize=9)
-        
+        ax2.legend(fontsize=9, loc='lower right')
+
         # Add value labels on bars
         for bars, values in [(bars2, precisions), (bars3, recalls)]:
             for bar, val in zip(bars, values):
                 if not np.isnan(val):
                     height = bar.get_height()
-                    ax2.text(bar.get_x() + bar.get_width()/2., height,
+                    ax2.text(bar.get_x() + bar.get_width()/2., height + 0.01,
                             f'{val:.2f}', ha='center', va='bottom', fontsize=8, fontweight='bold')
 
-        fig.suptitle(f'Polyploid Identification Performance (ILS {self.ils_level})',
-                    fontsize=16, fontweight='bold', y=1.00)
+        fig.suptitle(f'Polyploid Identification Performance ({self.ils_level})',
+                    fontsize=16, fontweight='bold', y=1.02)
 
-        plt.tight_layout()
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
         fig.savefig(self.plots_dir / "23_polyploid_f1_performance.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "23_polyploid_f1_performance.png", bbox_inches='tight', dpi=300)
         plt.close()
@@ -1966,6 +1976,7 @@ class ConfigurationAnalyzer:
             if idx >= (nrows - 1) * ncols:  # Bottom row
                 ax.set_xlabel('Performance Metrics', fontsize=11, fontweight='bold')
             ax.tick_params(axis='x', labelsize=8, rotation=45)
+            plt.setp(ax.get_xticklabels(), ha='right')
             ax.tick_params(axis='y', labelsize=8)
 
         # Hide unused subplots
@@ -1973,7 +1984,7 @@ class ConfigurationAnalyzer:
             axes[idx].axis('off')
 
         fig.suptitle(f'Network Properties vs Performance Metrics Correlation (Per Method)\nILS {self.ils_level}',
-                    fontsize=16, fontweight='bold', y=0.995)
+                    fontsize=16, fontweight='bold', y=1.02)
 
         plt.tight_layout()
         fig.savefig(self.plots_dir / "32_per_method_correlation_heatmap.pdf", bbox_inches='tight')
@@ -2055,9 +2066,9 @@ class ConfigurationAnalyzer:
                 'Total_Runs': total,
                 'Completed_Runs': successful,
                 'Completion_Rate_%': comp_rate,
-                'Mean_Edit_Distance_MULtree': mean_ed,
-                'Median_Edit_Distance_MULtree': median_ed,
-                'Std_Edit_Distance_MULtree': std_ed,
+                'Mean_Edit_Distance': mean_ed,
+                'Median_Edit_Distance': median_ed,
+                'Std_Edit_Distance': std_ed,
                 # 'Mean_RF_Distance': mean_rf,  # Disabled: RF not well-defined for MUL-trees
                 # 'Median_RF_Distance': median_rf,
                 'Mean_Reticulation_MAE': mean_ret_err,
@@ -2109,9 +2120,9 @@ class ConfigurationAnalyzer:
                     ]
                 
                 if len(method_edit) > 0:
-                    row[f'{method}_EditDist_MULtree'] = method_edit['mean'].values[0]
+                    row[f'{method}_EditDist'] = method_edit['mean'].values[0]
                 else:
-                    row[f'{method}_EditDist_MULtree'] = np.nan
+                    row[f'{method}_EditDist'] = np.nan
                 
                 # RF distance — DISABLED: not well-defined for MUL-trees
                 # method_rf = self.metrics[

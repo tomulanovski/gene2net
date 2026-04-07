@@ -29,12 +29,12 @@ METHOD_DISPLAY = {
 
 # Display names for metrics
 METRIC_DISPLAY = {
-    'edit_distance_multree': 'MUL-tree Edit Distance',
-    'polyploid_species_jaccard': 'Polyploid Species\nJaccard Distance',
-    'rf_distance': 'Robinson-Foulds\nDistance',
-    'ret_leaf_jaccard.dist': 'Reticulation Leaf Set\nJaccard Distance',
-    'ret_sisters_jaccard.dist': 'Sister Relationship\nJaccard Distance',
-    'ploidy_diff.dist': 'Ploidy Difference',
+    'edit_distance_multree': 'Edit Distance',
+    'polyploid_species_jaccard': 'Polyploid Species\nDistance',
+    # 'rf_distance': 'RF Distance',  # Disabled: RF not well-defined for MUL-trees
+    'ret_leaf_jaccard.dist': 'Reticulation Leaf\nDistance',
+    'ret_sisters_jaccard.dist': 'Sister-Taxa\nDistance',
+    'ploidy_diff.dist': 'Ploidy Distance',
     'num_rets_diff': 'Reticulation Count\nDifference (abs)',
 }
 
@@ -86,18 +86,90 @@ def plot_heatmap(ax, matrix, labels, title, vmin=0, vmax=1, cmap='YlOrRd', fmt='
     return im
 
 
+def plot_split_heatmap(ax, matrix_upper, matrix_lower, labels,
+                       title_upper, title_lower,
+                       vmin=0, vmax=1, cmap_upper='YlOrRd', cmap_lower='YlGnBu',
+                       fmt='.2f'):
+    """
+    Plot a split heatmap: upper triangle shows one metric, lower triangle shows another.
+    Diagonal shows '—'.
+    """
+    n = len(labels)
+    cmap_u = plt.get_cmap(cmap_upper)
+    cmap_l = plt.get_cmap(cmap_lower)
+
+    # Normalize values for coloring
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+
+    # Draw cell-by-cell as colored rectangles
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                color = 'white'
+                ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1,
+                             facecolor=color, edgecolor='black', linewidth=0.5))
+                ax.text(j, i, '—', ha='center', va='center', fontsize=12, color='gray')
+            elif i < j:
+                # Upper triangle
+                val = matrix_upper[i, j]
+                if np.isnan(val):
+                    color = '#F0F0F0'
+                    ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1,
+                                 facecolor=color, edgecolor='black', linewidth=0.5))
+                    ax.text(j, i, 'N/A', ha='center', va='center', fontsize=9, color='gray')
+                else:
+                    color = cmap_u(norm(val))
+                    ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1,
+                                 facecolor=color, edgecolor='black', linewidth=0.5))
+                    text_color = 'white' if val > (vmax - vmin) * 0.65 + vmin else 'black'
+                    ax.text(j, i, f'{val:{fmt}}', ha='center', va='center',
+                            fontsize=11, fontweight='bold', color=text_color)
+            else:
+                # Lower triangle
+                val = matrix_lower[i, j]
+                if np.isnan(val):
+                    color = '#F0F0F0'
+                    ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1,
+                                 facecolor=color, edgecolor='black', linewidth=0.5))
+                    ax.text(j, i, 'N/A', ha='center', va='center', fontsize=9, color='gray')
+                else:
+                    color = cmap_l(norm(val))
+                    ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1,
+                                 facecolor=color, edgecolor='black', linewidth=0.5))
+                    text_color = 'white' if val > (vmax - vmin) * 0.65 + vmin else 'black'
+                    ax.text(j, i, f'{val:{fmt}}', ha='center', va='center',
+                            fontsize=11, fontweight='bold', color=text_color)
+
+    ax.set_xlim(-0.5, n - 0.5)
+    ax.set_ylim(n - 0.5, -0.5)
+    ax.set_xticks(range(n))
+    ax.set_yticks(range(n))
+    ax.set_xticklabels(labels, fontsize=11, rotation=45, ha='right')
+    ax.set_yticklabels(labels, fontsize=11)
+    ax.set_aspect('equal')
+
+    # Return colormaps/norm for colorbar creation
+    return cmap_u, cmap_l, norm
+
+
 def main():
     parser = argparse.ArgumentParser(description='Generate case study pairwise heatmap')
     parser.add_argument('comparisons_csv', help='Path to comparisons_raw.csv')
     parser.add_argument('--dataset', required=True, help='Dataset name (e.g., Wu_2015)')
     parser.add_argument('--metrics', nargs='+',
                         default=['edit_distance_multree', 'ret_leaf_jaccard.dist',
-                                 'ret_sisters_jaccard.dist', 'polyploid_species_jaccard',
+                                 'ret_sisters_jaccard.dist', 'ploidy_diff.dist',
                                  'num_rets_diff'],
                         help='Metrics to plot')
     parser.add_argument('--output', help='Output directory (default: plots/{dataset}/ next to CSV)')
     parser.add_argument('--combined', action='store_true',
                         help='Also generate a single combined figure with all metrics side by side')
+    parser.add_argument('--split', nargs=2, action='append', metavar=('UPPER', 'LOWER'),
+                        help='Generate split heatmap with UPPER metric in upper triangle '
+                             'and LOWER metric in lower triangle. Can be repeated for '
+                             'multiple split heatmaps. Example: '
+                             '--split ret_leaf_jaccard.dist ret_sisters_jaccard.dist '
+                             '--split edit_distance_multree ploidy_diff.dist')
     parser.add_argument('--dpi', type=int, default=300)
 
     args = parser.parse_args()
@@ -162,6 +234,72 @@ def main():
         fig.savefig(str(png_path), dpi=args.dpi, bbox_inches='tight')
         print(f"Saved: {pdf_path}")
         plt.close(fig)
+
+    # Generate split heatmaps (two metrics in one: upper/lower triangle)
+    if args.split:
+        for upper_metric, lower_metric in args.split:
+            # Validate both metrics exist
+            if upper_metric not in df_dataset['metric'].unique():
+                print(f"WARNING: Metric '{upper_metric}' not found for {args.dataset}, skipping split")
+                continue
+            if lower_metric not in df_dataset['metric'].unique():
+                print(f"WARNING: Metric '{lower_metric}' not found for {args.dataset}, skipping split")
+                continue
+
+            df_upper = df_dataset[df_dataset['metric'] == upper_metric]
+            df_lower = df_dataset[df_dataset['metric'] == lower_metric]
+            matrix_upper = make_symmetric_matrix(df_upper, all_methods)
+            matrix_lower = make_symmetric_matrix(df_lower, all_methods)
+
+            # Determine scale — use 0-1 for normalized metrics, auto for counts
+            is_count = 'num_rets_diff' in (upper_metric, lower_metric)
+            if is_count:
+                all_vals = np.concatenate([
+                    matrix_upper[~np.isnan(matrix_upper)],
+                    matrix_lower[~np.isnan(matrix_lower)]
+                ])
+                vmax = max(1.0, np.nanmax(all_vals)) if len(all_vals) > 0 else 1.0
+                fmt = '.0f'
+            else:
+                vmax = 1.0
+                fmt = '.2f'
+
+            title_upper = METRIC_DISPLAY.get(upper_metric, upper_metric)
+            title_lower = METRIC_DISPLAY.get(lower_metric, lower_metric)
+
+            fig, ax = plt.subplots(1, 1, figsize=(7, 6.5))
+            cmap_u, cmap_l, norm = plot_split_heatmap(
+                ax, matrix_upper, matrix_lower, display_labels,
+                title_upper, title_lower,
+                vmin=0, vmax=vmax, fmt=fmt,
+                cmap_upper='YlOrRd', cmap_lower='YlGnBu'
+            )
+
+            # Add two colorbars
+            import matplotlib.cm as cm
+            sm_upper = cm.ScalarMappable(cmap=cmap_u, norm=norm)
+            sm_lower = cm.ScalarMappable(cmap=cmap_l, norm=norm)
+            cbar_u = fig.colorbar(sm_upper, ax=ax, fraction=0.023, pad=0.08, location='right')
+            cbar_u.set_label(title_upper.replace('\n', ' '), fontsize=10)
+            cbar_u.ax.tick_params(labelsize=8)
+            cbar_l = fig.colorbar(sm_lower, ax=ax, fraction=0.023, pad=0.12, location='right')
+            cbar_l.set_label(title_lower.replace('\n', ' '), fontsize=10)
+            cbar_l.ax.tick_params(labelsize=8)
+
+            # Title
+            ax.set_title(f'Upper: {title_upper.replace(chr(10), " ")}  |  '
+                         f'Lower: {title_lower.replace(chr(10), " ")}',
+                         fontsize=12, fontweight='bold', pad=12)
+
+            plt.tight_layout()
+            safe_u = upper_metric.replace('.', '_')
+            safe_l = lower_metric.replace('.', '_')
+            pdf_path = plots_dir / f'split_{safe_u}_vs_{safe_l}.pdf'
+            png_path = plots_dir / f'split_{safe_u}_vs_{safe_l}.png'
+            fig.savefig(str(pdf_path), dpi=args.dpi, bbox_inches='tight')
+            fig.savefig(str(png_path), dpi=args.dpi, bbox_inches='tight')
+            print(f"Saved split heatmap: {pdf_path}")
+            plt.close(fig)
 
     # Generate combined figure with all metrics side by side
     if args.combined and len(available_metrics) > 1:

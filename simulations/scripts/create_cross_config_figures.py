@@ -111,12 +111,12 @@ LEVEL_ORDER = ['Low', 'Medium', 'High']
 
 # Key metrics for analysis
 KEY_METRICS = {
-    'edit_distance_multree': 'Edit Distance (MUL-tree)',
+    'edit_distance_multree': 'Edit Distance',
     # 'rf_distance': 'Robinson-Foulds Distance',  # Disabled: RF not well-defined for MUL-trees
-    'ret_leaf_jaccard.dist': 'Reticulation Leaf Set Distance',
-    'ret_sisters_jaccard.dist': 'Sister Relationship Distance',
-    'ploidy_diff.dist': 'Ploidy Difference',
-    'num_rets_bias': 'Reticulation Count Bias',
+    'ret_leaf_jaccard.dist': 'Reticulation Leaf Distance',
+    'ret_sisters_jaccard.dist': 'Sister-Taxa Distance',
+    'ploidy_diff.dist': 'Ploidy Distance',
+    'num_rets_bias': 'Reticulation Bias',
 }
 
 # Plot style
@@ -288,10 +288,10 @@ class CrossConfigAnalyzer:
 
         # --- 2. Accuracy across conditions (one per key metric, per family) ---
         for metric_key, metric_label in [
-            ('edit_distance_multree', 'Edit Distance (MUL-tree)'),
+            ('edit_distance_multree', 'Edit Distance'),
             # ('rf_distance', 'Robinson-Foulds Distance'),  # Disabled: RF not well-defined for MUL-trees
-            ('ret_leaf_jaccard.dist', 'Reticulation Leaf Set Distance'),
-            ('ploidy_diff.dist', 'Ploidy Difference'),
+            ('ret_leaf_jaccard.dist', 'Reticulation Leaf Distance'),
+            ('ploidy_diff.dist', 'Ploidy Distance'),
         ]:
             plot_num += 1
             print(f"[{plot_num}/{total_plots}] Accuracy across conditions: {metric_label}...")
@@ -300,11 +300,11 @@ class CrossConfigAnalyzer:
         # --- 3. Accuracy heatmaps ---
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Accuracy heatmap (edit distance)...")
-        self.plot_accuracy_heatmap('edit_distance_multree', 'Mean Edit Distance (MUL-tree)')
+        self.plot_accuracy_heatmap('edit_distance_multree', 'Mean Edit Distance')
 
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Accuracy heatmap (ret leaf Jaccard)...")
-        self.plot_accuracy_heatmap('ret_leaf_jaccard.dist', 'Mean Ret. Leaf Set Distance')
+        self.plot_accuracy_heatmap('ret_leaf_jaccard.dist', 'Mean Reticulation Leaf Distance')
 
         # --- 4. Reticulation count bias across conditions ---
         plot_num += 1
@@ -570,7 +570,7 @@ class CrossConfigAnalyzer:
         plt.close()
 
     # ========================================================================
-    # FIGURE 4: Reticulation Count Bias Across Conditions
+    # FIGURE 4: Reticulation Bias Across Conditions
     # ========================================================================
 
     def plot_reticulation_bias_across_conditions(self):
@@ -635,14 +635,14 @@ class CrossConfigAnalyzer:
 
             ax.axhline(y=0, color='black', linewidth=1, linestyle='-')
             ax.set_xlabel(fam_info['label'], fontsize=13, fontweight='bold')
-            ax.set_ylabel('Reticulation Count Bias\n(positive = over-predicts)', fontsize=12, fontweight='bold')
+            ax.set_ylabel('Reticulation Bias\n(positive = over-predicts)', fontsize=12, fontweight='bold')
             ax.set_title(fam_info['description'], fontsize=13, fontweight='bold', pad=10)
             ax.set_xticks(x_positions)
             ax.set_xticklabels(LEVEL_ORDER, fontsize=12)
             ax.grid(True, alpha=0.25, linestyle='--', axis='y')
             ax.legend(fontsize=9, framealpha=0.9, loc='best')
 
-        fig.suptitle('Reticulation Count Bias Across Simulation Conditions',
+        fig.suptitle('Reticulation Bias Across Simulation Conditions',
                      fontsize=15, fontweight='bold', y=1.02)
         plt.tight_layout()
         fig.savefig(self.plots_dir / "04_reticulation_bias_across_conditions.pdf", bbox_inches='tight')
@@ -663,7 +663,7 @@ class CrossConfigAnalyzer:
             return
 
         metric_key = 'edit_distance_multree'
-        metric_label = 'Edit Distance (MUL-tree)'
+        metric_label = 'Edit Distance'
 
         metric_df = self.comparisons[
             (self.comparisons['metric'] == metric_key) &
@@ -753,11 +753,11 @@ class CrossConfigAnalyzer:
         # Metrics to rank on (lower is better for distance metrics,
         # but we handle them uniformly since all are distance-like)
         rank_metrics = {
-            'edit_distance_multree': 'Edit Distance\n(MUL-tree)',
+            'edit_distance_multree': 'Edit\nDistance',
             # 'rf_distance': 'Robinson-Foulds\nDistance',  # Disabled: RF not well-defined for MUL-trees
-            'ret_leaf_jaccard.dist': 'Ret. Leaf Set\nDistance',
-            'ret_sisters_jaccard.dist': 'Sister Rel.\nDistance',
-            'ploidy_diff.dist': 'Ploidy\nDifference',
+            'ret_leaf_jaccard.dist': 'Reticulation\nLeaf Distance',
+            'ret_sisters_jaccard.dist': 'Sister-Taxa\nDistance',
+            'ploidy_diff.dist': 'Ploidy\nDistance',
         }
 
         # Also include completion rate (higher is better → we'll invert rank)

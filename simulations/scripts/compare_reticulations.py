@@ -59,6 +59,23 @@ def compare_ploidy_diff(leaf_counts_A, leaf_counts_B):
     
     return {'dist': j_dist(intersect, union), 'FP': FP, 'FN': FN, 'TP': TP}
 
+def compare_polyploid_species(leaf_counts_A, leaf_counts_B):
+    '''
+    Jaccard distance on the sets of polyploid species (species with >1 copy).
+    Binary metric: only cares about WHICH species are polyploid, not copy counts.
+    Returns float distance in [0, 1]. 0 = same polyploid species, 1 = completely different.
+    '''
+    polyploids_A = {sp for sp, count in leaf_counts_A.items() if count > 1}
+    polyploids_B = {sp for sp, count in leaf_counts_B.items() if count > 1}
+
+    if len(polyploids_A) == 0 and len(polyploids_B) == 0:
+        return 0.0  # Both diploid-only — perfect agreement
+
+    intersection = len(polyploids_A & polyploids_B)
+    union = len(polyploids_A | polyploids_B)
+    return 1.0 - (intersection / union) if union > 0 else 1.0
+
+
 def jaccard(a, b):
     '''Jaccard similarity between two sets; 1.0 if both empty.'''
     a, b = set(a), set(b)
@@ -263,6 +280,7 @@ def pairwise_compare(obj1, obj2, df=None, partial_match=False):
             'num_rets_diff':            num_rets_comparison['abs'],  # Absolute difference (backward compatible)
             'num_rets_bias':            num_rets_comparison['signed'],  # NEW: Signed difference (bias)
             'ploidy_diff':              compare_ploidy_diff(row1['leaf_counts'], row2['leaf_counts']),
+            'polyploid_species_jaccard': compare_polyploid_species(row1['leaf_counts'], row2['leaf_counts']),
             'ret_leaf_jaccard':         match_and_compare(row1['reticulation_leaves'], row2['reticulation_leaves'],
                                         precomputed_match = precomputed, partial_match=partial_match),
             'ret_sisters_jaccard':      match_and_compare(row1['reticulation_leaves'], row2['reticulation_leaves'],
@@ -282,6 +300,7 @@ def pairwise_compare(obj1, obj2, df=None, partial_match=False):
         'num_rets_diff':            num_rets_comparison['abs'],  # Absolute difference (backward compatible)
         'num_rets_bias':            num_rets_comparison['signed'],  # NEW: Signed difference (bias)
         'ploidy_diff':              compare_ploidy_diff(obj1.get_leaf_counts(), obj2.get_leaf_counts()),
+        'polyploid_species_jaccard': compare_polyploid_species(obj1.get_leaf_counts(), obj2.get_leaf_counts()),
         'ret_leaf_jaccard':         match_and_compare(obj1.get_reticulation_leaves(), obj2.get_reticulation_leaves(),
                                         precomputed_match = precomputed, partial_match=partial_match),
         'ret_sisters_jaccard':      match_and_compare(obj1.get_reticulation_leaves(), obj2.get_reticulation_leaves(),

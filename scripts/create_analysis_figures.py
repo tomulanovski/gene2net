@@ -98,14 +98,14 @@ class RealDataAnalyzer:
     def _get_metric_label(self, metric: str) -> str:
         """Get human-readable label for a metric"""
         metric_labels = {
-            'edit_distance_multree': 'MUL-tree Edit Distance',
+            'edit_distance_multree': 'Edit Distance',
             'edit_distance': 'Network Edit Distance',
-            'rf_distance': 'RF Distance (MUL-tree)',
+            # 'rf_distance': 'RF Distance',  # Disabled: RF not well-defined for MUL-trees
             'num_rets_diff': 'Reticulation Count Difference',
-            'polyploid_species_jaccard': 'Polyploid Species Agreement\n(0=same species, 1=different species)',
-            'ploidy_diff.dist': 'Polyploid Identification Distance',
-            'ret_leaf_jaccard.dist': 'Reticulation Leaf Jaccard Distance',
-            'ret_sisters_jaccard.dist': 'Sister Relationship Jaccard Distance'
+            'polyploid_species_jaccard': 'Polyploid Species Distance',
+            'ploidy_diff.dist': 'Ploidy Distance',
+            'ret_leaf_jaccard.dist': 'Reticulation Leaf Distance',
+            'ret_sisters_jaccard.dist': 'Sister-Taxa Distance'
         }
         return metric_labels.get(metric, metric.replace('_', ' ').title())
 
@@ -379,7 +379,7 @@ class RealDataAnalyzer:
         bars = ax.barh(rankings_df['method'], rankings_df['avg_edit_distance_multree'],
                       color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
 
-        ax.set_xlabel('Average MUL-tree Edit Distance', fontsize=13, fontweight='bold')
+        ax.set_xlabel('Average Edit Distance', fontsize=13, fontweight='bold')
         ax.set_ylabel('Method', fontsize=13, fontweight='bold')
         ax.set_title('Method Similarity Rankings\nAverage Distance to Other Methods (Lower = More Similar)', 
                     fontsize=15, fontweight='bold', pad=20)
@@ -398,13 +398,13 @@ class RealDataAnalyzer:
         plt.close()
 
     def plot_distance_metrics_comparison(self):
-        """Compare MUL-tree Edit Distance and RF Distance side-by-side"""
+        """Compare Edit Distance metrics side-by-side"""
         if self.valid_comparisons.empty:
             return
 
         metrics_to_compare = {
-            'edit_distance_multree': 'MUL-tree Edit Distance',
-            'rf_distance': 'RF Distance (MUL-tree)'
+            'edit_distance_multree': 'Edit Distance',
+            # 'rf_distance': 'RF Distance',  # Disabled: RF not well-defined for MUL-trees
         }
 
         fig, axes = plt.subplots(1, 2, figsize=(16, 6))
@@ -466,7 +466,7 @@ class RealDataAnalyzer:
             ax.grid(True, alpha=0.25, axis='y', linestyle='--')
             ax.tick_params(axis='x', rotation=45, labelsize=9)
 
-        fig.suptitle('Method Similarity: MUL-tree Distance Metrics Comparison',
+        fig.suptitle('Method Similarity: Distance Metrics Comparison',
                     fontsize=16, fontweight='bold', y=1.02)
 
         plt.tight_layout()
@@ -506,13 +506,13 @@ class RealDataAnalyzer:
         fig, ax = plt.subplots(figsize=(10, 8))
 
         sns.heatmap(df_matrix, annot=True, fmt='.3f', cmap='YlOrRd', vmin=0, vmax=1,
-                   cbar_kws={'label': 'Polyploid Species Jaccard Distance\n(0 = same species, 1 = different)'},
+                   cbar_kws={'label': 'Polyploid Species Distance\n(0 = same species, 1 = different)'},
                    ax=ax, linewidths=1, linecolor='black', square=True,
                    annot_kws={'fontsize': 10, 'fontweight': 'bold'})
 
         ax.set_xlabel('Method', fontsize=13, fontweight='bold')
         ax.set_ylabel('Method', fontsize=13, fontweight='bold')
-        ax.set_title('Polyploid Species Identification Agreement\n(Lower = More Agreement)',
+        ax.set_title('Polyploid Species Distance\n(Lower = More Similar)',
                     fontsize=15, fontweight='bold', pad=20)
 
         plt.tight_layout()
@@ -525,7 +525,7 @@ class RealDataAnalyzer:
         if self.valid_comparisons.empty:
             return
 
-        agreement_metrics = ['rf_distance', 'polyploid_species_jaccard', 'ret_leaf_jaccard.dist']
+        agreement_metrics = ['polyploid_species_jaccard', 'ret_leaf_jaccard.dist']
         available_metrics = [m for m in agreement_metrics
                             if m in self.valid_comparisons['metric'].values]
 
@@ -547,9 +547,8 @@ class RealDataAnalyzer:
         dataset_order = overall_means.index.tolist()
 
         metric_labels = {
-            'rf_distance': 'RF Distance',
-            'polyploid_species_jaccard': 'Polyploid Species\nJaccard',
-            'ret_leaf_jaccard.dist': 'Reticulation Leaf\nJaccard',
+            'polyploid_species_jaccard': 'Polyploid Species\nDist.',
+            'ret_leaf_jaccard.dist': 'Reticulation Leaf\nDistance',
         }
 
         def color_for_val(v):
@@ -670,18 +669,19 @@ class RealDataAnalyzer:
         # Pairwise comparisons
         print("Plotting pairwise comparisons...")
         metrics_to_plot = [
-            'edit_distance_multree', 'rf_distance', 'num_rets_diff',
+            'edit_distance_multree', 'num_rets_diff',
             'polyploid_species_jaccard',
             'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist',
             'ploidy_diff.dist'
+            # 'rf_distance' disabled: RF not well-defined for MUL-trees
         ]
         for metric in metrics_to_plot:
             print(f"  {metric}...")
             self.plot_pairwise_heatmap(metric)
             self.plot_pairwise_boxplots(metric)
 
-        # 3-way distance comparison
-        print("Plotting 3-way distance metrics comparison...")
+        # Distance comparison
+        print("Plotting distance metrics comparison...")
         self.plot_distance_metrics_comparison()
 
         # Per-network analysis
