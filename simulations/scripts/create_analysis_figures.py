@@ -14,6 +14,7 @@ Usage:
 """
 
 import argparse
+import gc
 import pandas as pd
 import numpy as np
 import matplotlib
@@ -244,6 +245,8 @@ class ConfigurationAnalyzer:
         self.plot_completion_vs_characteristic_faceted(
             'Max_Copies', 'Maximum Copies per Species', '06_faceted_completion_vs_max_copies')
 
+        gc.collect()  # Free memory from Category 1
+
         # ========================================================================
         # CATEGORY 2: EDIT DISTANCE (ACCURACY) vs NETWORK CHARACTERISTICS
         # ========================================================================
@@ -319,6 +322,8 @@ class ConfigurationAnalyzer:
         #     'H_Strict', 'Number of Reticulations (Holm Fold)', 'rf_distance',
         #     'Robinson-Foulds Distance (MUL-tree)', '16_faceted_rf_vs_h_strict')
 
+        gc.collect()  # Free memory from Category 2
+
         # ========================================================================
         # CATEGORY 3: ADVANCED METRICS (Jaccard, Polyploid F1)
         # ========================================================================
@@ -370,6 +375,8 @@ class ConfigurationAnalyzer:
                                       'Sister-Taxa Distance',
                                       '08e_ret_sisters_jaccard_distribution')
 
+        gc.collect()  # Free memory from Category 3
+
         # ========================================================================
         # CATEGORY 4: DISTRIBUTIONS, COMPARISONS, AND SUMMARIES
         # ========================================================================
@@ -420,6 +427,8 @@ class ConfigurationAnalyzer:
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Method Performance Summary...")
         self.plot_method_summary()
+
+        gc.collect()  # Free memory before correlation heatmaps
 
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Comprehensive Correlation Heatmap (Aggregated)...")
@@ -1829,7 +1838,7 @@ class ConfigurationAnalyzer:
 
                 for _, metric_row in net_metrics.iterrows():
                     metric_name = metric_row['metric']
-                    if metric_name in ['edit_distance', 'num_rets_diff']:
+                    if metric_name in ['edit_distance_multree', 'num_rets_diff']:
                         row[metric_name] = metric_row['mean']
 
                 correlation_data.append(row)
@@ -1843,7 +1852,7 @@ class ConfigurationAnalyzer:
         # Select columns for correlation
         property_cols = ['Num_Species', 'H_Strict', 'H_Relaxed', 'Num_Polyploids',
                         'Max_Copies', 'Total_WGD', 'Polyploid_Ratio']
-        metric_cols = ['completion_rate', 'edit_distance', 'num_rets_diff']
+        metric_cols = ['completion_rate', 'edit_distance_multree', 'num_rets_diff']
 
         # Keep only available columns
         property_cols = [c for c in property_cols if c in df.columns]
@@ -1916,7 +1925,7 @@ class ConfigurationAnalyzer:
 
                 for _, metric_row in net_metrics.iterrows():
                     metric_name = metric_row['metric']
-                    if metric_name in ['edit_distance_multree', 'edit_distance', 'num_rets_diff']:
+                    if metric_name in ['edit_distance_multree', 'num_rets_diff']:
                         row[metric_name] = metric_row['mean']
 
                 correlation_data.append(row)
@@ -1930,7 +1939,7 @@ class ConfigurationAnalyzer:
         # Select columns for correlation
         property_cols = ['Num_Species', 'H_Strict', 'H_Relaxed', 'Num_Polyploids',
                         'Max_Copies', 'Total_WGD', 'Polyploid_Ratio']
-        metric_cols = ['completion_rate', 'edit_distance_multree', 'edit_distance', 'num_rets_diff']
+        metric_cols = ['completion_rate', 'edit_distance_multree', 'num_rets_diff']
 
         # Keep only available columns
         property_cols = [c for c in property_cols if c in df.columns]

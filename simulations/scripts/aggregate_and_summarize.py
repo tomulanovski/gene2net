@@ -106,7 +106,6 @@ class MultiLevelSummary:
             'ploidy_diff.dist': 'ploidy_diff',
             'ret_leaf_jaccard.dist': 'ret_leaf_jaccard',
             'ret_sisters_jaccard.dist': 'ret_sisters_jaccard',
-            'edit_distance': 'edit_distance_network'  # LEGACY: Network edit distance (for comparison)
         }
 
         for metric_name, output_name in metrics_to_pivot.items():
@@ -156,7 +155,6 @@ class MultiLevelSummary:
         distance_metrics = ['edit_distance_multree', 'rf_distance',  # PRIMARY MUL-tree metrics
                            'num_rets_diff', 'ploidy_diff.dist',
                            'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist',
-                           'edit_distance']  # LEGACY network edit distance
 
         rankings = []
 
