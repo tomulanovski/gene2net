@@ -94,7 +94,9 @@ def run_pipeline(config_name: str, config_dict: dict, args):
     print(f"PHASE 2: Compute Comparisons")
     print(f"{'='*80}\n")
 
-    engine = ComparisonEngine(str(cache_dir), force_recompute=args.force_recompute)
+    timeout = getattr(args, 'timeout', 0) or 0
+    engine = ComparisonEngine(str(cache_dir), force_recompute=args.force_recompute,
+                              timeout=timeout)
     comparisons_df = engine.compute_all_comparisons(inventory_df)
 
     # Print statistics
@@ -204,6 +206,9 @@ Examples:
                        help='Output directory (default: from config file)')
     parser.add_argument('--network-stats', metavar='CSV',
                        help='Network characteristics CSV for correlation analysis')
+    parser.add_argument('--timeout', type=int, default=0,
+                       help='Per-comparison timeout in seconds (0 = no limit). '
+                            'Runs each comparison in a subprocess to prevent OOM kills.')
 
     args = parser.parse_args()
 

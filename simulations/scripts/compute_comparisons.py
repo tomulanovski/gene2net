@@ -14,6 +14,7 @@ import sys
 import argparse
 import pickle
 import hashlib
+import multiprocessing
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 from datetime import datetime
@@ -25,20 +26,40 @@ from reticulate_tree import ReticulateTree
 from compare_reticulations import pairwise_compare, SINGLE_RETICULATION_METHODS
 
 
+def _compare_in_subprocess(gt_path, inf_path, method, single_ret_methods):
+    """Module-level function for multiprocessing (must be picklable)."""
+    try:
+        with open(gt_path, 'r') as f:
+            gt_newick = f.read().strip()
+        gt_tree = ReticulateTree(gt_newick)
+
+        with open(inf_path, 'r') as f:
+            inf_newick = f.read().strip()
+        inf_tree = ReticulateTree(inf_newick)
+
+        partial_match = method in single_ret_methods
+        metrics = pairwise_compare(gt_tree, inf_tree, partial_match=partial_match)
+        return {'status': 'SUCCESS', 'error': None, 'metrics': metrics}
+    except Exception as e:
+        return {'status': 'ERROR', 'error': str(e), 'metrics': None}
+
+
 class ComparisonEngine:
     """Wrapper around existing comparison tools with caching"""
 
-    def __init__(self, cache_dir: str, force_recompute: bool = False):
+    def __init__(self, cache_dir: str, force_recompute: bool = False, timeout: int = 0):
         """
         Initialize comparison engine
 
         Args:
             cache_dir: Directory for caching comparison results
             force_recompute: If True, ignore cache and recompute all
+            timeout: Per-comparison timeout in seconds (0 = no timeout)
         """
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.force_recompute = force_recompute
+        self.timeout = timeout
 
         # Statistics
         self.stats = {
@@ -157,6 +178,37 @@ class ComparisonEngine:
                 'metrics': None
             }
 
+    def _run_comparison(self, gt_path, inf_path, network, method):
+        """Run compare_pair, optionally in a subprocess with timeout."""
+        if self.timeout <= 0:
+            return self.compare_pair(gt_path, inf_path, network, method)
+
+        # Run in subprocess to isolate memory and enforce timeout
+        pool = multiprocessing.Pool(processes=1)
+        try:
+            async_result = pool.apply_async(
+                _compare_in_subprocess,
+                (gt_path, inf_path, method, SINGLE_RETICULATION_METHODS)
+            )
+            result = async_result.get(timeout=self.timeout)
+            return result
+        except multiprocessing.TimeoutError:
+            pool.terminate()
+            return {
+                'status': 'ERROR',
+                'error': f'Timeout ({self.timeout}s) for {network}/{method}',
+                'metrics': None
+            }
+        except Exception as e:
+            return {
+                'status': 'ERROR',
+                'error': f'Subprocess error: {e}',
+                'metrics': None
+            }
+        finally:
+            pool.terminate()
+            pool.join()
+
     def flatten_metrics(self, metrics: Dict) -> Dict:
         """
         Flatten nested metric dictionaries
@@ -229,12 +281,12 @@ class ComparisonEngine:
                     source = 'cache'
                 except Exception as e:
                     # Cache read failed, recompute
-                    comparison = self.compare_pair(gt_path, inf_path, network, method)
+                    comparison = self._run_comparison(gt_path, inf_path, network, method)
                     self.stats['computed'] += 1
                     source = 'computed'
             else:
                 # Compute comparison
-                comparison = self.compare_pair(gt_path, inf_path, network, method)
+                comparison = self._run_comparison(gt_path, inf_path, network, method)
                 self.stats['computed'] += 1
                 source = 'computed'
 
@@ -372,6 +424,9 @@ Examples:
                        help='Export comparison results to CSV file')
     parser.add_argument('--report', metavar='FILE',
                        help='Write detailed comparison report to file')
+    parser.add_argument('--timeout', type=int, default=0,
+                       help='Per-comparison timeout in seconds (0 = no limit). '
+                            'Runs each comparison in a subprocess to isolate memory.')
 
     args = parser.parse_args()
 
@@ -384,7 +439,8 @@ Examples:
         sys.exit(1)
 
     # Create comparison engine
-    engine = ComparisonEngine(args.cache_dir, force_recompute=args.force_recompute)
+    engine = ComparisonEngine(args.cache_dir, force_recompute=args.force_recompute,
+                              timeout=args.timeout)
 
     # Compute comparisons
     comparisons_df = engine.compute_all_comparisons(inventory)
