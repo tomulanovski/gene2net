@@ -987,6 +987,373 @@ class CrossConfigAnalyzer:
 
 
 # ============================================================================
+# POLYPHEST THRESHOLD ANALYSIS
+# ============================================================================
+
+POLYPHEST_THRESHOLDS = ['polyphest_p50', 'polyphest_p70', 'polyphest_p90']
+POLYPHEST_COLORS = {
+    'polyphest_p50': '#DE8F05',
+    'polyphest_p70': '#029E73',
+    'polyphest_p90': '#CC78BC',
+}
+POLYPHEST_DISPLAY = {
+    'polyphest_p50': 'p50',
+    'polyphest_p70': 'p70',
+    'polyphest_p90': 'p90',
+}
+
+
+def build_polyphest_inventory(data: Dict) -> pd.DataFrame:
+    """Build combined inventory with only polyphest variants (unmerged)."""
+    frames = []
+    for config, dfs in data.items():
+        df = dfs['inventory'].copy()
+        df['config'] = config
+        frames.append(df)
+    if not frames:
+        return pd.DataFrame()
+    combined = pd.concat(frames, ignore_index=True)
+    return combined[combined['method'].isin(POLYPHEST_THRESHOLDS)]
+
+
+def build_polyphest_comparisons(data: Dict) -> pd.DataFrame:
+    """Build combined comparisons with only polyphest variants (unmerged)."""
+    frames = []
+    for config, dfs in data.items():
+        if 'comparisons' not in dfs:
+            continue
+        df = dfs['comparisons'].copy()
+        if 'config' not in df.columns:
+            df['config'] = config
+        frames.append(df)
+    if not frames:
+        return pd.DataFrame()
+    combined = pd.concat(frames, ignore_index=True)
+    return combined[combined['method'].isin(POLYPHEST_THRESHOLDS)]
+
+
+class PolyphestThresholdAnalyzer:
+    """Analyze Polyphest threshold variants across configurations."""
+
+    def __init__(self, data: Dict, output_dir: Path, network_stats=None):
+        self.output_dir = output_dir
+        self.plots_dir = output_dir / "plots"
+        self.tables_dir = output_dir / "tables"
+        self.plots_dir.mkdir(parents=True, exist_ok=True)
+        self.tables_dir.mkdir(parents=True, exist_ok=True)
+        self.network_stats = network_stats
+
+        self.inventory = build_polyphest_inventory(data)
+        self.comparisons = build_polyphest_comparisons(data)
+
+        if not self.inventory.empty:
+            self.inventory = tag_config_family(self.inventory)
+        if not self.comparisons.empty:
+            self.comparisons = tag_config_family(self.comparisons)
+
+        print(f"\nPolyphest threshold analyzer initialized:")
+        print(f"  Inventory rows: {len(self.inventory)}")
+        print(f"  Comparison rows: {len(self.comparisons)}")
+
+    def _poly_display(self, method):
+        return POLYPHEST_DISPLAY.get(method, method)
+
+    def generate_all(self):
+        """Generate all Polyphest threshold comparison figures."""
+        print(f"\n{'='*80}")
+        print(f"Generating Polyphest Threshold Analysis")
+        print(f"Output: {self.output_dir}")
+        print(f"{'='*80}\n")
+
+        self.plot_completion_heatmap()
+        self.plot_completion_across_conditions()
+        self.plot_accuracy_across_conditions('edit_distance_multree', 'Edit Distance')
+        self.plot_accuracy_across_conditions('ret_leaf_jaccard.dist', 'Reticulation Leaf Distance')
+        self.plot_accuracy_across_conditions('ploidy_diff.dist', 'Ploidy Distance')
+        self.plot_accuracy_across_conditions('num_rets_bias', 'Reticulation Bias')
+        self.plot_accuracy_boxplots()
+        self.generate_summary_table()
+
+        print(f"\n{'='*80}")
+        print(f"Polyphest threshold analysis complete!")
+        print(f"  Plots: {self.plots_dir}")
+        print(f"  Tables: {self.tables_dir}")
+        print(f"{'='*80}\n")
+
+    def plot_completion_heatmap(self):
+        """Completion rate heatmap: rows=thresholds, columns=configs."""
+        if self.inventory.empty:
+            return
+
+        completion = (
+            self.inventory
+            .groupby(['method', 'config'])['inferred_exists']
+            .mean()
+            .unstack(fill_value=0) * 100
+        )
+
+        config_order = []
+        for fam_name, fam_info in CONFIG_FAMILIES.items():
+            for level in LEVEL_ORDER:
+                cfg = fam_info['configs'].get(level)
+                if cfg and cfg in completion.columns:
+                    config_order.append(cfg)
+        for c in completion.columns:
+            if c not in config_order:
+                config_order.append(c)
+        completion = completion.reindex(columns=[c for c in config_order if c in completion.columns])
+
+        short_labels = [c.replace('conf_', '').replace('_10M', '') for c in completion.columns]
+
+        fig, ax = plt.subplots(figsize=(max(12, len(completion.columns) * 1.3), 3))
+        im = ax.imshow(completion.values, cmap='RdYlGn', aspect='auto', vmin=0, vmax=100)
+
+        for i in range(completion.shape[0]):
+            for j in range(completion.shape[1]):
+                val = completion.values[i, j]
+                text_color = 'white' if val < 40 or val > 85 else 'black'
+                ax.text(j, i, f'{val:.0f}%', ha='center', va='center',
+                        fontsize=10, fontweight='bold', color=text_color)
+
+        ax.set_xticks(range(len(short_labels)))
+        ax.set_xticklabels(short_labels, rotation=45, ha='right', fontsize=10)
+        ax.set_yticks(range(len(completion.index)))
+        ax.set_yticklabels([self._poly_display(m) for m in completion.index], fontsize=11)
+        ax.set_title('Polyphest Completion Rate by Threshold', fontsize=14, fontweight='bold', pad=15)
+
+        fig.colorbar(im, ax=ax, shrink=0.8, label='Completion %')
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "01_completion_heatmap.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "01_completion_heatmap.png", bbox_inches='tight', dpi=300)
+        plt.close('all')
+        gc.collect()
+        print("  [1] Completion heatmap")
+
+    def plot_completion_across_conditions(self):
+        """Grouped bar chart: completion rate per threshold across config families."""
+        if self.inventory.empty:
+            return
+
+        n_families = len(CONFIG_FAMILIES)
+        fig, axes = plt.subplots(1, n_families, figsize=(6 * n_families, 5), squeeze=False)
+        axes = axes.flatten()
+
+        for fam_idx, (fam_name, fam_info) in enumerate(CONFIG_FAMILIES.items()):
+            ax = axes[fam_idx]
+            fam_configs = [fam_info['configs'].get(l) for l in LEVEL_ORDER]
+            fam_configs = [c for c in fam_configs if c is not None]
+            fam_data = self.inventory[self.inventory['config'].isin(fam_configs)]
+
+            if fam_data.empty:
+                ax.set_title(fam_name)
+                ax.text(0.5, 0.5, 'No data', ha='center', va='center')
+                continue
+
+            x_positions = np.arange(len(LEVEL_ORDER))
+            thresholds = [t for t in POLYPHEST_THRESHOLDS if t in fam_data['method'].unique()]
+            bar_width = 0.8 / max(len(thresholds), 1)
+
+            for t_idx, threshold in enumerate(thresholds):
+                rates = []
+                for level in LEVEL_ORDER:
+                    cfg = fam_info['configs'].get(level)
+                    level_data = fam_data[(fam_data['method'] == threshold) & (fam_data['config'] == cfg)]
+                    if len(level_data) > 0:
+                        rates.append(level_data['inferred_exists'].mean() * 100)
+                    else:
+                        rates.append(0)
+
+                offset = (t_idx - len(thresholds) / 2 + 0.5) * bar_width
+                ax.bar(x_positions + offset, rates, bar_width * 0.9,
+                       label=self._poly_display(threshold),
+                       color=POLYPHEST_COLORS.get(threshold, '#888888'),
+                       edgecolor='white', linewidth=0.8, alpha=0.85)
+
+            ax.set_xlabel(fam_info['label'], fontsize=12, fontweight='bold')
+            ax.set_ylabel('Completion Rate (%)', fontsize=12, fontweight='bold')
+            ax.set_title(fam_info['description'], fontsize=13, fontweight='bold', pad=10)
+            ax.set_xticks(x_positions)
+            ax.set_xticklabels(LEVEL_ORDER, fontsize=11)
+            ax.set_ylim(0, 110)
+            ax.grid(True, alpha=0.25, linestyle='--', axis='y')
+            ax.legend(fontsize=10, framealpha=0.9)
+
+        fig.suptitle('Polyphest Completion Rate by Threshold', fontsize=15, fontweight='bold', y=1.02)
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "02_completion_across_conditions.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "02_completion_across_conditions.png", bbox_inches='tight', dpi=300)
+        plt.close('all')
+        gc.collect()
+        print("  [2] Completion across conditions")
+
+    def plot_accuracy_across_conditions(self, metric_key: str, metric_label: str):
+        """Grouped bar chart: metric per threshold across config families."""
+        if self.comparisons.empty:
+            return
+
+        metric_data = self.comparisons[
+            (self.comparisons['metric'] == metric_key) &
+            (self.comparisons['status'] == 'SUCCESS')
+        ]
+        if metric_data.empty:
+            print(f"  WARNING: No data for {metric_key}")
+            return
+
+        n_families = len(CONFIG_FAMILIES)
+        fig, axes = plt.subplots(1, n_families, figsize=(6 * n_families, 5), squeeze=False)
+        axes = axes.flatten()
+
+        for fam_idx, (fam_name, fam_info) in enumerate(CONFIG_FAMILIES.items()):
+            ax = axes[fam_idx]
+            fam_configs = [fam_info['configs'].get(l) for l in LEVEL_ORDER]
+            fam_configs = [c for c in fam_configs if c is not None]
+            fam_data = metric_data[metric_data['config'].isin(fam_configs)]
+
+            if fam_data.empty:
+                ax.set_title(fam_name)
+                ax.text(0.5, 0.5, 'No data', ha='center', va='center')
+                continue
+
+            x_positions = np.arange(len(LEVEL_ORDER))
+            thresholds = [t for t in POLYPHEST_THRESHOLDS if t in fam_data['method'].unique()]
+            bar_width = 0.8 / max(len(thresholds), 1)
+
+            for t_idx, threshold in enumerate(thresholds):
+                means = []
+                sems = []
+                for level in LEVEL_ORDER:
+                    cfg = fam_info['configs'].get(level)
+                    level_data = fam_data[(fam_data['method'] == threshold) & (fam_data['config'] == cfg)]['value']
+                    if len(level_data) > 0:
+                        means.append(level_data.mean())
+                        sems.append(level_data.std() / np.sqrt(len(level_data)) if len(level_data) > 1 else 0)
+                    else:
+                        means.append(np.nan)
+                        sems.append(0)
+
+                offset = (t_idx - len(thresholds) / 2 + 0.5) * bar_width
+                ax.bar(x_positions + offset, means, bar_width * 0.9,
+                       yerr=sems, capsize=3,
+                       label=self._poly_display(threshold),
+                       color=POLYPHEST_COLORS.get(threshold, '#888888'),
+                       edgecolor='white', linewidth=0.8, alpha=0.85)
+
+            ax.set_xlabel(fam_info['label'], fontsize=12, fontweight='bold')
+            ax.set_ylabel(metric_label, fontsize=12, fontweight='bold')
+            ax.set_title(fam_info['description'], fontsize=13, fontweight='bold', pad=10)
+            ax.set_xticks(x_positions)
+            ax.set_xticklabels(LEVEL_ORDER, fontsize=11)
+            ax.grid(True, alpha=0.25, linestyle='--', axis='y')
+            ax.legend(fontsize=10, framealpha=0.9)
+
+            if metric_key == 'num_rets_bias':
+                ax.axhline(y=0, color='black', linewidth=1, linestyle='-')
+
+        safe_name = metric_key.replace('.', '_')
+        fig.suptitle(f'Polyphest {metric_label} by Threshold', fontsize=15, fontweight='bold', y=1.02)
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / f"03_{safe_name}_across_conditions.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / f"03_{safe_name}_across_conditions.png", bbox_inches='tight', dpi=300)
+        plt.close('all')
+        gc.collect()
+        print(f"  [3] {metric_label} across conditions")
+
+    def plot_accuracy_boxplots(self):
+        """Boxplots comparing thresholds on key metrics (aggregated across all configs)."""
+        if self.comparisons.empty:
+            return
+
+        metrics = [
+            ('edit_distance_multree', 'Edit Distance'),
+            ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance'),
+            ('ploidy_diff.dist', 'Ploidy Distance'),
+        ]
+        available = [(k, l) for k, l in metrics
+                     if k in self.comparisons['metric'].unique()]
+
+        if not available:
+            return
+
+        fig, axes = plt.subplots(1, len(available), figsize=(6 * len(available), 5), squeeze=False)
+        axes = axes.flatten()
+
+        for idx, (metric_key, metric_label) in enumerate(available):
+            ax = axes[idx]
+            metric_data = self.comparisons[
+                (self.comparisons['metric'] == metric_key) &
+                (self.comparisons['status'] == 'SUCCESS')
+            ]
+
+            data_by_threshold = []
+            labels = []
+            colors = []
+            for threshold in POLYPHEST_THRESHOLDS:
+                vals = metric_data[metric_data['method'] == threshold]['value'].dropna()
+                if len(vals) > 0:
+                    data_by_threshold.append(vals.values)
+                    labels.append(self._poly_display(threshold))
+                    colors.append(POLYPHEST_COLORS.get(threshold, '#888888'))
+
+            if data_by_threshold:
+                bp = ax.boxplot(data_by_threshold, labels=labels, patch_artist=True,
+                               widths=0.6, showmeans=True,
+                               meanprops=dict(marker='D', markerfacecolor='white',
+                                             markeredgecolor='black', markersize=6))
+                for patch, color in zip(bp['boxes'], colors):
+                    patch.set_facecolor(color)
+                    patch.set_alpha(0.7)
+
+            ax.set_ylabel(metric_label, fontsize=12, fontweight='bold')
+            ax.set_title(metric_label, fontsize=13, fontweight='bold')
+            ax.grid(True, alpha=0.25, linestyle='--', axis='y')
+
+        fig.suptitle('Polyphest Accuracy by Threshold (All Configs)', fontsize=15, fontweight='bold', y=1.02)
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "04_accuracy_boxplots.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "04_accuracy_boxplots.png", bbox_inches='tight', dpi=300)
+        plt.close('all')
+        gc.collect()
+        print("  [4] Accuracy boxplots")
+
+    def generate_summary_table(self):
+        """Summary table of threshold performance."""
+        if self.comparisons.empty:
+            return
+
+        rows = []
+        for threshold in POLYPHEST_THRESHOLDS:
+            for config in sorted(self.inventory['config'].unique()):
+                inv = self.inventory[
+                    (self.inventory['method'] == threshold) &
+                    (self.inventory['config'] == config)
+                ]
+                comp_rate = inv['inferred_exists'].mean() * 100 if len(inv) > 0 else 0
+
+                row = {
+                    'threshold': self._poly_display(threshold),
+                    'config': config,
+                    'completion_rate': comp_rate,
+                }
+
+                for metric_key in ['edit_distance_multree', 'ret_leaf_jaccard.dist',
+                                   'ploidy_diff.dist', 'num_rets_bias']:
+                    vals = self.comparisons[
+                        (self.comparisons['method'] == threshold) &
+                        (self.comparisons['config'] == config) &
+                        (self.comparisons['metric'] == metric_key) &
+                        (self.comparisons['status'] == 'SUCCESS')
+                    ]['value']
+                    row[f'{metric_key}_mean'] = vals.mean() if len(vals) > 0 else np.nan
+                    row[f'{metric_key}_std'] = vals.std() if len(vals) > 1 else np.nan
+
+                rows.append(row)
+
+        summary = pd.DataFrame(rows)
+        summary.to_csv(self.tables_dir / "01_polyphest_threshold_summary.csv", index=False)
+        print(f"  Saved: {self.tables_dir / '01_polyphest_threshold_summary.csv'}")
+
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
@@ -1022,7 +1389,7 @@ Examples:
     if args.output:
         output_dir = Path(args.output)
     else:
-        output_dir = SCRIPT_DIR.parent / "analysis" / "cross_config"
+        output_dir = SCRIPT_DIR.parent / "analysis" / "summary" / "cross_config"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Network stats
@@ -1047,9 +1414,14 @@ Examples:
         print("ERROR: No data loaded. Run run_full_summary.py first.", file=sys.stderr)
         sys.exit(1)
 
-    # Generate figures
+    # Generate cross-config figures
     analyzer = CrossConfigAnalyzer(data, output_dir, network_stats)
     analyzer.generate_all()
+
+    # Generate Polyphest threshold analysis
+    polyphest_dir = output_dir / "polyphest"
+    polyphest_analyzer = PolyphestThresholdAnalyzer(data, polyphest_dir, network_stats)
+    polyphest_analyzer.generate_all()
 
 
 if __name__ == '__main__':
