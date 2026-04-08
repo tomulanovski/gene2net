@@ -1966,56 +1966,38 @@ class ConfigurationAnalyzer:
             return
 
         methods = sorted(df['method'].unique())
-        n_methods = len(methods)
 
-        # Create faceted subplots - one per method
-        ncols = min(3, n_methods)
-        nrows = (n_methods + ncols - 1) // ncols
-        fig, axes = plt.subplots(nrows, ncols, figsize=(6*ncols, 5*nrows), squeeze=False)
-        axes = axes.flatten()
-
-        for idx, method in enumerate(methods):
-            ax = axes[idx]
+        # Generate one figure per method to avoid OOM on large faceted grids
+        for method in methods:
             method_df = df[df['method'] == method]
 
-            # Calculate correlation matrix for this method
             corr_matrix = method_df[property_cols + metric_cols].corr()
             corr_subset = corr_matrix.loc[property_cols, metric_cols]
 
             if len(corr_subset) == 0 or corr_subset.isna().all().all():
-                ax.text(0.5, 0.5, f'Insufficient data\nfor {method}',
-                       ha='center', va='center', fontsize=12, color='gray')
-                ax.set_title(method, fontsize=13, fontweight='bold')
-                ax.axis('off')
                 continue
 
-            # Plot heatmap
+            fig, ax = plt.subplots(figsize=(8, 6))
+
             sns.heatmap(corr_subset, annot=True, fmt='.2f', cmap='RdBu_r', center=0,
                        vmin=-1, vmax=1, square=True, linewidths=0.5,
                        cbar_kws={'label': 'Correlation'},
-                       ax=ax, annot_kws={'fontsize': 8, 'fontweight': 'bold'})
+                       ax=ax, annot_kws={'fontsize': 9, 'fontweight': 'bold'})
 
-            ax.set_title(method, fontsize=13, fontweight='bold', pad=10)
-            if idx % ncols == 0:  # Leftmost column
-                ax.set_ylabel('Network Properties', fontsize=11, fontweight='bold')
-            if idx >= (nrows - 1) * ncols:  # Bottom row
-                ax.set_xlabel('Performance Metrics', fontsize=11, fontweight='bold')
-            ax.tick_params(axis='x', labelsize=8, rotation=45)
+            ax.set_title(f'{method} — Network Properties vs Performance\nILS {self.ils_level}',
+                        fontsize=13, fontweight='bold', pad=10)
+            ax.set_ylabel('Network Properties', fontsize=11, fontweight='bold')
+            ax.set_xlabel('Performance Metrics', fontsize=11, fontweight='bold')
+            ax.tick_params(axis='x', labelsize=9, rotation=45)
             plt.setp(ax.get_xticklabels(), ha='right')
-            ax.tick_params(axis='y', labelsize=8)
+            ax.tick_params(axis='y', labelsize=9)
 
-        # Hide unused subplots
-        for idx in range(n_methods, len(axes)):
-            axes[idx].axis('off')
-
-        fig.suptitle(f'Network Properties vs Performance Metrics Correlation (Per Method)\nILS {self.ils_level}',
-                    fontsize=16, fontweight='bold', y=1.02)
-
-        plt.tight_layout()
-        fig.savefig(self.plots_dir / "32_per_method_correlation_heatmap.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "32_per_method_correlation_heatmap.png", bbox_inches='tight', dpi=300)
-        plt.close('all')
-        gc.collect()
+            plt.tight_layout()
+            safe_method = method.replace(' ', '_')
+            fig.savefig(self.plots_individual_dir / f"32_correlation_{safe_method}.pdf", bbox_inches='tight')
+            fig.savefig(self.plots_individual_dir / f"32_correlation_{safe_method}.png", bbox_inches='tight', dpi=300)
+            plt.close('all')
+            gc.collect()
 
     def generate_summary_tables(self):
         """Generate comprehensive summary tables for publication"""
