@@ -22,7 +22,8 @@ METHOD_DISPLAY = {
     'grampa': 'GRAMPA',
     'polyphest': 'Polyphest',
     'padre': 'PADRE',
-    'mpallop': 'AlloppNET',
+    'mpallop': 'MPAllopp',
+    'mpsugar': 'MPAllopp',
     'alloppnet': 'AlloppNET',
     'grandma_split': r'GRAMPA$^{Iter}$',
 }

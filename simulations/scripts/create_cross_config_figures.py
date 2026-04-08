@@ -17,6 +17,7 @@ Usage:
 """
 
 import argparse
+import gc
 import sys
 from pathlib import Path
 from collections import defaultdict
@@ -109,6 +110,24 @@ METHOD_MARKERS = {
 
 LEVEL_ORDER = ['Low', 'Medium', 'High']
 
+# Display names for figures
+METHOD_DISPLAY = {
+    'grampa': 'GRAMPA',
+    'polyphest': 'Polyphest',
+    'polyphest_p50': 'Polyphest (p50)',
+    'polyphest_p70': 'Polyphest (p70)',
+    'polyphest_p90': 'Polyphest (p90)',
+    'mpsugar': 'MPAllopp',
+    'padre': 'PADRE',
+    'alloppnet': 'AlloppNET',
+    'grandma_split': r'GRAMPA$^{Iter}$',
+}
+
+
+def display_name(method: str) -> str:
+    """Return publication-ready display name for a method."""
+    return METHOD_DISPLAY.get(method, method)
+
 # Key metrics for analysis
 KEY_METRICS = {
     'edit_distance_multree': 'Edit Distance',
@@ -171,6 +190,7 @@ def load_all_data(configs: List[str], summary_base: Path) -> Dict[str, Dict[str,
 
 def build_combined_inventory(data: Dict) -> pd.DataFrame:
     """Combine inventory DataFrames from all configs, tagging each with config name."""
+    from create_analysis_figures import merge_polyphest_inventory
     frames = []
     for config, dfs in data.items():
         df = dfs['inventory'].copy()
@@ -178,11 +198,13 @@ def build_combined_inventory(data: Dict) -> pd.DataFrame:
         frames.append(df)
     if not frames:
         return pd.DataFrame()
-    return pd.concat(frames, ignore_index=True)
+    combined = pd.concat(frames, ignore_index=True)
+    return merge_polyphest_inventory(combined)
 
 
 def build_combined_comparisons(data: Dict) -> pd.DataFrame:
     """Combine comparisons DataFrames from all configs."""
+    from create_analysis_figures import merge_polyphest_comparisons
     frames = []
     for config, dfs in data.items():
         if 'comparisons' not in dfs:
@@ -193,11 +215,19 @@ def build_combined_comparisons(data: Dict) -> pd.DataFrame:
         frames.append(df)
     if not frames:
         return pd.DataFrame()
-    return pd.concat(frames, ignore_index=True)
+    combined = pd.concat(frames, ignore_index=True)
+    return merge_polyphest_comparisons(combined)
 
 
 def build_combined_aggregated(data: Dict) -> pd.DataFrame:
     """Combine aggregated metrics from all configs."""
+    from create_analysis_figures import merge_polyphest_comparisons, reaggregate_metrics
+    # Build from comparisons if available, to get properly merged polyphest
+    comparisons = build_combined_comparisons(data)
+    if not comparisons.empty:
+        return reaggregate_metrics(comparisons)
+
+    # Fallback: use pre-aggregated files
     frames = []
     for config, dfs in data.items():
         if 'aggregated' not in dfs:
@@ -251,10 +281,15 @@ class CrossConfigAnalyzer:
 
         self.network_stats = network_stats
 
-        # Build combined datasets
+        # Build combined datasets (polyphest thresholds merged into single 'polyphest')
         self.inventory = build_combined_inventory(data)
         self.comparisons = build_combined_comparisons(data)
-        self.aggregated = build_combined_aggregated(data)
+        # Re-aggregate from merged comparisons
+        from create_analysis_figures import reaggregate_metrics
+        if not self.comparisons.empty:
+            self.aggregated = reaggregate_metrics(self.comparisons)
+        else:
+            self.aggregated = build_combined_aggregated(data)
 
         # Tag families
         if not self.inventory.empty:
@@ -381,7 +416,7 @@ class CrossConfigAnalyzer:
         ax.set_xticks(range(len(short_labels)))
         ax.set_xticklabels(short_labels, rotation=45, ha='right', fontsize=10)
         ax.set_yticks(range(len(completion.index)))
-        ax.set_yticklabels(completion.index, fontsize=11)
+        ax.set_yticklabels([display_name(m) for m in completion.index], fontsize=11)
 
         # Add family separators
         family_boundaries = []
@@ -406,7 +441,8 @@ class CrossConfigAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "01_completion_rate_heatmap.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "01_completion_rate_heatmap.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     # ========================================================================
     # FIGURE 2: Accuracy Across Conditions (grouped bar/line per family)
@@ -472,7 +508,7 @@ class CrossConfigAnalyzer:
                 offset = (m_idx - len(methods) / 2 + 0.5) * bar_width
                 bars = ax.bar(x_positions + offset, means, bar_width * 0.9,
                               yerr=sems, capsize=3,
-                              label=method,
+                              label=display_name(method),
                               color=METHOD_COLORS.get(method, '#888888'),
                               edgecolor='white', linewidth=0.8,
                               alpha=0.85)
@@ -492,7 +528,8 @@ class CrossConfigAnalyzer:
         safe_name = metric_key.replace('.', '_')
         fig.savefig(self.plots_dir / f"02_{safe_name}_across_conditions.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / f"02_{safe_name}_across_conditions.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     # ========================================================================
     # FIGURE 3: Accuracy Heatmap
@@ -546,7 +583,7 @@ class CrossConfigAnalyzer:
         ax.set_xticks(range(len(short_labels)))
         ax.set_xticklabels(short_labels, rotation=45, ha='right', fontsize=10)
         ax.set_yticks(range(len(pivot.index)))
-        ax.set_yticklabels(pivot.index, fontsize=11)
+        ax.set_yticklabels([display_name(m) for m in pivot.index], fontsize=11)
 
         # Family separators
         col_idx = 0
@@ -567,7 +604,8 @@ class CrossConfigAnalyzer:
         safe_name = metric_key.replace('.', '_')
         fig.savefig(self.plots_dir / f"03_{safe_name}_heatmap.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / f"03_{safe_name}_heatmap.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     # ========================================================================
     # FIGURE 4: Reticulation Bias Across Conditions
@@ -628,7 +666,7 @@ class CrossConfigAnalyzer:
                 offset = (m_idx - len(methods) / 2 + 0.5) * bar_width
                 ax.bar(x_positions + offset, means, bar_width * 0.9,
                        yerr=sems, capsize=3,
-                       label=method,
+                       label=display_name(method),
                        color=METHOD_COLORS.get(method, '#888888'),
                        edgecolor='white', linewidth=0.8,
                        alpha=0.85)
@@ -647,7 +685,8 @@ class CrossConfigAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "04_reticulation_bias_across_conditions.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "04_reticulation_bias_across_conditions.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     # ========================================================================
     # FIGURE 5: Network Complexity × Condition Interaction
@@ -732,7 +771,8 @@ class CrossConfigAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "05_complexity_condition_interaction.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "05_complexity_condition_interaction.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     # ========================================================================
     # FIGURE 6: Method Ranking Across Metrics
@@ -835,7 +875,7 @@ class CrossConfigAnalyzer:
         ax_heat.set_xticks(range(len(ranks_display.columns)))
         ax_heat.set_xticklabels(ranks_display.columns, fontsize=10, ha='center')
         ax_heat.set_yticks(range(len(ranks_display.index)))
-        ax_heat.set_yticklabels(ranks_display.index, fontsize=12, fontweight='bold')
+        ax_heat.set_yticklabels([display_name(m) for m in ranks_display.index], fontsize=12, fontweight='bold')
         ax_heat.set_title('Rank per Metric (1 = best)', fontsize=13, fontweight='bold', pad=10)
 
         # Right: overall average rank bar chart
@@ -860,7 +900,8 @@ class CrossConfigAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "06_method_ranking.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "06_method_ranking.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
         # Also save ranking table as CSV
         rank_table = ranks_df.copy()

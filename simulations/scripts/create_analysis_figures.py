@@ -67,6 +67,125 @@ METHOD_MARKERS = {
     'grandma_split': 'd'        # Diamond
 }
 
+# Display names for figures and tables
+METHOD_DISPLAY = {
+    'grampa': 'GRAMPA',
+    'polyphest': 'Polyphest',
+    'polyphest_p50': 'Polyphest (p50)',
+    'polyphest_p70': 'Polyphest (p70)',
+    'polyphest_p90': 'Polyphest (p90)',
+    'mpsugar': 'MPAllopp',
+    'padre': 'PADRE',
+    'alloppnet': 'AlloppNET',
+    'grandma_split': r'GRAMPA$^{Iter}$',
+}
+
+
+def display_name(method: str) -> str:
+    """Return publication-ready display name for a method."""
+    return METHOD_DISPLAY.get(method, method)
+
+
+POLYPHEST_THRESHOLDS = ['polyphest_p50', 'polyphest_p70', 'polyphest_p90']
+
+
+def merge_polyphest_inventory(df: pd.DataFrame) -> pd.DataFrame:
+    """Merge polyphest_p50/p70/p90 into single 'polyphest' using lowest available threshold."""
+    non_poly = df[~df['method'].isin(POLYPHEST_THRESHOLDS)].copy()
+    poly = df[df['method'].isin(POLYPHEST_THRESHOLDS)].copy()
+
+    if poly.empty:
+        return non_poly
+
+    # Group by config too if present (for cross-config analysis)
+    group_cols = ['network', 'replicate']
+    if 'config' in poly.columns:
+        group_cols = ['config', 'network', 'replicate']
+
+    merged_rows = []
+    for key, group in poly.groupby(group_cols):
+        # Pick lowest threshold that completed
+        best = None
+        for method in POLYPHEST_THRESHOLDS:
+            row = group[group['method'] == method]
+            if len(row) > 0 and row.iloc[0]['inferred_exists']:
+                best = row.iloc[0].copy()
+                break
+        if best is None:
+            # None completed — take p50 row as placeholder (inferred_exists=False)
+            row = group[group['method'] == POLYPHEST_THRESHOLDS[0]]
+            if len(row) > 0:
+                best = row.iloc[0].copy()
+        if best is not None:
+            best['method'] = 'polyphest'
+            merged_rows.append(best)
+
+    if merged_rows:
+        merged_poly = pd.DataFrame(merged_rows)
+        return pd.concat([non_poly, merged_poly], ignore_index=True)
+    return non_poly
+
+
+def merge_polyphest_comparisons(df: pd.DataFrame) -> pd.DataFrame:
+    """Merge polyphest comparisons: per (network, replicate), use lowest completed threshold."""
+    non_poly = df[~df['method'].isin(POLYPHEST_THRESHOLDS)].copy()
+    poly = df[df['method'].isin(POLYPHEST_THRESHOLDS)].copy()
+
+    if poly.empty:
+        return non_poly
+
+    # Group by config too if present (for cross-config analysis)
+    group_cols = ['network', 'replicate']
+    if 'config' in poly.columns:
+        group_cols = ['config', 'network', 'replicate']
+
+    # For each group, determine which threshold to use (lowest that has SUCCESS status)
+    threshold_choice = {}
+    for key, group in poly.groupby(group_cols):
+        chosen = None
+        for method in POLYPHEST_THRESHOLDS:
+            method_rows = group[group['method'] == method]
+            if len(method_rows) > 0 and (method_rows['status'] == 'SUCCESS').any():
+                chosen = method
+                break
+        threshold_choice[key] = chosen
+
+    # Filter: keep only the chosen threshold's rows for each group
+    merged_rows = []
+    for key, chosen in threshold_choice.items():
+        if chosen is None:
+            continue
+        # Build filter mask
+        mask = (poly['method'] == chosen)
+        for col, val in zip(group_cols, key if isinstance(key, tuple) else (key,)):
+            mask = mask & (poly[col] == val)
+        rows = poly[mask].copy()
+        rows['method'] = 'polyphest'
+        merged_rows.append(rows)
+
+    if merged_rows:
+        merged_poly = pd.concat(merged_rows, ignore_index=True)
+        return pd.concat([non_poly, merged_poly], ignore_index=True)
+    return non_poly
+
+
+def reaggregate_metrics(comparisons_df: pd.DataFrame) -> pd.DataFrame:
+    """Re-aggregate comparisons into metrics (mean/std/min/max/n_valid per network/config/method/metric)."""
+    valid = comparisons_df[comparisons_df['status'] == 'SUCCESS'].copy()
+    if valid.empty:
+        return pd.DataFrame(columns=['network', 'config', 'method', 'metric', 'mean', 'std', 'min', 'max', 'n_valid'])
+
+    grouped = valid.groupby(['network', 'config', 'method', 'metric'])['value']
+    aggregated = grouped.agg([
+        ('mean', 'mean'),
+        ('std', 'std'),
+        ('min', 'min'),
+        ('max', 'max'),
+        ('n_valid', 'count')
+    ]).reset_index()
+    aggregated['std'] = aggregated['std'].fillna(0)
+    return aggregated
+
 
 class ConfigurationAnalyzer:
     """Analyze and visualize results for a single configuration"""
@@ -104,13 +223,22 @@ class ConfigurationAnalyzer:
         inventory_file = self.base_dir / "inventory.csv"
         self.inventory = pd.read_csv(inventory_file) if inventory_file.exists() else None
 
-        # Load aggregated metrics
-        metrics_file = self.base_dir / "aggregated_metrics.csv"
-        self.metrics = pd.read_csv(metrics_file) if metrics_file.exists() else None
-
         # Load comparisons
         comparisons_file = self.base_dir / "comparisons_raw.csv"
         self.comparisons = pd.read_csv(comparisons_file) if comparisons_file.exists() else None
+
+        # Merge polyphest thresholds into single 'polyphest' (lowest available threshold)
+        if self.inventory is not None:
+            self.inventory = merge_polyphest_inventory(self.inventory)
+        if self.comparisons is not None:
+            self.comparisons = merge_polyphest_comparisons(self.comparisons)
+
+        # Re-aggregate metrics from merged comparisons
+        if self.comparisons is not None:
+            self.metrics = reaggregate_metrics(self.comparisons)
+        else:
+            metrics_file = self.base_dir / "aggregated_metrics.csv"
+            self.metrics = pd.read_csv(metrics_file) if metrics_file.exists() else None
 
         # Enrich network stats with derived metrics
         self._prepare_enriched_stats()
@@ -505,7 +633,7 @@ class ConfigurationAnalyzer:
                 ax.errorbar(grouped_df[char_col], grouped_df['completion_rate'],
                            yerr=grouped_df['std_err'],
                            marker=METHOD_MARKERS.get(method, 'o'),
-                           label=method,
+                           label=display_name(method),
                            color=METHOD_COLORS.get(method, '#000000'),
                            linestyle='None',  # No connecting lines - data is discrete
                            markersize=9,
@@ -602,7 +730,7 @@ class ConfigurationAnalyzer:
 
             ax.set_xlabel(char_label, fontsize=12, fontweight='bold')
             ax.set_ylabel('Completion Rate (%)', fontsize=12, fontweight='bold')
-            ax.set_title(f'{method}',
+            ax.set_title(f'{display_name(method)}',
                         fontsize=13, fontweight='bold', pad=10)
             ax.grid(True, alpha=0.25, linestyle='--')
             ax.set_ylim(-5, 105)
@@ -670,7 +798,7 @@ class ConfigurationAnalyzer:
                        markeredgewidth=1.5, markeredgecolor='white')
 
             ax.set_xlabel('Number of Reticulations', fontsize=12, fontweight='bold')
-            ax.set_title(method, fontsize=13, fontweight='bold', pad=10)
+            ax.set_title(display_name(method), fontsize=13, fontweight='bold', pad=10)
             ax.grid(True, alpha=0.25, linestyle='--')
             ax.set_ylim(-5, 105)
             ax.legend(fontsize=10, framealpha=0.9)
@@ -735,7 +863,7 @@ class ConfigurationAnalyzer:
             ax.axvline(0, color='black', linestyle='-', linewidth=1.5, alpha=0.5)
 
             ax.set_xlabel('Reticulation Bias\n(+ = Over-estimation)', fontsize=11, fontweight='bold')
-            ax.set_title(f'{method}\nMAE = {mae:.2f}', fontsize=12, fontweight='bold')
+            ax.set_title(f'{display_name(method)}\nMAE = {mae:.2f}', fontsize=12, fontweight='bold')
             ax.legend(fontsize=10)
             ax.grid(True, alpha=0.25, axis='y')
 
@@ -809,7 +937,7 @@ class ConfigurationAnalyzer:
             
             if len(method_values) > 0:
                 data_by_method.append(method_values)
-                labels.append(method)
+                labels.append(display_name(method))
                 colors.append(METHOD_COLORS.get(method, '#000000'))
                 mean_biases.append(method_values.mean())
 
@@ -889,7 +1017,7 @@ class ConfigurationAnalyzer:
             method_data = edit_data[edit_data['method'] == method]['mean'].dropna()
             if len(method_data) > 0:
                 data_by_method.append(method_data)
-                labels.append(method)
+                labels.append(display_name(method))
                 colors.append(METHOD_COLORS.get(method, '#000000'))
 
         bp = ax.boxplot(data_by_method, labels=labels, patch_artist=True,
@@ -959,7 +1087,7 @@ class ConfigurationAnalyzer:
                 method_data = metric_data[metric_data['method'] == method]['mean'].dropna()
                 if len(method_data) > 0:
                     data_by_method.append(method_data)
-                    labels.append(method)
+                    labels.append(display_name(method))
                     colors.append(METHOD_COLORS.get(method, '#000000'))
                     means.append(method_data.mean())
             
@@ -1110,7 +1238,7 @@ class ConfigurationAnalyzer:
             method_data = method_data.set_index('network').reindex(networks_sorted).reset_index()
 
             ax.bar(x + i*width, method_data['completion_rate'],
-                  width, label=method,
+                  width, label=display_name(method),
                   color=METHOD_COLORS.get(method, '#000000'),
                   alpha=0.8, edgecolor='black', linewidth=0.5)
 
@@ -1359,9 +1487,10 @@ class ConfigurationAnalyzer:
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 13))
 
         colors = [METHOD_COLORS.get(m, '#000000') for m in methods]
+        method_labels = [display_name(m) for m in methods]
 
         # Completion rate
-        bars1 = ax1.bar(methods, completion_rates, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+        bars1 = ax1.bar(method_labels, completion_rates, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
         ax1.set_ylabel('Completion Rate (%)', fontsize=13, fontweight='bold')
         ax1.set_xlabel('Method', fontsize=13, fontweight='bold')
         ax1.set_title('Completion Rate', fontsize=14, fontweight='bold', pad=15)
@@ -1376,7 +1505,7 @@ class ConfigurationAnalyzer:
                     f'{val:.1f}%', ha='center', va='bottom', fontsize=10, fontweight='bold')
 
         # Edit distance
-        bars2 = ax2.bar(methods, edit_distances, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+        bars2 = ax2.bar(method_labels, edit_distances, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
         ax2.set_ylabel('Mean Edit Distance', fontsize=13, fontweight='bold')
         ax2.set_xlabel('Method', fontsize=13, fontweight='bold')
         ax2.set_title('Edit Distance (lower = better)', fontsize=14, fontweight='bold', pad=15)
@@ -1391,7 +1520,7 @@ class ConfigurationAnalyzer:
                         f'{val:.3f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
 
         # Reticulation absolute error (MAE)
-        bars3 = ax3.bar(methods, ret_errors, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+        bars3 = ax3.bar(method_labels, ret_errors, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
         ax3.set_ylabel('Mean Absolute Error (MAE)', fontsize=13, fontweight='bold')
         ax3.set_xlabel('Method', fontsize=13, fontweight='bold')
         ax3.set_title('Reticulation Count: Absolute Error', fontsize=14, fontweight='bold', pad=15)
@@ -1416,7 +1545,7 @@ class ConfigurationAnalyzer:
             else:
                 bias_colors.append('#1F77B4')  # Blue for under-estimation
         
-        bars4 = ax4.bar(methods, ret_biases, color=bias_colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+        bars4 = ax4.bar(method_labels, ret_biases, color=bias_colors, alpha=0.8, edgecolor='black', linewidth=1.5)
         ax4.axhline(0, color='black', linestyle='--', linewidth=1.5, alpha=0.5, label='No bias (0%)')
         ax4.set_ylabel('Mean Bias (%)\n(Signed Error / True × 100)', fontsize=13, fontweight='bold')
         ax4.set_xlabel('Method', fontsize=13, fontweight='bold')
@@ -1480,7 +1609,7 @@ class ConfigurationAnalyzer:
                 ax.errorbar(grouped[char_col], grouped['metric_mean'],
                            yerr=grouped['std_err'],
                            marker=METHOD_MARKERS.get(method, 'o'),
-                           label=method,
+                           label=display_name(method),
                            color=METHOD_COLORS.get(method, '#000000'),
                            linewidth=2.5,
                            markersize=9,
@@ -1554,7 +1683,7 @@ class ConfigurationAnalyzer:
 
             ax.set_xlabel(char_label, fontsize=12, fontweight='bold')
             ax.set_ylabel(metric_label, fontsize=12, fontweight='bold')
-            ax.set_title(f'{method}', fontsize=13, fontweight='bold', pad=10)
+            ax.set_title(f'{display_name(method)}', fontsize=13, fontweight='bold', pad=10)
             ax.grid(True, alpha=0.25, linestyle='--')
 
             if metrics_with_stats[char_col].dtype in ['int64', 'int32']:
@@ -1612,7 +1741,7 @@ class ConfigurationAnalyzer:
                 ax.errorbar(grouped[char_col], grouped['metric_mean'],
                            yerr=grouped['std_err'],
                            marker=METHOD_MARKERS.get(method, 'o'),
-                           label=method,
+                           label=display_name(method),
                            color=METHOD_COLORS.get(method, '#000000'),
                            linewidth=2.5,
                            markersize=9,
@@ -1700,7 +1829,7 @@ class ConfigurationAnalyzer:
 
             ax.set_xlabel(char_label, fontsize=12, fontweight='bold')
             ax.set_ylabel(f'{jaccard_label}\n(0 = perfect, 1 = no match)', fontsize=12, fontweight='bold')
-            ax.set_title(f'{method}', fontsize=13, fontweight='bold', pad=10)
+            ax.set_title(f'{display_name(method)}', fontsize=13, fontweight='bold', pad=10)
             ax.grid(True, alpha=0.25, linestyle='--')
             ax.set_ylim(-0.05, 1.05)
 
@@ -1761,9 +1890,10 @@ class ConfigurationAnalyzer:
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
 
         colors = [METHOD_COLORS.get(m, '#000000') for m in methods]
+        method_labels = [display_name(m) for m in methods]
 
         # F1 scores
-        bars1 = ax1.bar(methods, f1_scores, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+        bars1 = ax1.bar(method_labels, f1_scores, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
         ax1.set_ylabel('F1 Score', fontsize=13, fontweight='bold')
         ax1.set_xlabel('Method', fontsize=13, fontweight='bold')
         ax1.set_title('Polyploid Identification F1 Score', fontsize=14, fontweight='bold', pad=15)
@@ -1790,7 +1920,7 @@ class ConfigurationAnalyzer:
         ax2.set_xlabel('Method', fontsize=13, fontweight='bold')
         ax2.set_title('Precision vs Recall', fontsize=14, fontweight='bold', pad=15)
         ax2.set_xticks(x)
-        ax2.set_xticklabels(methods, rotation=45, ha='right', fontsize=10)
+        ax2.set_xticklabels(method_labels, rotation=45, ha='right', fontsize=10)
         ax2.set_ylim(0, 1.15)  # Extra room for value labels
         ax2.grid(True, alpha=0.25, axis='y', linestyle='--')
         ax2.legend(fontsize=9, loc='lower right')
@@ -1984,7 +2114,7 @@ class ConfigurationAnalyzer:
                        cbar_kws={'label': 'Correlation'},
                        ax=ax, annot_kws={'fontsize': 9, 'fontweight': 'bold'})
 
-            ax.set_title(f'{method} — Network Properties vs Performance\nILS {self.ils_level}',
+            ax.set_title(f'{display_name(method)} — Network Properties vs Performance\nILS {self.ils_level}',
                         fontsize=13, fontweight='bold', pad=10)
             ax.set_ylabel('Network Properties', fontsize=11, fontweight='bold')
             ax.set_xlabel('Performance Metrics', fontsize=11, fontweight='bold')
@@ -2070,7 +2200,7 @@ class ConfigurationAnalyzer:
                 mean_ret_bias = median_ret_bias = np.nan
 
             summary_data.append({
-                'Method': method,
+                'Method': display_name(method),
                 'Total_Runs': total,
                 'Completed_Runs': successful,
                 'Completion_Rate_%': comp_rate,
