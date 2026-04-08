@@ -27,8 +27,8 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Publication-quality settings
-plt.rcParams['figure.dpi'] = 300
-plt.rcParams['savefig.dpi'] = 300
+plt.rcParams['figure.dpi'] = 100  # Low DPI for in-memory figures (saves RAM)
+plt.rcParams['savefig.dpi'] = 300  # High DPI only when saving to file
 plt.rcParams['font.size'] = 11
 plt.rcParams['axes.labelsize'] = 13
 plt.rcParams['axes.titlesize'] = 14
@@ -529,7 +529,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / f"{fig_prefix}_{char_col.lower()}.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / f"{fig_prefix}_{char_col.lower()}.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_completion_vs_characteristic_faceted(self, char_col: str, char_label: str, fig_prefix: str):
         """Plot completion rate vs characteristic - faceted subplots, one per method"""
@@ -619,7 +620,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_individual_dir / f"{fig_prefix}_{char_col.lower()}.pdf", bbox_inches='tight')
         fig.savefig(self.plots_individual_dir / f"{fig_prefix}_{char_col.lower()}.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_folding_comparison(self):
         """Compare Holm Fold vs Polyphest Fold - completion rates"""
@@ -685,7 +687,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "05_folding_completion_comparison.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "05_folding_completion_comparison.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_folding_accuracy_comparison(self):
         """Compare folding methods: which produces more accurate reticulation counts? Shows bias."""
@@ -747,7 +750,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "06_reticulation_bias_histogram.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "06_reticulation_bias_histogram.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_reticulation_error_distribution(self):
         """Boxplot of reticulation count errors - shows percentage bias (signed)"""
@@ -853,7 +857,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "07_reticulation_bias_boxplot.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "07_reticulation_bias_boxplot.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_edit_distance_distribution(self):
         """Plot MUL-tree edit distance distribution for each method"""
@@ -909,7 +914,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "08_edit_distance_multree_boxplot.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "08_edit_distance_multree_boxplot.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_distance_metrics_comparison(self):
         """Compare distance metrics side-by-side: Network ED and MUL-tree ED"""
@@ -1003,7 +1009,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "08a_distance_metrics_comparison.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "08a_distance_metrics_comparison.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_metric_distribution(self, metric_name: str, metric_label: str, filename_prefix: str):
         """Generic method to plot distribution of any metric as box plots"""
@@ -1058,7 +1065,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / f"{filename_prefix}.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / f"{filename_prefix}.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_per_network_breakdown(self):
         """Show per-network completion rates to visualize aggregation"""
@@ -1120,7 +1128,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "09_per_network_breakdown.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "09_per_network_breakdown.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_reticulation_bias_per_network(self):
         """Grouped bar chart showing reticulation bias (percentage) per network for all methods"""
@@ -1274,7 +1283,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "09b_per_network_reticulation_bias.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "09b_per_network_reticulation_bias.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_method_summary(self):
         """Summary bar plot: completion rate, edit distance, and reticulation error with bias"""
@@ -1432,7 +1442,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout(rect=[0, 0, 1, 0.97])
         fig.savefig(self.plots_dir / "10_method_summary.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "10_method_summary.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_accuracy_vs_characteristic_combined(self, char_col: str, char_label: str,
                                                   metric_name: str, metric_label: str, fig_prefix: str):
@@ -1492,7 +1503,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / f"{fig_prefix}.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / f"{fig_prefix}.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_accuracy_vs_characteristic_faceted(self, char_col: str, char_label: str,
                                                  metric_name: str, metric_label: str, fig_prefix: str):
@@ -1557,7 +1569,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_individual_dir / f"{fig_prefix}.pdf", bbox_inches='tight')
         fig.savefig(self.plots_individual_dir / f"{fig_prefix}.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_jaccard_vs_characteristic_combined(self, char_col: str, char_label: str,
                                                  jaccard_metric: str, jaccard_label: str, fig_prefix: str):
@@ -1583,7 +1596,8 @@ class ConfigurationAnalyzer:
 
         if len(metrics_with_stats) == 0:
             print(f"  WARNING: No data for {metric_name}, skipping")
-            plt.close()
+            plt.close('all')
+        gc.collect()
             return
 
         for method in sorted(metrics_with_stats['method'].unique()):
@@ -1631,7 +1645,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / f"{fig_prefix}.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / f"{fig_prefix}.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_jaccard_vs_characteristic_faceted(self, char_col: str, char_label: str,
                                                 jaccard_metric: str, jaccard_label: str, fig_prefix: str):
@@ -1709,7 +1724,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_individual_dir / f"{fig_prefix}.pdf", bbox_inches='tight')
         fig.savefig(self.plots_individual_dir / f"{fig_prefix}.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_polyploid_f1_performance(self):
         """Plot F1 score for polyploid identification per method"""
@@ -1795,7 +1811,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout(rect=[0, 0, 1, 0.96])
         fig.savefig(self.plots_dir / "23_polyploid_f1_performance.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "23_polyploid_f1_performance.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_comprehensive_correlation_heatmap(self):
         """Comprehensive correlation heatmap: all network properties vs all performance metrics"""
@@ -1882,7 +1899,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "31_comprehensive_correlation_heatmap.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "31_comprehensive_correlation_heatmap.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def plot_correlation_heatmap_per_method(self):
         """Create per-method correlation heatmaps showing which network properties affect each method"""
@@ -1998,7 +2016,8 @@ class ConfigurationAnalyzer:
         plt.tight_layout()
         fig.savefig(self.plots_dir / "32_per_method_correlation_heatmap.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "32_per_method_correlation_heatmap.png", bbox_inches='tight', dpi=300)
-        plt.close()
+        plt.close('all')
+        gc.collect()
 
     def generate_summary_tables(self):
         """Generate comprehensive summary tables for publication"""
