@@ -1596,8 +1596,6 @@ class ConfigurationAnalyzer:
 
         if len(metrics_with_stats) == 0:
             print(f"  WARNING: No data for {metric_name}, skipping")
-            plt.close('all')
-        gc.collect()
             return
 
         for method in sorted(metrics_with_stats['method'].unique()):
