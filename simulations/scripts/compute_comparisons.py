@@ -296,11 +296,11 @@ class ComparisonEngine:
                     'status': 'FAILED'
                 })
 
-            # Progress update
-            if (idx + 1) % 20 == 0 or (idx + 1) == len(valid_inventory):
-                print(f"  Processed {idx + 1}/{len(valid_inventory)} "
-                      f"(Success: {self.stats['success']}, Failed: {self.stats['failed']}, "
-                      f"Cached: {self.stats['from_cache']})")
+            # Progress update — always print network/method being processed
+            # so we can identify which one causes OOM kills
+            print(f"  [{idx + 1}/{len(valid_inventory)}] {network} / {method} / rep_{replicate} "
+                  f"[{source}] (Success: {self.stats['success']}, Failed: {self.stats['failed']}, "
+                  f"Cached: {self.stats['from_cache']})", flush=True)
 
         return pd.DataFrame(results)
 
