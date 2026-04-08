@@ -152,9 +152,9 @@ class MultiLevelSummary:
         # Metrics to rank (lower is better for distances)
         # PRIMARY METRICS first, then secondary
         # Note: num_rets_bias is NOT ranked (it's signed, not an error magnitude)
-        distance_metrics = ['edit_distance_multree', 'rf_distance',  # PRIMARY MUL-tree metrics
+        distance_metrics = ['edit_distance_multree', 'rf_distance',
                            'num_rets_diff', 'ploidy_diff.dist',
-                           'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist',
+                           'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist']
 
         rankings = []
 
