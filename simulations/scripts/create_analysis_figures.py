@@ -173,7 +173,7 @@ class ConfigurationAnalyzer:
         # Clean old plots and tables before generating new ones
         self._clean_output_directories()
 
-        total_plots = 43  # Updated: removed 5 RF distance plots (RF not well-defined for MUL-trees)
+        total_plots = 38
         plot_num = 0
 
         # ========================================================================
