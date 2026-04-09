@@ -84,7 +84,7 @@ METHOD_DISPLAY = {
 }
 
 METRICS = {
-    'edit_distance_multree': 'MUL-tree Edit Distance',
+    'edit_distance_multree': 'Edit Distance',
     'ret_leaf_jaccard.dist': 'Reticulation Leaf Distance',
     'ret_sisters_jaccard.dist': 'Sister-Taxa Distance',
     'ploidy_diff.dist': 'Ploidy Distance',
