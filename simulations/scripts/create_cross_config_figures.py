@@ -299,7 +299,7 @@ class CrossConfigAnalyzer:
         if not self.aggregated.empty:
             self.aggregated = tag_config_family(self.aggregated)
 
-        # Convert num_rets_bias from raw counts to percentage: (bias / H_Strict) * 100
+        # Convert num_rets_bias from raw counts to percentage: (bias / Total_WGD) * 100
         if network_stats is not None and not self.comparisons.empty:
             self._convert_bias_to_percentage()
 
@@ -311,7 +311,7 @@ class CrossConfigAnalyzer:
         print(f"  Aggregated rows: {len(self.aggregated)}")
 
     def _convert_bias_to_percentage(self):
-        """Convert num_rets_bias values from raw counts to percentage of true H_Strict."""
+        """Convert num_rets_bias values from raw counts to percentage of true Total_WGD."""
         mask = self.comparisons['metric'] == 'num_rets_bias'
         if not mask.any():
             return
@@ -1080,7 +1080,7 @@ class PolyphestThresholdAnalyzer:
         print(f"  Comparison rows: {len(self.comparisons)}")
 
     def _convert_bias_to_percentage(self):
-        """Convert num_rets_bias values from raw counts to percentage of true H_Strict."""
+        """Convert num_rets_bias values from raw counts to percentage of true Total_WGD."""
         mask = self.comparisons['metric'] == 'num_rets_bias'
         if not mask.any():
             return
@@ -1734,10 +1734,12 @@ class TetraploidSubsetAnalyzer:
 
                 if len(vals) > 0:
                     row[f'{metric_key}_mean'] = round(vals.mean(), 3)
+                    row[f'{metric_key}_median'] = round(vals.median(), 3)
                     row[f'{metric_key}_std'] = round(vals.std(), 3)
                     row[f'{metric_key}_n'] = len(vals)
                 else:
                     row[f'{metric_key}_mean'] = np.nan
+                    row[f'{metric_key}_median'] = np.nan
                     row[f'{metric_key}_std'] = np.nan
                     row[f'{metric_key}_n'] = 0
 

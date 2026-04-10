@@ -667,6 +667,7 @@ class PolyphestVsGrampaIter:
                         (self.comparisons['status'] == 'SUCCESS')
                     ]['value']
                     row[f'{metric_key}_mean'] = vals.mean() if len(vals) > 0 else np.nan
+                    row[f'{metric_key}_median'] = vals.median() if len(vals) > 0 else np.nan
                     row[f'{metric_key}_std'] = vals.std() if len(vals) > 1 else np.nan
 
                 rows.append(row)
