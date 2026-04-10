@@ -135,7 +135,7 @@ KEY_METRICS = {
     'ret_leaf_jaccard.dist': 'Reticulation Leaf Distance',
     'ret_sisters_jaccard.dist': 'Sister-Taxa Distance',
     'ploidy_diff.dist': 'Ploidy Distance',
-    'num_rets_bias': 'Reticulation Bias',
+    'num_rets_bias': 'Reticulation Bias (%)',
 }
 
 # Plot style
@@ -299,12 +299,32 @@ class CrossConfigAnalyzer:
         if not self.aggregated.empty:
             self.aggregated = tag_config_family(self.aggregated)
 
+        # Convert num_rets_bias from raw counts to percentage: (bias / H_Strict) * 100
+        if network_stats is not None and not self.comparisons.empty:
+            self._convert_bias_to_percentage()
+
         available = list(data.keys())
         print(f"\nCross-config analyzer initialized:")
         print(f"  Configs loaded: {len(available)}")
         print(f"  Inventory rows: {len(self.inventory)}")
         print(f"  Comparison rows: {len(self.comparisons)}")
         print(f"  Aggregated rows: {len(self.aggregated)}")
+
+    def _convert_bias_to_percentage(self):
+        """Convert num_rets_bias values from raw counts to percentage of true H_Strict."""
+        mask = self.comparisons['metric'] == 'num_rets_bias'
+        if not mask.any():
+            return
+
+        wgd_lookup = self.network_stats.set_index('network')['Total_WGD'].to_dict()
+
+        idx = self.comparisons.index[mask]
+        for i in idx:
+            wgd = wgd_lookup.get(self.comparisons.at[i, 'network'])
+            if wgd is not None and wgd > 0:
+                self.comparisons.at[i, 'value'] = self.comparisons.at[i, 'value'] / wgd * 100
+
+        print(f"  Converted num_rets_bias to percentage (÷ Total_WGD × 100)")
 
     def generate_all(self):
         """Generate all cross-config figures and tables."""
@@ -673,14 +693,14 @@ class CrossConfigAnalyzer:
 
             ax.axhline(y=0, color='black', linewidth=1, linestyle='-')
             ax.set_xlabel(fam_info['label'], fontsize=13, fontweight='bold')
-            ax.set_ylabel('Reticulation Bias\n(positive = over-predicts)', fontsize=12, fontweight='bold')
+            ax.set_ylabel('Reticulation Bias (%)\n(positive = over-predicts)', fontsize=12, fontweight='bold')
             ax.set_title(fam_info['description'], fontsize=13, fontweight='bold', pad=10)
             ax.set_xticks(x_positions)
             ax.set_xticklabels(LEVEL_ORDER, fontsize=12)
             ax.grid(True, alpha=0.25, linestyle='--', axis='y')
             ax.legend(fontsize=9, framealpha=0.9, loc='best')
 
-        fig.suptitle('Reticulation Bias Across Simulation Conditions',
+        fig.suptitle('Reticulation Bias (%) Across Simulation Conditions',
                      fontsize=15, fontweight='bold', y=1.02)
         plt.tight_layout()
         fig.savefig(self.plots_dir / "04_reticulation_bias_across_conditions.pdf", bbox_inches='tight')
@@ -1051,9 +1071,29 @@ class PolyphestThresholdAnalyzer:
         if not self.comparisons.empty:
             self.comparisons = tag_config_family(self.comparisons)
 
+        # Convert num_rets_bias to percentage
+        if network_stats is not None and not self.comparisons.empty:
+            self._convert_bias_to_percentage()
+
         print(f"\nPolyphest threshold analyzer initialized:")
         print(f"  Inventory rows: {len(self.inventory)}")
         print(f"  Comparison rows: {len(self.comparisons)}")
+
+    def _convert_bias_to_percentage(self):
+        """Convert num_rets_bias values from raw counts to percentage of true H_Strict."""
+        mask = self.comparisons['metric'] == 'num_rets_bias'
+        if not mask.any():
+            return
+
+        wgd_lookup = self.network_stats.set_index('network')['Total_WGD'].to_dict()
+
+        idx = self.comparisons.index[mask]
+        for i in idx:
+            wgd = wgd_lookup.get(self.comparisons.at[i, 'network'])
+            if wgd is not None and wgd > 0:
+                self.comparisons.at[i, 'value'] = self.comparisons.at[i, 'value'] / wgd * 100
+
+        print(f"  Converted num_rets_bias to percentage (÷ Total_WGD × 100)")
 
     def _poly_display(self, method):
         return POLYPHEST_DISPLAY.get(method, method)
@@ -1070,7 +1110,7 @@ class PolyphestThresholdAnalyzer:
         self.plot_accuracy_across_conditions('edit_distance_multree', 'Edit Distance')
         self.plot_accuracy_across_conditions('ret_leaf_jaccard.dist', 'Reticulation Leaf Distance')
         self.plot_accuracy_across_conditions('ploidy_diff.dist', 'Ploidy Distance')
-        self.plot_accuracy_across_conditions('num_rets_bias', 'Reticulation Bias')
+        self.plot_accuracy_across_conditions('num_rets_bias', 'Reticulation Bias (%)')
         self.plot_accuracy_boxplots()
         self.generate_summary_table()
 

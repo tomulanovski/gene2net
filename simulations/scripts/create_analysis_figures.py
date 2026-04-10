@@ -900,9 +900,9 @@ class ConfigurationAnalyzer:
             metric_name = 'num_rets_bias'
             use_percentage = True
 
-        # Merge with network stats to get true H_Strict for percentage calculation
+        # Merge with network stats to get true Total_WGD for percentage calculation
         ret_bias = ret_bias.merge(
-            self.network_stats[['network', 'H_Strict']],
+            self.network_stats[['network', 'Total_WGD']],
             on='network',
             how='left'
         )
@@ -918,16 +918,16 @@ class ConfigurationAnalyzer:
 
         for method in methods:
             method_data = ret_bias[ret_bias['method'] == method].copy()
-            
+
             if use_percentage:
-                # Calculate percentage bias: (bias / H_Strict) * 100
-                # Handle division by zero: if H_Strict=0, use absolute bias
+                # Calculate percentage bias: (bias / Total_WGD) * 100
+                # Handle division by zero: if Total_WGD=0, use absolute bias
                 method_data['bias_pct'] = (
-                    method_data['mean'] / method_data['H_Strict'] * 100
+                    method_data['mean'] / method_data['Total_WGD'] * 100
                 ).replace([np.inf, -np.inf], np.nan)
-                
-                # For networks with H_Strict=0, use absolute bias (can't calculate percentage)
-                zero_h_mask = method_data['H_Strict'] == 0
+
+                # For networks with Total_WGD=0, use absolute bias (can't calculate percentage)
+                zero_h_mask = method_data['Total_WGD'] == 0
                 if zero_h_mask.any():
                     method_data.loc[zero_h_mask, 'bias_pct'] = method_data.loc[zero_h_mask, 'mean']
                 
@@ -1272,20 +1272,20 @@ class ConfigurationAnalyzer:
             print("  WARNING: No num_rets_bias data found, skipping per-network bias plot")
             return
 
-        # Merge with network stats to get H_Strict for percentage calculation
+        # Merge with network stats to get Total_WGD for percentage calculation
         ret_bias = ret_bias.merge(
-            self.network_stats[['network', 'H_Strict']],
+            self.network_stats[['network', 'Total_WGD']],
             on='network',
             how='left'
         )
 
         # Calculate percentage bias
         ret_bias['bias_pct'] = (
-            ret_bias['mean'] / ret_bias['H_Strict'] * 100
+            ret_bias['mean'] / ret_bias['Total_WGD'] * 100
         ).replace([np.inf, -np.inf], np.nan)
-        
-        # For networks with H_Strict=0, use absolute bias
-        zero_h_mask = ret_bias['H_Strict'] == 0
+
+        # For networks with Total_WGD=0, use absolute bias
+        zero_h_mask = ret_bias['Total_WGD'] == 0
         if zero_h_mask.any():
             ret_bias.loc[zero_h_mask, 'bias_pct'] = ret_bias.loc[zero_h_mask, 'mean']
 
@@ -1467,16 +1467,16 @@ class ConfigurationAnalyzer:
             if len(method_bias) > 0:
                 # Merge with network stats to calculate percentage bias
                 method_bias_with_stats = method_bias.merge(
-                    self.network_stats[['network', 'H_Strict']],
+                    self.network_stats[['network', 'Total_WGD']],
                     on='network',
                     how='left'
                 )
-                # Calculate percentage: (bias / H_Strict) * 100
+                # Calculate percentage: (bias / Total_WGD) * 100
                 method_bias_with_stats['bias_pct'] = (
-                    method_bias_with_stats['mean'] / method_bias_with_stats['H_Strict'] * 100
+                    method_bias_with_stats['mean'] / method_bias_with_stats['Total_WGD'] * 100
                 ).replace([np.inf, -np.inf], np.nan)
-                # For H_Strict=0, use absolute bias
-                zero_h_mask = method_bias_with_stats['H_Strict'] == 0
+                # For Total_WGD=0, use absolute bias
+                zero_h_mask = method_bias_with_stats['Total_WGD'] == 0
                 if zero_h_mask.any():
                     method_bias_with_stats.loc[zero_h_mask, 'bias_pct'] = method_bias_with_stats.loc[zero_h_mask, 'mean']
                 

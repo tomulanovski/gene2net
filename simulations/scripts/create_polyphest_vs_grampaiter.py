@@ -89,7 +89,7 @@ METRICS = {
     'ret_sisters_jaccard.dist': 'Sister-Taxa Distance',
     'ploidy_diff.dist': 'Ploidy Distance',
     'num_rets_diff': 'Reticulation Count Error (|diff|)',
-    'num_rets_bias': 'Reticulation Count Bias',
+    'num_rets_bias': 'Reticulation Count Bias (%)',
 }
 
 # Plot style
@@ -198,10 +198,32 @@ class PolyphestVsGrampaIter:
         self.tables_dir.mkdir(parents=True, exist_ok=True)
         self.network_stats = network_stats
 
+        # Convert num_rets_bias from raw counts to percentage: (bias / H_Strict) * 100
+        if network_stats is not None and not comparisons.empty:
+            self._convert_bias_to_percentage()
+
         print(f"\nPolyphest vs GRAMPA^Iter analyzer:")
         print(f"  Inventory: {len(self.inventory)} rows")
         print(f"  Comparisons: {len(self.comparisons)} rows")
         print(f"  Output: {self.output_dir}")
+
+    def _convert_bias_to_percentage(self):
+        """Convert num_rets_bias values from raw counts to percentage of true H_Strict."""
+        mask = self.comparisons['metric'] == 'num_rets_bias'
+        if not mask.any():
+            return
+
+        # Build network -> Total_WGD lookup (auto + allo events)
+        wgd_lookup = self.network_stats.set_index('network')['Total_WGD'].to_dict()
+
+        idx = self.comparisons.index[mask]
+        for i in idx:
+            wgd = wgd_lookup.get(self.comparisons.at[i, 'network'])
+            if wgd is not None and wgd > 0:
+                self.comparisons.at[i, 'value'] = self.comparisons.at[i, 'value'] / wgd * 100
+            # Total_WGD == 0 or missing: keep raw value
+
+        print(f"  Converted num_rets_bias to percentage (÷ Total_WGD × 100)")
 
     def generate_all(self):
         print(f"\n{'='*70}")
@@ -356,7 +378,7 @@ class PolyphestVsGrampaIter:
         panel_metrics = [
             ('edit_distance_multree', 'Edit Distance', None),
             ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance', None),
-            ('num_rets_bias', 'Ret. Count Bias', 0),  # 0 = reference line
+            ('num_rets_bias', 'Ret. Count Bias (%)', 0),  # 0 = reference line
         ]
 
         fig, axes = plt.subplots(len(panel_metrics), len(CONFIG_FAMILIES),
@@ -557,7 +579,7 @@ class PolyphestVsGrampaIter:
         line_metrics = [
             ('edit_distance_multree', 'Edit Distance'),
             ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance'),
-            ('num_rets_bias', 'Ret. Bias'),
+            ('num_rets_bias', 'Ret. Bias (%)'),
         ]
 
         fig, axes = plt.subplots(len(line_metrics), len(CONFIG_FAMILIES),
