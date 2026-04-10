@@ -1397,6 +1397,357 @@ class PolyphestThresholdAnalyzer:
 # MAIN
 # ============================================================================
 
+# ============================================================================
+# TETRAPLOID SUBSET ANALYSIS
+# ============================================================================
+
+# The 8 tetraploid-only networks where AlloppNET can run
+TETRAPLOID_NETWORKS = [
+    'Bendiksby_2011', 'Ding_2023', 'Koenen_2020', 'Liu_2023',
+    'Shahrestani_2015', 'Wisecaver_2023', 'Wu_2015', 'Zhao_2021',
+]
+
+# ILS configs only — all methods have data under these
+ILS_CONFIGS = [
+    'conf_ils_low_10M',
+    'conf_ils_medium_10M',
+    'conf_ils_high_10M',
+]
+
+ILS_LEVEL_MAP = {
+    'conf_ils_low_10M': 'Low',
+    'conf_ils_medium_10M': 'Medium',
+    'conf_ils_high_10M': 'High',
+}
+
+# Methods to include in tetraploid analysis (all that potentially complete)
+TETRA_METHODS = ['polyphest', 'grandma_split', 'alloppnet', 'mpsugar', 'padre']
+
+# Ordered for consistent plotting
+TETRA_METHOD_ORDER = ['polyphest', 'padre', 'mpsugar', 'grandma_split', 'alloppnet']
+
+
+class TetraploidSubsetAnalyzer:
+    """Compare all methods on the 8 tetraploid networks under ILS configs."""
+
+    def __init__(self, data: Dict, output_dir: Path, network_stats: Optional[pd.DataFrame] = None):
+        self.output_dir = output_dir
+        self.plots_dir = output_dir / "plots"
+        self.tables_dir = output_dir / "tables"
+        self.plots_dir.mkdir(parents=True, exist_ok=True)
+        self.tables_dir.mkdir(parents=True, exist_ok=True)
+        self.network_stats = network_stats
+
+        # Build combined data from ILS configs only, polyphest merged
+        self.inventory, self.comparisons = self._build_data(data)
+
+        # Convert bias to percentage
+        if network_stats is not None and not self.comparisons.empty:
+            self._convert_bias_to_percentage()
+
+        print(f"\nTetraploid subset analyzer initialized:")
+        print(f"  Networks: {len(TETRAPLOID_NETWORKS)}")
+        print(f"  Configs: {ILS_CONFIGS}")
+        print(f"  Inventory rows: {len(self.inventory)}")
+        print(f"  Comparison rows: {len(self.comparisons)}")
+
+    def _build_data(self, data: Dict):
+        """Load ILS configs, merge polyphest, filter to tetraploid networks and relevant methods."""
+        from create_analysis_figures import merge_polyphest_inventory, merge_polyphest_comparisons
+
+        inv_frames = []
+        comp_frames = []
+
+        for config in ILS_CONFIGS:
+            if config not in data:
+                continue
+            dfs = data[config]
+
+            if 'inventory' in dfs:
+                df = dfs['inventory'].copy()
+                df['config'] = config
+                inv_frames.append(df)
+
+            if 'comparisons' in dfs:
+                df = dfs['comparisons'].copy()
+                if 'config' not in df.columns:
+                    df['config'] = config
+                comp_frames.append(df)
+
+        if not inv_frames:
+            return pd.DataFrame(), pd.DataFrame()
+
+        inventory = pd.concat(inv_frames, ignore_index=True)
+        comparisons = pd.concat(comp_frames, ignore_index=True) if comp_frames else pd.DataFrame()
+
+        # Merge polyphest thresholds
+        inventory = merge_polyphest_inventory(inventory)
+        if not comparisons.empty:
+            comparisons = merge_polyphest_comparisons(comparisons)
+
+        # Filter to tetraploid networks and relevant methods
+        inventory = inventory[
+            inventory['network'].isin(TETRAPLOID_NETWORKS) &
+            inventory['method'].isin(TETRA_METHODS)
+        ].copy()
+
+        if not comparisons.empty:
+            comparisons = comparisons[
+                comparisons['network'].isin(TETRAPLOID_NETWORKS) &
+                comparisons['method'].isin(TETRA_METHODS)
+            ].copy()
+
+        return inventory, comparisons
+
+    def _convert_bias_to_percentage(self):
+        """Convert num_rets_bias values from raw counts to percentage of true Total_WGD."""
+        mask = self.comparisons['metric'] == 'num_rets_bias'
+        if not mask.any():
+            return
+
+        wgd_lookup = self.network_stats.set_index('network')['Total_WGD'].to_dict()
+
+        idx = self.comparisons.index[mask]
+        for i in idx:
+            wgd = wgd_lookup.get(self.comparisons.at[i, 'network'])
+            if wgd is not None and wgd > 0:
+                self.comparisons.at[i, 'value'] = self.comparisons.at[i, 'value'] / wgd * 100
+
+        print(f"  Converted num_rets_bias to percentage (÷ Total_WGD × 100)")
+
+    def _get_methods_with_data(self):
+        """Return methods that have at least some successful comparisons, in display order."""
+        if self.comparisons.empty:
+            return []
+        methods_present = set(
+            self.comparisons[self.comparisons['status'] == 'SUCCESS']['method'].unique()
+        )
+        return [m for m in TETRA_METHOD_ORDER if m in methods_present]
+
+    def generate_all(self):
+        print(f"\n{'='*80}")
+        print(f"Generating Tetraploid Subset Analysis")
+        print(f"Output: {self.output_dir}")
+        print(f"{'='*80}\n")
+
+        self.plot_accuracy_overview()
+        self.plot_accuracy_by_ils()
+        self.generate_summary_table()
+
+        print(f"\nTetraploid subset analysis complete!")
+        print(f"  Plots: {self.plots_dir}")
+        print(f"  Tables: {self.tables_dir}")
+
+    # ------------------------------------------------------------------
+    # 1. Accuracy overview — aggregated across 3 ILS levels
+    # ------------------------------------------------------------------
+    def plot_accuracy_overview(self):
+        """Multi-panel bar chart: one panel per metric, bars per method, aggregated across ILS configs."""
+        if self.comparisons.empty:
+            return
+
+        methods = self._get_methods_with_data()
+        if not methods:
+            print("  WARNING: No methods with data for tetraploid overview")
+            return
+
+        panel_metrics = [
+            ('edit_distance_multree', 'Edit Distance'),
+            ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance'),
+            ('ret_sisters_jaccard.dist', 'Sister-Taxa Distance'),
+            ('num_rets_bias', 'Ret. Count Bias (%)'),
+        ]
+
+        fig, axes = plt.subplots(1, len(panel_metrics),
+                                 figsize=(4.5 * len(panel_metrics), 5), squeeze=False)
+        axes = axes.flatten()
+
+        for idx, (metric_key, metric_label) in enumerate(panel_metrics):
+            ax = axes[idx]
+            metric_data = self.comparisons[
+                (self.comparisons['metric'] == metric_key) &
+                (self.comparisons['status'] == 'SUCCESS')
+            ]
+
+            means = []
+            sems = []
+            labels = []
+            colors = []
+            counts = []
+
+            for method in methods:
+                vals = metric_data[metric_data['method'] == method]['value'].dropna()
+                if len(vals) > 0:
+                    means.append(vals.mean())
+                    sems.append(vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0)
+                    counts.append(len(vals))
+                else:
+                    means.append(0)
+                    sems.append(0)
+                    counts.append(0)
+                labels.append(display_name(method))
+                colors.append(METHOD_COLORS.get(method, '#888888'))
+
+            x = np.arange(len(methods))
+            bars = ax.bar(x, means, yerr=sems, capsize=4,
+                         color=colors, edgecolor='white', linewidth=0.8, alpha=0.85)
+
+            # Add count annotations
+            nonzero_means = [abs(m) for m in means if m != 0]
+            y_offset = 0.01 * max(nonzero_means) if nonzero_means else 0.02
+            for j, (bar, n) in enumerate(zip(bars, counts)):
+                if n > 0:
+                    y_pos = bar.get_height() + sems[j] + y_offset
+                    ax.text(bar.get_x() + bar.get_width() / 2, y_pos,
+                           f'n={n}', ha='center', va='bottom', fontsize=7, color='gray')
+
+            if metric_key == 'num_rets_bias':
+                ax.axhline(y=0, color='black', linewidth=1, linestyle='-', alpha=0.5)
+
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels, fontsize=9, rotation=45, ha='right')
+            ax.set_title(metric_label, fontsize=12, fontweight='bold')
+            ax.grid(True, alpha=0.25, linestyle='--', axis='y')
+
+        fig.suptitle('Method Accuracy on Tetraploid Networks\n(8 networks, 3 ILS configs)',
+                     fontsize=14, fontweight='bold', y=1.04)
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "01_tetra_accuracy_overview.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "01_tetra_accuracy_overview.png", bbox_inches='tight', dpi=300)
+        plt.close('all')
+        gc.collect()
+        print("  [1] Accuracy overview")
+
+    # ------------------------------------------------------------------
+    # 2. Accuracy by ILS level — shows degradation
+    # ------------------------------------------------------------------
+    def plot_accuracy_by_ils(self):
+        """Grouped bar chart per metric, split by ILS level."""
+        if self.comparisons.empty:
+            return
+
+        methods = self._get_methods_with_data()
+        if not methods:
+            return
+
+        panel_metrics = [
+            ('edit_distance_multree', 'Edit Distance'),
+            ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance'),
+            ('ret_sisters_jaccard.dist', 'Sister-Taxa Distance'),
+            ('num_rets_bias', 'Ret. Count Bias (%)'),
+        ]
+
+        fig, axes = plt.subplots(len(panel_metrics), 1,
+                                 figsize=(max(10, 2 * len(methods)), 4.5 * len(panel_metrics)),
+                                 squeeze=False)
+
+        ils_levels = ['Low', 'Medium', 'High']
+
+        for row_idx, (metric_key, metric_label) in enumerate(panel_metrics):
+            ax = axes[row_idx, 0]
+            metric_data = self.comparisons[
+                (self.comparisons['metric'] == metric_key) &
+                (self.comparisons['status'] == 'SUCCESS')
+            ]
+
+            n_methods = len(methods)
+            n_levels = len(ils_levels)
+            group_width = 0.8
+            bar_width = group_width / n_methods
+            x = np.arange(n_levels)
+
+            for m_idx, method in enumerate(methods):
+                means = []
+                sems = []
+                for level_name in ils_levels:
+                    cfg = [k for k, v in ILS_LEVEL_MAP.items() if v == level_name]
+                    if cfg:
+                        vals = metric_data[
+                            (metric_data['method'] == method) &
+                            (metric_data['config'] == cfg[0])
+                        ]['value'].dropna()
+                        means.append(vals.mean() if len(vals) > 0 else np.nan)
+                        sems.append(vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0)
+                    else:
+                        means.append(np.nan)
+                        sems.append(0)
+
+                offset = (m_idx - n_methods / 2 + 0.5) * bar_width
+                ax.bar(x + offset, means, bar_width * 0.9,
+                       yerr=sems, capsize=3,
+                       label=display_name(method) if row_idx == 0 else None,
+                       color=METHOD_COLORS.get(method, '#888888'),
+                       edgecolor='white', linewidth=0.8, alpha=0.85)
+
+            if metric_key == 'num_rets_bias':
+                ax.axhline(y=0, color='black', linewidth=1, linestyle='-', alpha=0.5)
+
+            ax.set_xticks(x)
+            ax.set_xticklabels(ils_levels, fontsize=11)
+            ax.set_ylabel(metric_label, fontsize=11, fontweight='bold')
+            ax.set_xlabel('ILS Level', fontsize=11, fontweight='bold')
+            ax.grid(True, alpha=0.25, linestyle='--', axis='y')
+
+            if row_idx == 0:
+                ax.legend(fontsize=9, framealpha=0.9, loc='upper left',
+                         bbox_to_anchor=(1.01, 1))
+
+        fig.suptitle('Method Accuracy on Tetraploid Networks by ILS Level',
+                     fontsize=14, fontweight='bold', y=1.02)
+        plt.tight_layout()
+        fig.savefig(self.plots_dir / "02_tetra_accuracy_by_ils.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "02_tetra_accuracy_by_ils.png", bbox_inches='tight', dpi=300)
+        plt.close('all')
+        gc.collect()
+        print("  [2] Accuracy by ILS level")
+
+    # ------------------------------------------------------------------
+    # Summary table
+    # ------------------------------------------------------------------
+    def generate_summary_table(self):
+        """Summary table: method × metric, aggregated across 3 ILS configs."""
+        if self.comparisons.empty:
+            return
+
+        methods = self._get_methods_with_data()
+        metrics = [
+            'edit_distance_multree', 'ret_leaf_jaccard.dist',
+            'ret_sisters_jaccard.dist', 'ploidy_diff.dist',
+            'num_rets_bias', 'num_rets_diff',
+        ]
+
+        rows = []
+        for method in methods:
+            row = {'method': display_name(method)}
+
+            # Completion rate
+            inv = self.inventory[self.inventory['method'] == method]
+            row['completion_rate'] = f"{inv['inferred_exists'].mean() * 100:.1f}%" if len(inv) > 0 else 'N/A'
+            row['n_completed'] = int(inv['inferred_exists'].sum()) if len(inv) > 0 else 0
+
+            for metric_key in metrics:
+                vals = self.comparisons[
+                    (self.comparisons['method'] == method) &
+                    (self.comparisons['metric'] == metric_key) &
+                    (self.comparisons['status'] == 'SUCCESS')
+                ]['value'].dropna()
+
+                if len(vals) > 0:
+                    row[f'{metric_key}_mean'] = round(vals.mean(), 3)
+                    row[f'{metric_key}_std'] = round(vals.std(), 3)
+                    row[f'{metric_key}_n'] = len(vals)
+                else:
+                    row[f'{metric_key}_mean'] = np.nan
+                    row[f'{metric_key}_std'] = np.nan
+                    row[f'{metric_key}_n'] = 0
+
+            rows.append(row)
+
+        summary = pd.DataFrame(rows)
+        summary.to_csv(self.tables_dir / "01_tetra_method_summary.csv", index=False)
+        print(f"  [T] Summary table saved")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Cross-configuration comparative analysis',
@@ -1462,6 +1813,19 @@ Examples:
     polyphest_dir = output_dir / "polyphest"
     polyphest_analyzer = PolyphestThresholdAnalyzer(data, polyphest_dir, network_stats)
     polyphest_analyzer.generate_all()
+
+    # Generate tetraploid subset analysis
+    tetra_dir = output_dir / "tetra_subset"
+    tetra_analyzer = TetraploidSubsetAnalyzer(data, tetra_dir, network_stats)
+    tetra_analyzer.generate_all()
+
+    # Generate Polyphest vs GRAMPA^Iter analysis
+    from create_polyphest_vs_grampaiter import PolyphestVsGrampaIter, load_data as pvg_load_data
+    pvg_output = SUMMARY_BASE / "polyphest_vs_grampaiter"
+    pvg_output.mkdir(parents=True, exist_ok=True)
+    pvg_inventory, pvg_comparisons = pvg_load_data(configs, SUMMARY_BASE)
+    pvg_analyzer = PolyphestVsGrampaIter(pvg_inventory, pvg_comparisons, pvg_output, network_stats)
+    pvg_analyzer.generate_all()
 
 
 if __name__ == '__main__':
