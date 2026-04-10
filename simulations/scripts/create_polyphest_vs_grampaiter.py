@@ -325,9 +325,11 @@ class PolyphestVsGrampaIter:
             x = np.arange(len(LEVEL_ORDER))
             bar_width = 0.35
 
+            use_median = (metric_key == 'num_rets_bias')
+
             for m_idx, method in enumerate(METHODS):
-                means = []
-                sems = []
+                centers = []
+                errs = []
                 for level in LEVEL_ORDER:
                     cfg = fam_info['configs'].get(level)
                     vals = metric_data[
@@ -335,17 +337,31 @@ class PolyphestVsGrampaIter:
                         (metric_data['config'] == cfg)
                     ]['value']
                     if len(vals) > 0:
-                        means.append(vals.mean())
-                        sems.append(vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0)
+                        if use_median:
+                            centers.append(vals.median())
+                            q1, q3 = vals.quantile(0.25), vals.quantile(0.75)
+                            errs.append([[vals.median() - q1], [q3 - vals.median()]])
+                        else:
+                            centers.append(vals.mean())
+                            errs.append(vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0)
                     else:
-                        means.append(np.nan)
-                        sems.append(0)
+                        centers.append(np.nan)
+                        errs.append(0 if not use_median else [[0], [0]])
 
                 offset = (m_idx - 0.5) * bar_width
-                ax.bar(x + offset, means, bar_width * 0.9,
-                       yerr=sems, capsize=3,
-                       label=dn(method), color=METHOD_COLORS[method],
-                       edgecolor='white', linewidth=0.8, alpha=0.85)
+                if use_median:
+                    # Asymmetric error bars (IQR)
+                    err_low = [e[0][0] if isinstance(e, list) else 0 for e in errs]
+                    err_high = [e[1][0] if isinstance(e, list) else 0 for e in errs]
+                    ax.bar(x + offset, centers, bar_width * 0.9,
+                           yerr=[err_low, err_high], capsize=3,
+                           label=dn(method), color=METHOD_COLORS[method],
+                           edgecolor='white', linewidth=0.8, alpha=0.85)
+                else:
+                    ax.bar(x + offset, centers, bar_width * 0.9,
+                           yerr=errs, capsize=3,
+                           label=dn(method), color=METHOD_COLORS[method],
+                           edgecolor='white', linewidth=0.8, alpha=0.85)
 
             if metric_key == 'num_rets_bias':
                 ax.axhline(y=0, color='black', linewidth=1, linestyle='-', alpha=0.5)
@@ -396,9 +412,12 @@ class PolyphestVsGrampaIter:
                 x = np.arange(len(LEVEL_ORDER))
                 bar_width = 0.35
 
+                use_median = (metric_key == 'num_rets_bias')
+
                 for m_idx, method in enumerate(METHODS):
-                    means = []
-                    sems = []
+                    centers = []
+                    errs_low = []
+                    errs_high = []
                     for level in LEVEL_ORDER:
                         cfg = fam_info['configs'].get(level)
                         vals = metric_data[
@@ -406,15 +425,24 @@ class PolyphestVsGrampaIter:
                             (metric_data['config'] == cfg)
                         ]['value']
                         if len(vals) > 0:
-                            means.append(vals.mean())
-                            sems.append(vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0)
+                            if use_median:
+                                med = vals.median()
+                                centers.append(med)
+                                errs_low.append(med - vals.quantile(0.25))
+                                errs_high.append(vals.quantile(0.75) - med)
+                            else:
+                                centers.append(vals.mean())
+                                sem = vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0
+                                errs_low.append(sem)
+                                errs_high.append(sem)
                         else:
-                            means.append(np.nan)
-                            sems.append(0)
+                            centers.append(np.nan)
+                            errs_low.append(0)
+                            errs_high.append(0)
 
                     offset = (m_idx - 0.5) * bar_width
-                    ax.bar(x + offset, means, bar_width * 0.9,
-                           yerr=sems, capsize=3,
+                    ax.bar(x + offset, centers, bar_width * 0.9,
+                           yerr=[errs_low, errs_high], capsize=3,
                            label=dn(method) if row_idx == 0 else None,
                            color=METHOD_COLORS[method],
                            edgecolor='white', linewidth=0.8, alpha=0.85)
@@ -595,9 +623,12 @@ class PolyphestVsGrampaIter:
             for fam_idx, (fam_name, fam_info) in enumerate(CONFIG_FAMILIES.items()):
                 ax = axes[row_idx, fam_idx]
 
+                use_median = (metric_key == 'num_rets_bias')
+
                 for method in METHODS:
-                    means = []
-                    sems = []
+                    centers = []
+                    errs_low = []
+                    errs_high = []
                     for level in LEVEL_ORDER:
                         cfg = fam_info['configs'].get(level)
                         vals = metric_data[
@@ -605,13 +636,22 @@ class PolyphestVsGrampaIter:
                             (metric_data['config'] == cfg)
                         ]['value']
                         if len(vals) > 0:
-                            means.append(vals.mean())
-                            sems.append(vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0)
+                            if use_median:
+                                med = vals.median()
+                                centers.append(med)
+                                errs_low.append(med - vals.quantile(0.25))
+                                errs_high.append(vals.quantile(0.75) - med)
+                            else:
+                                centers.append(vals.mean())
+                                sem = vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0
+                                errs_low.append(sem)
+                                errs_high.append(sem)
                         else:
-                            means.append(np.nan)
-                            sems.append(0)
+                            centers.append(np.nan)
+                            errs_low.append(0)
+                            errs_high.append(0)
 
-                    ax.errorbar(LEVEL_ORDER, means, yerr=sems,
+                    ax.errorbar(LEVEL_ORDER, centers, yerr=[errs_low, errs_high],
                                marker='o', markersize=8, capsize=4,
                                label=dn(method) if row_idx == 0 and fam_idx == 0 else None,
                                color=METHOD_COLORS[method], linewidth=2.5)

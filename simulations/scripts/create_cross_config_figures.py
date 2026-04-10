@@ -672,20 +672,24 @@ class CrossConfigAnalyzer:
 
             for m_idx, method in enumerate(methods):
                 method_data = fam_data[fam_data['method'] == method]
-                means = []
-                sems = []
+                centers = []
+                errs_low = []
+                errs_high = []
                 for level in LEVEL_ORDER:
                     level_data = method_data[method_data['level'] == level]['value']
                     if len(level_data) > 0:
-                        means.append(level_data.mean())
-                        sems.append(level_data.std() / np.sqrt(len(level_data)) if len(level_data) > 1 else 0)
+                        med = level_data.median()
+                        centers.append(med)
+                        errs_low.append(med - level_data.quantile(0.25))
+                        errs_high.append(level_data.quantile(0.75) - med)
                     else:
-                        means.append(np.nan)
-                        sems.append(0)
+                        centers.append(np.nan)
+                        errs_low.append(0)
+                        errs_high.append(0)
 
                 offset = (m_idx - len(methods) / 2 + 0.5) * bar_width
-                ax.bar(x_positions + offset, means, bar_width * 0.9,
-                       yerr=sems, capsize=3,
+                ax.bar(x_positions + offset, centers, bar_width * 0.9,
+                       yerr=[errs_low, errs_high], capsize=3,
                        label=display_name(method),
                        color=METHOD_COLORS.get(method, '#888888'),
                        edgecolor='white', linewidth=0.8,
@@ -693,7 +697,7 @@ class CrossConfigAnalyzer:
 
             ax.axhline(y=0, color='black', linewidth=1, linestyle='-')
             ax.set_xlabel(fam_info['label'], fontsize=13, fontweight='bold')
-            ax.set_ylabel('Reticulation Bias (%)\n(positive = over-predicts)', fontsize=12, fontweight='bold')
+            ax.set_ylabel('Median Reticulation Bias (%)\n(positive = over-predicts)', fontsize=12, fontweight='bold')
             ax.set_title(fam_info['description'], fontsize=13, fontweight='bold', pad=10)
             ax.set_xticks(x_positions)
             ax.set_xticklabels(LEVEL_ORDER, fontsize=12)
@@ -1258,28 +1262,41 @@ class PolyphestThresholdAnalyzer:
             thresholds = [t for t in POLYPHEST_THRESHOLDS if t in fam_data['method'].unique()]
             bar_width = 0.8 / max(len(thresholds), 1)
 
+            use_median = (metric_key == 'num_rets_bias')
+
             for t_idx, threshold in enumerate(thresholds):
-                means = []
-                sems = []
+                centers = []
+                errs_low = []
+                errs_high = []
                 for level in LEVEL_ORDER:
                     cfg = fam_info['configs'].get(level)
                     level_data = fam_data[(fam_data['method'] == threshold) & (fam_data['config'] == cfg)]['value']
                     if len(level_data) > 0:
-                        means.append(level_data.mean())
-                        sems.append(level_data.std() / np.sqrt(len(level_data)) if len(level_data) > 1 else 0)
+                        if use_median:
+                            med = level_data.median()
+                            centers.append(med)
+                            errs_low.append(med - level_data.quantile(0.25))
+                            errs_high.append(level_data.quantile(0.75) - med)
+                        else:
+                            centers.append(level_data.mean())
+                            sem = level_data.std() / np.sqrt(len(level_data)) if len(level_data) > 1 else 0
+                            errs_low.append(sem)
+                            errs_high.append(sem)
                     else:
-                        means.append(np.nan)
-                        sems.append(0)
+                        centers.append(np.nan)
+                        errs_low.append(0)
+                        errs_high.append(0)
 
                 offset = (t_idx - len(thresholds) / 2 + 0.5) * bar_width
-                ax.bar(x_positions + offset, means, bar_width * 0.9,
-                       yerr=sems, capsize=3,
+                ax.bar(x_positions + offset, centers, bar_width * 0.9,
+                       yerr=[errs_low, errs_high], capsize=3,
                        label=self._poly_display(threshold),
                        color=POLYPHEST_COLORS.get(threshold, '#888888'),
                        edgecolor='white', linewidth=0.8, alpha=0.85)
 
             ax.set_xlabel(fam_info['label'], fontsize=12, fontweight='bold')
-            ax.set_ylabel(metric_label, fontsize=12, fontweight='bold')
+            ylabel = f'Median {metric_label}' if use_median else metric_label
+            ax.set_ylabel(ylabel, fontsize=12, fontweight='bold')
             ax.set_title(fam_info['description'], fontsize=13, fontweight='bold', pad=10)
             ax.set_xticks(x_positions)
             ax.set_xticklabels(LEVEL_ORDER, fontsize=11)
@@ -1569,8 +1586,10 @@ class TetraploidSubsetAnalyzer:
                 (self.comparisons['status'] == 'SUCCESS')
             ]
 
-            means = []
-            sems = []
+            use_median = (metric_key == 'num_rets_bias')
+            centers = []
+            errs_low = []
+            errs_high = []
             labels = []
             colors = []
             counts = []
@@ -1578,28 +1597,41 @@ class TetraploidSubsetAnalyzer:
             for method in methods:
                 vals = metric_data[metric_data['method'] == method]['value'].dropna()
                 if len(vals) > 0:
-                    means.append(vals.mean())
-                    sems.append(vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0)
+                    if use_median:
+                        c = vals.median()
+                        q1, q3 = vals.quantile(0.25), vals.quantile(0.75)
+                        centers.append(c)
+                        errs_low.append(c - q1)
+                        errs_high.append(q3 - c)
+                    else:
+                        c = vals.mean()
+                        sem = vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0
+                        centers.append(c)
+                        errs_low.append(sem)
+                        errs_high.append(sem)
                     counts.append(len(vals))
                 else:
-                    means.append(0)
-                    sems.append(0)
+                    centers.append(0)
+                    errs_low.append(0)
+                    errs_high.append(0)
                     counts.append(0)
                 labels.append(display_name(method))
                 colors.append(METHOD_COLORS.get(method, '#888888'))
 
             x = np.arange(len(methods))
-            bars = ax.bar(x, means, yerr=sems, capsize=4,
+            bars = ax.bar(x, centers, yerr=[errs_low, errs_high], capsize=4,
                          color=colors, edgecolor='white', linewidth=0.8, alpha=0.85)
 
             # Add count annotations
-            nonzero_means = [abs(m) for m in means if m != 0]
-            y_offset = 0.01 * max(nonzero_means) if nonzero_means else 0.02
+            nonzero_vals = [abs(m) for m in centers if m != 0]
+            y_offset = 0.01 * max(nonzero_vals) if nonzero_vals else 0.02
             for j, (bar, n) in enumerate(zip(bars, counts)):
                 if n > 0:
-                    y_pos = bar.get_height() + sems[j] + y_offset
+                    h = bar.get_height()
+                    y_pos = (h + errs_high[j] + y_offset) if h >= 0 else (h - errs_low[j] - y_offset)
+                    va = 'bottom' if h >= 0 else 'top'
                     ax.text(bar.get_x() + bar.get_width() / 2, y_pos,
-                           f'n={n}', ha='center', va='bottom', fontsize=7, color='gray')
+                           f'n={n}', ha='center', va=va, fontsize=7, color='gray')
 
             if metric_key == 'num_rets_bias':
                 ax.axhline(y=0, color='black', linewidth=1, linestyle='-', alpha=0.5)
@@ -1656,9 +1688,12 @@ class TetraploidSubsetAnalyzer:
             bar_width = group_width / n_methods
             x = np.arange(n_levels)
 
+            use_median = (metric_key == 'num_rets_bias')
+
             for m_idx, method in enumerate(methods):
-                means = []
-                sems = []
+                centers = []
+                errs_low = []
+                errs_high = []
                 for level_name in ils_levels:
                     cfg = [k for k, v in ILS_LEVEL_MAP.items() if v == level_name]
                     if cfg:
@@ -1666,15 +1701,31 @@ class TetraploidSubsetAnalyzer:
                             (metric_data['method'] == method) &
                             (metric_data['config'] == cfg[0])
                         ]['value'].dropna()
-                        means.append(vals.mean() if len(vals) > 0 else np.nan)
-                        sems.append(vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0)
+                        if len(vals) > 0:
+                            if use_median:
+                                c = vals.median()
+                                q1, q3 = vals.quantile(0.25), vals.quantile(0.75)
+                                centers.append(c)
+                                errs_low.append(c - q1)
+                                errs_high.append(q3 - c)
+                            else:
+                                c = vals.mean()
+                                sem = vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0
+                                centers.append(c)
+                                errs_low.append(sem)
+                                errs_high.append(sem)
+                        else:
+                            centers.append(np.nan)
+                            errs_low.append(0)
+                            errs_high.append(0)
                     else:
-                        means.append(np.nan)
-                        sems.append(0)
+                        centers.append(np.nan)
+                        errs_low.append(0)
+                        errs_high.append(0)
 
                 offset = (m_idx - n_methods / 2 + 0.5) * bar_width
-                ax.bar(x + offset, means, bar_width * 0.9,
-                       yerr=sems, capsize=3,
+                ax.bar(x + offset, centers, bar_width * 0.9,
+                       yerr=[errs_low, errs_high], capsize=3,
                        label=display_name(method) if row_idx == 0 else None,
                        color=METHOD_COLORS.get(method, '#888888'),
                        edgecolor='white', linewidth=0.8, alpha=0.85)
