@@ -1272,9 +1272,9 @@ class ConfigurationAnalyzer:
             print("  WARNING: No num_rets_bias data found, skipping per-network bias plot")
             return
 
-        # Merge with network stats to get Total_WGD for percentage calculation
+        # Merge with network stats to get Total_WGD for percentage calculation and H_Strict for labels
         ret_bias = ret_bias.merge(
-            self.network_stats[['network', 'Total_WGD']],
+            self.network_stats[['network', 'Total_WGD', 'H_Strict']],
             on='network',
             how='left'
         )
