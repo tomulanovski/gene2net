@@ -462,6 +462,8 @@ class ResultPostprocessor:
             reverse_map = self._load_taxa_map(network, replicate)
             if reverse_map:
                 tree_string = self._reverse_substring_fix(tree_string, reverse_map)
+                reversals = ', '.join(f'{r}->{o}' for r, o in reverse_map.items())
+                print(f"    Reversed substring fix for {network}/replicate_{replicate}: {reversals}")
 
         if tree_string is None:
             self.stats['failed'] += 1

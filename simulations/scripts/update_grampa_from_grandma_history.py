@@ -189,6 +189,8 @@ def main():
                 reverse_map = load_reverse_taxa_map(taxa_map_path)
                 if reverse_map:
                     cleaned = reverse_substring_fix(cleaned, reverse_map)
+                    reversals = ', '.join(f'{r}->{o}' for r, o in reverse_map.items())
+                    print(f"  {label}: Reversed substring fix: {reversals}")
 
                 # Ensure it ends with semicolon
                 if not cleaned.endswith(';'):
