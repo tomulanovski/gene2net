@@ -27,7 +27,7 @@ methods:
     output_file: "alloppnet_result.tre"
   grandma_split:
     directory: "grandma_split"
-    output_file: "final_multree.tre"
+    output_file: "grandma_result.tre"
 
 # Network list (21 networks)
 networks:

@@ -159,6 +159,57 @@ class ResultPostprocessor:
         except Exception as e:
             return None
 
+    def _load_taxa_map(self, network: str, replicate: int) -> Dict[str, str]:
+        """
+        Load taxa replacement map from GRAMPA prep stage.
+
+        Args:
+            network: Network name
+            replicate: Replicate number
+
+        Returns:
+            Dict mapping replacement -> original (reversed for undoing the fix)
+        """
+        taxa_map_file = (self.base_dir / network / "processed" / self.config /
+                        "grampa_input" / f"replicate_{replicate}" / "taxa_map.txt")
+
+        if not taxa_map_file.exists():
+            return {}
+
+        reverse_map = {}
+        with open(taxa_map_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                parts = line.split('\t')
+                if len(parts) == 2:
+                    original, replacement = parts
+                    reverse_map[replacement] = original
+
+        return reverse_map
+
+    def _reverse_substring_fix(self, tree: str, reverse_map: Dict[str, str]) -> str:
+        """
+        Reverse the substring fix applied during GRAMPA prep.
+
+        Args:
+            tree: Tree string with suffixed taxa names
+            reverse_map: Dict mapping replacement -> original
+
+        Returns:
+            Tree string with original taxa names restored
+        """
+        if not reverse_map:
+            return tree
+
+        # Sort by length (longest first) to avoid partial replacements
+        for replacement, original in sorted(reverse_map.items(), key=lambda x: len(x[0]), reverse=True):
+            pattern = rf'\b{re.escape(replacement)}(?=[^a-zA-Z0-9_]|$)'
+            tree = re.sub(pattern, original, tree)
+
+        return tree
+
     def _clean_grampa_tree(self, tree: str) -> str:
         """
         Clean GRAMPA tree format.
@@ -184,6 +235,31 @@ class ResultPostprocessor:
         tree = re.sub(r'<\d+>', '', tree)
 
         return tree
+
+    def extract_grandma_split_tree(self, input_file: Path) -> Optional[str]:
+        """
+        Read MUL-tree from grandma_split final_multree.tre.
+
+        The tree is already clean (no GRAMPA-style annotations).
+        Substring fix reversal is handled separately in process_file.
+
+        Returns:
+            Tree string or None if failed
+        """
+        try:
+            with open(input_file, 'r') as f:
+                tree = f.read().strip()
+
+            if not tree:
+                return None
+
+            if not tree.endswith(';'):
+                tree += ';'
+
+            return tree
+
+        except Exception as e:
+            return None
 
     def copy_padre_result(self, input_file: Path) -> Optional[str]:
         """
@@ -343,6 +419,8 @@ class ResultPostprocessor:
                 input_file = result_dir / "mpsugar_results.txt"
             elif method == 'alloppnet':
                 input_file = result_dir / "sampledmultrees.txt"
+            elif method == 'grandma_split':
+                input_file = result_dir / "final_multree.tre"
             else:
                 print(f"  ERROR: Unknown method '{method}'")
                 return False
@@ -371,11 +449,19 @@ class ResultPostprocessor:
             tree_string = self.extract_mpsugar_newick(input_file)
         elif method == 'padre':
             tree_string = self.copy_padre_result(input_file)
+        elif method == 'grandma_split':
+            tree_string = self.extract_grandma_split_tree(input_file)
         elif method == 'alloppnet':
             # AlloppNET post-processing runs via sbatch (handled in process_all)
             # This method is called per file but we handle AlloppNET at method level
             self.stats['skipped'] += 1
             return False
+
+        # Reverse substring fix for methods that use GRAMPA inputs
+        if method in ('grampa', 'grandma_split') and tree_string is not None:
+            reverse_map = self._load_taxa_map(network, replicate)
+            if reverse_map:
+                tree_string = self._reverse_substring_fix(tree_string, reverse_map)
 
         if tree_string is None:
             self.stats['failed'] += 1

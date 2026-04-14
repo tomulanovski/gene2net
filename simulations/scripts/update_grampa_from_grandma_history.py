@@ -60,6 +60,42 @@ NETWORKS = [
 NUM_REPLICATES = 5
 
 
+def load_reverse_taxa_map(taxa_map_path):
+    """Load taxa_map.txt and return a reversed mapping (replacement -> original).
+
+    The taxa_map.txt is created by prep_grampa to fix substring issues
+    (e.g., 'Qlo' -> 'QloX'). We need to reverse this to restore original names.
+    """
+    if not taxa_map_path.is_file():
+        return {}
+
+    reverse_map = {}
+    with open(taxa_map_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            parts = line.split('\t')
+            if len(parts) == 2:
+                original, replacement = parts
+                reverse_map[replacement] = original
+    return reverse_map
+
+
+def reverse_substring_fix(tree_str, reverse_map):
+    """Reverse the substring fix applied during GRAMPA prep."""
+    if not reverse_map:
+        return tree_str
+
+    # Sort by length (longest first) to avoid partial replacements
+    for replacement, original in sorted(reverse_map.items(),
+                                        key=lambda x: len(x[0]), reverse=True):
+        pattern = rf'\b{re.escape(replacement)}(?=[^a-zA-Z0-9_]|$)'
+        tree_str = re.sub(pattern, original, tree_str)
+
+    return tree_str
+
+
 def clean_grampa_tree(tree_str):
     """Clean a GRAMPA best_mt string to produce a standard Newick tree.
 
@@ -146,6 +182,13 @@ def main():
 
                 # Clean the tree
                 cleaned = clean_grampa_tree(best_mt)
+
+                # Reverse substring fix from prep stage
+                taxa_map_path = (BASE_DIR / network / "processed" / config /
+                                 "grampa_input" / f"replicate_{replicate}" / "taxa_map.txt")
+                reverse_map = load_reverse_taxa_map(taxa_map_path)
+                if reverse_map:
+                    cleaned = reverse_substring_fix(cleaned, reverse_map)
 
                 # Ensure it ends with semicolon
                 if not cleaned.endswith(';'):
