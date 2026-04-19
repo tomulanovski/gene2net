@@ -1517,12 +1517,15 @@ class TetraploidSubsetAnalyzer:
         return inventory, comparisons
 
     def _convert_bias_to_percentage(self):
-        """Convert num_rets_bias values from raw counts to percentage of true Total_WGD."""
+        """Convert num_rets_bias from counts to %; retain signed counts as num_rets_bias_count."""
         mask = self.comparisons['metric'] == 'num_rets_bias'
         if not mask.any():
             return
 
         wgd_lookup = self.network_stats.set_index('network')['Total_WGD'].to_dict()
+
+        count_rows = self.comparisons.loc[mask].copy()
+        count_rows['metric'] = 'num_rets_bias_count'
 
         idx = self.comparisons.index[mask]
         for i in idx:
@@ -1530,7 +1533,8 @@ class TetraploidSubsetAnalyzer:
             if wgd is not None and wgd > 0:
                 self.comparisons.at[i, 'value'] = self.comparisons.at[i, 'value'] / wgd * 100
 
-        print(f"  Converted num_rets_bias to percentage (÷ Total_WGD × 100)")
+        self.comparisons = pd.concat([self.comparisons, count_rows], ignore_index=True)
+        print(f"  Converted num_rets_bias to percentage (÷ Total_WGD × 100); retained counts as num_rets_bias_count")
 
     def _get_methods_with_data(self):
         """Return methods that have at least some successful comparisons, in display order."""
@@ -1572,7 +1576,6 @@ class TetraploidSubsetAnalyzer:
             ('edit_distance_multree', 'Edit Distance'),
             ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance'),
             ('ret_sisters_jaccard.dist', 'Sister-Taxa Distance'),
-            ('num_rets_bias', 'Ret. Count Bias (%)'),
         ]
 
         fig, axes = plt.subplots(1, len(panel_metrics),
@@ -1764,7 +1767,7 @@ class TetraploidSubsetAnalyzer:
         metrics = [
             'edit_distance_multree', 'ret_leaf_jaccard.dist',
             'ret_sisters_jaccard.dist', 'ploidy_diff.dist',
-            'num_rets_bias', 'num_rets_diff',
+            'num_rets_bias', 'num_rets_bias_count', 'num_rets_diff',
         ]
 
         rows = []

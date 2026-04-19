@@ -428,8 +428,9 @@ class PolyphestVsGrampaIter:
                             if use_median:
                                 med = vals.median()
                                 centers.append(med)
-                                errs_low.append(med - vals.quantile(0.25))
-                                errs_high.append(vals.quantile(0.75) - med)
+                                sem = vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0
+                                errs_low.append(sem)
+                                errs_high.append(sem)
                             else:
                                 centers.append(vals.mean())
                                 sem = vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0
@@ -639,8 +640,9 @@ class PolyphestVsGrampaIter:
                             if use_median:
                                 med = vals.median()
                                 centers.append(med)
-                                errs_low.append(med - vals.quantile(0.25))
-                                errs_high.append(vals.quantile(0.75) - med)
+                                sem = vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0
+                                errs_low.append(sem)
+                                errs_high.append(sem)
                             else:
                                 centers.append(vals.mean())
                                 sem = vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0
