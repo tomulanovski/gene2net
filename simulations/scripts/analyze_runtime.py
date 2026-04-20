@@ -167,15 +167,17 @@ def find_method_logs(method, config):
                 continue
 
     elif method == "grandma_split":
-        # Pattern: run_grandma_split_<config>_<taskid>.out
-        #      or: run_grandma_split_<config>_<jobid>_<taskid>.out
+        # Pattern 1: run_grandma_split_<config>_<taskid>.out (from pipeline script)
+        # Pattern 2: run_grandma_split_<taskid>.out (from all_configs script, no config in name)
+        # Pattern 3: run_grandma_split_<config>_<jobid>_<taskid>.out
+
+        # First try config-specific logs
         for f in LOG_DIR.glob(f"run_grandma_split_{config}_*.out"):
             name = f.stem
             suffix = name.replace(f"run_grandma_split_{config}_", "")
             parts = suffix.split('_')
             try:
                 if len(parts) == 1:
-                    # Just task_id
                     task_id = int(parts[0])
                     job_id = 0
                 elif len(parts) == 2:
@@ -186,6 +188,29 @@ def find_method_logs(method, config):
                 results.append((f, job_id, task_id, None, None))
             except ValueError:
                 continue
+
+        # If no config-specific logs found, try generic logs (no config in name)
+        # These are from submit_grandma_split_all_configs.sh which uses %a only
+        if not results:
+            for f in LOG_DIR.glob("run_grandma_split_*.out"):
+                name = f.stem
+                suffix = name.replace("run_grandma_split_", "")
+                # Skip config-specific files (they contain underscores from config name)
+                # Generic files are just a number: run_grandma_split_42.out
+                try:
+                    task_id = int(suffix)
+                    # These logs don't have config info — check inside the log
+                    # to see which config it ran
+                    try:
+                        with open(f, 'r', errors='replace') as fh:
+                            head = fh.read(2000)
+                        if config not in head:
+                            continue
+                    except (IOError, OSError):
+                        continue
+                    results.append((f, 0, task_id, None, None))
+                except ValueError:
+                    continue
 
     elif method == "mpsugar":
         # Pattern: run_mpsugar_<config>_i<iter>_c<chains>_<jobid>_<taskid>.out
