@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --time=00:30:00
-#SBATCH --mem=8G
+#SBATCH --time=00:15:00
+#SBATCH --mem=4G
 #SBATCH --cpus-per-task=1
 #SBATCH --partition=itaym-pool
 #SBATCH --account=itaym-users_v2
