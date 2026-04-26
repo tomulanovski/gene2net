@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=00:15:00
+#SBATCH --time=01:00:00
 #SBATCH --mem=4G
 #SBATCH --cpus-per-task=1
 #SBATCH --partition=itaym-pool
@@ -19,9 +19,11 @@ conda activate final_project
 BASE_DIR="/groups/itay_mayrose/tomulanovski/gene2net/ml_method"
 export PYTHONPATH="${PYTHONPATH:-}:${BASE_DIR}"
 
-TREE_INDEX=$(( SLURM_ARRAY_TASK_ID + ${INDEX_OFFSET:-0} ))
+N_PER_JOB="${N_PER_JOB:-1}"
+TREE_INDEX=$(( SLURM_ARRAY_TASK_ID * N_PER_JOB + ${INDEX_OFFSET:-0} ))
 
 python "${BASE_DIR}/scripts/package_training_data.py" \
     --index "$TREE_INDEX" \
+    --n-batch "$N_PER_JOB" \
     --mul-trees-dir "$MUL_TREES_DIR" \
     --config "$CONFIG_NAME"
