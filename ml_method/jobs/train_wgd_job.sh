@@ -30,6 +30,6 @@ echo "Date: $(date)"
 echo "============================================================================"
 
 python "${BASE_DIR}/scripts/train_wgd.py" \
-    --data-dir "${DATA_DIR}" \
+    --data-dir ${DATA_DIR} \
     --config "${CONFIG:-${BASE_DIR}/configs/wgd_detector.yaml}" \
     --output-dir "${OUTPUT_DIR:-${BASE_DIR}/output/wgd_detector}"

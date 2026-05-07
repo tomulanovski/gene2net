@@ -30,6 +30,6 @@ echo "Date: $(date)"
 echo "============================================================================"
 
 python "${BASE_DIR}/scripts/train_phase1.py" \
-    --data-dir "${DATA_DIR}" \
+    --data-dir ${DATA_DIR} \
     --config "${CONFIG:-${BASE_DIR}/configs/phase1.yaml}" \
     --output-dir "${OUTPUT_DIR:-${BASE_DIR}/output/phase1}"

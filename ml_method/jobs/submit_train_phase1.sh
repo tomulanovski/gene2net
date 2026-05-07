@@ -3,33 +3,50 @@
 # Submit Phase 1 training: features-only GNN for binary WGD detection
 #
 # USAGE:
-#   ./submit_train_phase1.sh [DATA_DIR] [--general] [--config CONFIG] [--output-dir DIR]
+#   ./submit_train_phase1.sh [DATA_DIR] [--all-configs] [--general] [--config CONFIG] [--output-dir DIR]
 #
 # EXAMPLES:
-#   ./submit_train_phase1.sh                                              # defaults
-#   ./submit_train_phase1.sh --config configs/phase1_cw6.yaml --output-dir output/phase1_cw6
-#   ./submit_train_phase1.sh --general
+#   ./submit_train_phase1.sh                                              # defaults (ils_low only)
+#   ./submit_train_phase1.sh --all-configs                                # all 9 configs (~17.9K samples)
+#   ./submit_train_phase1.sh --all-configs --output-dir output/phase1_all9
 # ==============================================================================
 
 BASE_DIR="/groups/itay_mayrose/tomulanovski/gene2net/ml_method"
 DEFAULT_DATA="${BASE_DIR}/data/mul_trees_2k/training/ils_low"
 
+ALL_CONFIGS_DIRS="\
+${BASE_DIR}/data/mul_trees_2k/training/ils_low \
+${BASE_DIR}/data/mul_trees_2k/training/ils_medium \
+${BASE_DIR}/data/mul_trees_2k/training/ils_high \
+${BASE_DIR}/data/mul_trees_2k/training/dup_loss_low \
+${BASE_DIR}/data/mul_trees_2k/training/dup_loss_medium \
+${BASE_DIR}/data/mul_trees_2k/training/dup_loss_high \
+${BASE_DIR}/data/mul_trees_2k/training/dup_loss_low_ne1M \
+${BASE_DIR}/data/mul_trees_2k/training/dup_loss_medium_ne1M \
+${BASE_DIR}/data/mul_trees_2k/training/dup_loss_high_ne1M"
+
 # Parse arguments
 DATA_DIR=""
 USE_GENERAL=false
+USE_ALL=false
 CONFIG="${BASE_DIR}/configs/phase1.yaml"
 OUTPUT_DIR="${BASE_DIR}/output/phase1"
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --general) USE_GENERAL=true; shift;;
+        --all-configs) USE_ALL=true; shift;;
         --config) CONFIG="${BASE_DIR}/$2"; shift 2;;
         --output-dir) OUTPUT_DIR="${BASE_DIR}/$2"; shift 2;;
         *) [ -z "$DATA_DIR" ] && DATA_DIR="$1"; shift;;
     esac
 done
 
-DATA_DIR="${DATA_DIR:-$DEFAULT_DATA}"
+if [ "$USE_ALL" = true ]; then
+    DATA_DIR="$ALL_CONFIGS_DIRS"
+else
+    DATA_DIR="${DATA_DIR:-$DEFAULT_DATA}"
+fi
 
 # Set partition
 if [ "$USE_GENERAL" = true ]; then
