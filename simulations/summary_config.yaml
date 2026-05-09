@@ -28,6 +28,9 @@ methods:
   grandma_split:
     directory: "grandma_split"
     output_file: "grandma_result.tre"
+  grandma_split_prior:
+    directory: "grandma_split_prior"
+    output_file: "grandma_split_prior_result.tre"
 
 # Network list (21 networks)
 networks:
