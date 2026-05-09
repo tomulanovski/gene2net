@@ -81,6 +81,7 @@ GENE_TREES="${GRAMPA_INPUT_DIR}/grampa_trees.tre"
 SPECIES_TREE="${GRAMPA_INPUT_DIR}/species.tre"
 MULTISET="${POLYPHEST_INPUT_DIR}/multi_set.txt"
 PLOIDY_FILE="${GRAMPA_INPUT_DIR}/split_ploidies.txt"
+TAXA_MAP="${GRAMPA_INPUT_DIR}/taxa_map.txt"
 
 # ============================================================================
 # HEADER
@@ -152,8 +153,13 @@ echo ""
 # ============================================================================
 
 echo "Generating ploidy file from multiset..."
-python "$GENERATE_PLOIDY_SCRIPT" "$MULTISET" "$PLOIDY_FILE"
-echo "✓ Ploidy file written: ${PLOIDY_FILE}"
+if [ -f "$TAXA_MAP" ]; then
+    python "$GENERATE_PLOIDY_SCRIPT" "$MULTISET" "$PLOIDY_FILE" --taxa-map "$TAXA_MAP"
+    echo "✓ Ploidy file written (with taxa map rename): ${PLOIDY_FILE}"
+else
+    python "$GENERATE_PLOIDY_SCRIPT" "$MULTISET" "$PLOIDY_FILE"
+    echo "✓ Ploidy file written: ${PLOIDY_FILE}"
+fi
 echo ""
 
 # ============================================================================
