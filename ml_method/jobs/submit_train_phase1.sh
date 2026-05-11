@@ -54,14 +54,14 @@ if [ "$USE_GENERAL" = true ]; then
     ACCOUNT=""
     QOS="public"
     GPU_FLAG="gpu:1"
-    MEM="32G"
+    MEM="96G"
     TIME="1-00:00:00"
 else
     PARTITION="gpu-rotemhsh-pool"
     ACCOUNT="--account=itaym-users_v2"
     QOS="owner"
     GPU_FLAG="gpu:1"
-    MEM="32G"
+    MEM="96G"
     TIME="1-00:00:00"
 fi
 
