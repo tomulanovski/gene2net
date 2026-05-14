@@ -66,7 +66,7 @@ def load_model_and_prepare_fn(model_type, model_config, model_dir, device):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", required=True)
+    parser.add_argument("--data-dir", required=True, nargs="+")
     parser.add_argument("--model-dir", default=None)
     parser.add_argument("--config", default=None)
     parser.add_argument("--model-type", default="phase1", choices=["phase1", "wgd"],
@@ -94,9 +94,13 @@ def main():
     if model is None:
         return
 
-    # Load dataset indices, use same split as training (without loading all into memory)
-    dataset = Gene2NetDataset(args.data_dir)
-    n_total = len(dataset)
+    # Load dataset from one or more directories
+    all_datasets = []
+    for d in args.data_dir:
+        all_datasets.append(Gene2NetDataset(d))
+    # Build a flat list of (dataset, local_idx) pairs
+    all_pairs = [(ds, i) for ds in all_datasets for i in range(len(ds))]
+    n_total = len(all_pairs)
 
     # Reproduce the same train/val split
     indices = list(range(n_total))
@@ -104,7 +108,7 @@ def main():
     random.shuffle(indices)
     n_val = int(n_total * 0.2)
     val_indices = indices[:min(n_val, args.max_samples)]
-    print(f"Val samples: {len(val_indices)}")
+    print(f"Total samples: {n_total}, Val samples: {len(val_indices)}")
 
     # Collect all predictions and targets (one at a time to save memory)
     all_probs = []
@@ -112,8 +116,9 @@ def main():
 
     with torch.no_grad():
         for i, idx in enumerate(val_indices):
+            ds, local_idx = all_pairs[idx]
             try:
-                sample = dataset[idx]
+                sample = ds[local_idx]
             except Exception:
                 continue
             if sample.labels is None:
