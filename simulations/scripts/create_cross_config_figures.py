@@ -50,35 +50,88 @@ ALL_CONFIGS = [
     "conf_dup_loss_low_10M_ne1M",
     "conf_dup_loss_medium_10M_ne1M",
     "conf_dup_loss_high_10M_ne1M",
+    "conf_dup_loss_low_10M_ne2M",
+    "conf_dup_loss_medium_10M_ne2M",
+    "conf_dup_loss_high_10M_ne2M",
 ]
 
 # Config families — each family varies one parameter (low/medium/high)
 CONFIG_FAMILIES = {
-    'ILS': {
+    'ILS only': {
         'label': 'ILS Level',
-        'description': 'Incomplete Lineage Sorting',
+        'description': 'Incomplete Lineage Sorting only (no dup/loss)',
         'configs': {
             'Low':    'conf_ils_low_10M',
             'Medium': 'conf_ils_medium_10M',
             'High':   'conf_ils_high_10M',
         }
     },
-    'Dup/Loss': {
-        'label': 'Dup/Loss Rate',
-        'description': 'Gene Duplication and Loss',
+    'Dup/Loss\n(low ILS)': {
+        'label': 'Dup/Loss Rate (low ILS)',
+        'description': 'Gene Duplication and Loss, low ILS (Ne=200K)',
         'configs': {
             'Low':    'conf_dup_loss_low_10M',
             'Medium': 'conf_dup_loss_medium_10M',
             'High':   'conf_dup_loss_high_10M',
         }
     },
-    'Dup/Loss (Ne=1M)': {
-        'label': 'Dup/Loss Rate (Ne=1M)',
-        'description': 'Gene Duplication and Loss with Ne=1M',
+    'Dup/Loss\n(med ILS)': {
+        'label': 'Dup/Loss Rate (med ILS)',
+        'description': 'Gene Duplication and Loss, medium ILS (Ne=1M)',
         'configs': {
             'Low':    'conf_dup_loss_low_10M_ne1M',
             'Medium': 'conf_dup_loss_medium_10M_ne1M',
             'High':   'conf_dup_loss_high_10M_ne1M',
+        }
+    },
+    'Dup/Loss\n(high ILS)': {
+        'label': 'Dup/Loss Rate (high ILS)',
+        'description': 'Gene Duplication and Loss, high ILS (Ne=2M)',
+        'configs': {
+            'Low':    'conf_dup_loss_low_10M_ne2M',
+            'Medium': 'conf_dup_loss_medium_10M_ne2M',
+            'High':   'conf_dup_loss_high_10M_ne2M',
+        }
+    },
+}
+
+# Alternative grouping: group by dup/loss level, x-axis = ILS level.
+# Answers "how does ILS degrade performance at each dup/loss level?"
+CONFIG_FAMILIES_BY_DUP = {
+    'No Dup/Loss': {
+        'label': 'ILS Level',
+        'description': 'No gene duplication or loss',
+        'configs': {
+            'Low':    'conf_ils_low_10M',
+            'Medium': 'conf_ils_medium_10M',
+            'High':   'conf_ils_high_10M',
+        }
+    },
+    'Dup/Loss: Low': {
+        'label': 'ILS Level',
+        'description': 'Low dup/loss rate, varying ILS',
+        'configs': {
+            'Low':    'conf_dup_loss_low_10M',
+            'Medium': 'conf_dup_loss_low_10M_ne1M',
+            'High':   'conf_dup_loss_low_10M_ne2M',
+        }
+    },
+    'Dup/Loss: Med': {
+        'label': 'ILS Level',
+        'description': 'Medium dup/loss rate, varying ILS',
+        'configs': {
+            'Low':    'conf_dup_loss_medium_10M',
+            'Medium': 'conf_dup_loss_medium_10M_ne1M',
+            'High':   'conf_dup_loss_medium_10M_ne2M',
+        }
+    },
+    'Dup/Loss: High': {
+        'label': 'ILS Level',
+        'description': 'High dup/loss rate, varying ILS',
+        'configs': {
+            'Low':    'conf_dup_loss_high_10M',
+            'Medium': 'conf_dup_loss_high_10M_ne1M',
+            'High':   'conf_dup_loss_high_10M_ne2M',
         }
     },
 }
@@ -132,8 +185,8 @@ def display_name(method: str) -> str:
 KEY_METRICS = {
     'edit_distance_multree': 'Edit Distance',
     # 'rf_distance': 'Robinson-Foulds Distance',  # Disabled: RF not well-defined for MUL-trees
-    'ret_leaf_jaccard.dist': 'Reticulation Leaf Distance',
-    'ret_sisters_jaccard.dist': 'Sister-Taxa Distance',
+    'ret_leaf_jaccard.dist': 'Reticulation Descendants Measure',
+    'ret_sisters_jaccard.dist': 'Reticulation Sister Measure',
     'ploidy_diff.dist': 'Ploidy Distance',
     'num_rets_bias': 'Reticulation Bias (%)',
 }
@@ -345,7 +398,7 @@ class CrossConfigAnalyzer:
         for metric_key, metric_label in [
             ('edit_distance_multree', 'Edit Distance'),
             # ('rf_distance', 'Robinson-Foulds Distance'),  # Disabled: RF not well-defined for MUL-trees
-            ('ret_leaf_jaccard.dist', 'Reticulation Leaf Distance'),
+            ('ret_leaf_jaccard.dist', 'Reticulation Descendants Measure'),
             ('ploidy_diff.dist', 'Ploidy Distance'),
         ]:
             plot_num += 1
@@ -359,7 +412,7 @@ class CrossConfigAnalyzer:
 
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Accuracy heatmap (ret leaf Jaccard)...")
-        self.plot_accuracy_heatmap('ret_leaf_jaccard.dist', 'Mean Reticulation Leaf Distance')
+        self.plot_accuracy_heatmap('ret_leaf_jaccard.dist', 'Mean Reticulation Descendants Measure')
 
         # --- 4. Reticulation count bias across conditions ---
         plot_num += 1
@@ -1112,7 +1165,7 @@ class PolyphestThresholdAnalyzer:
         self.plot_completion_heatmap()
         self.plot_completion_across_conditions()
         self.plot_accuracy_across_conditions('edit_distance_multree', 'Edit Distance')
-        self.plot_accuracy_across_conditions('ret_leaf_jaccard.dist', 'Reticulation Leaf Distance')
+        self.plot_accuracy_across_conditions('ret_leaf_jaccard.dist', 'Reticulation Descendants Measure')
         self.plot_accuracy_across_conditions('ploidy_diff.dist', 'Ploidy Distance')
         self.plot_accuracy_across_conditions('num_rets_bias', 'Reticulation Bias (%)')
         self.plot_accuracy_boxplots()
@@ -1563,7 +1616,7 @@ class TetraploidSubsetAnalyzer:
     # 1. Accuracy overview — aggregated across 3 ILS levels
     # ------------------------------------------------------------------
     def plot_accuracy_overview(self):
-        """Multi-panel bar chart: one panel per metric, bars per method, aggregated across ILS configs."""
+        """Grid bar chart: rows = ILS config (Low/Med/High), columns = metric, bars per method."""
         if self.comparisons.empty:
             return
 
@@ -1574,84 +1627,71 @@ class TetraploidSubsetAnalyzer:
 
         panel_metrics = [
             ('edit_distance_multree', 'Edit Distance'),
-            ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance'),
-            ('ret_sisters_jaccard.dist', 'Sister-Taxa Distance'),
+            ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
+            ('ret_sisters_jaccard.dist', 'Ret. Sister Measure'),
         ]
 
-        fig, axes = plt.subplots(1, len(panel_metrics),
-                                 figsize=(4.5 * len(panel_metrics), 5), squeeze=False)
-        axes = axes.flatten()
+        ils_configs = [
+            ('Low',    'conf_ils_low_10M'),
+            ('Medium', 'conf_ils_medium_10M'),
+            ('High',   'conf_ils_high_10M'),
+        ]
 
-        for idx, (metric_key, metric_label) in enumerate(panel_metrics):
-            ax = axes[idx]
-            metric_data = self.comparisons[
-                (self.comparisons['metric'] == metric_key) &
+        n_rows = len(ils_configs)
+        n_cols = len(panel_metrics)
+        fig, axes = plt.subplots(n_rows, n_cols,
+                                 figsize=(4.5 * n_cols, 4 * n_rows), squeeze=False)
+
+        method_labels = [display_name(m) for m in methods]
+        x = np.arange(len(methods))
+
+        for row_idx, (ils_label, ils_cfg) in enumerate(ils_configs):
+            cfg_data = self.comparisons[
+                (self.comparisons['config'] == ils_cfg) &
                 (self.comparisons['status'] == 'SUCCESS')
             ]
 
-            use_median = (metric_key == 'num_rets_bias')
-            centers = []
-            errs_low = []
-            errs_high = []
-            labels = []
-            colors = []
-            counts = []
+            for col_idx, (metric_key, metric_label) in enumerate(panel_metrics):
+                ax = axes[row_idx, col_idx]
+                metric_data = cfg_data[cfg_data['metric'] == metric_key]
 
-            for method in methods:
-                vals = metric_data[metric_data['method'] == method]['value'].dropna()
-                if len(vals) > 0:
-                    if use_median:
-                        c = vals.median()
-                        q1, q3 = vals.quantile(0.25), vals.quantile(0.75)
-                        centers.append(c)
-                        errs_low.append(c - q1)
-                        errs_high.append(q3 - c)
-                    else:
+                centers, errs_low, errs_high, counts, colors = [], [], [], [], []
+                for method in methods:
+                    vals = metric_data[metric_data['method'] == method]['value'].dropna()
+                    if len(vals) > 0:
                         c = vals.mean()
                         sem = vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0
                         centers.append(c)
                         errs_low.append(sem)
                         errs_high.append(sem)
-                    counts.append(len(vals))
-                else:
-                    centers.append(0)
-                    errs_low.append(0)
-                    errs_high.append(0)
-                    counts.append(0)
-                labels.append(display_name(method))
-                colors.append(METHOD_COLORS.get(method, '#888888'))
+                        counts.append(len(vals))
+                    else:
+                        centers.append(0)
+                        errs_low.append(0)
+                        errs_high.append(0)
+                        counts.append(0)
+                    colors.append(METHOD_COLORS.get(method, '#888888'))
 
-            x = np.arange(len(methods))
-            bars = ax.bar(x, centers, yerr=[errs_low, errs_high], capsize=4,
-                         color=colors, edgecolor='white', linewidth=0.8, alpha=0.85)
+                bars = ax.bar(x, centers, yerr=[errs_low, errs_high], capsize=4,
+                              color=colors, edgecolor='white', linewidth=0.8, alpha=0.85)
 
-            # Add count annotations
-            nonzero_vals = [abs(m) for m in centers if m != 0]
-            y_offset = 0.01 * max(nonzero_vals) if nonzero_vals else 0.02
-            for j, (bar, n) in enumerate(zip(bars, counts)):
-                if n > 0:
-                    h = bar.get_height()
-                    y_pos = (h + errs_high[j] + y_offset) if h >= 0 else (h - errs_low[j] - y_offset)
-                    va = 'bottom' if h >= 0 else 'top'
-                    ax.text(bar.get_x() + bar.get_width() / 2, y_pos,
-                           f'n={n}', ha='center', va=va, fontsize=7, color='gray')
+                ax.set_xticks(x)
+                ax.set_xticklabels(method_labels, fontsize=9, rotation=45, ha='right')
+                ax.grid(True, alpha=0.25, linestyle='--', axis='y')
 
-            if metric_key == 'num_rets_bias':
-                ax.axhline(y=0, color='black', linewidth=1, linestyle='-', alpha=0.5)
+                if col_idx == 0:
+                    ax.set_ylabel(f'ILS {ils_label}', fontsize=11, fontweight='bold')
+                if row_idx == 0:
+                    ax.set_title(metric_label, fontsize=12, fontweight='bold')
 
-            ax.set_xticks(x)
-            ax.set_xticklabels(labels, fontsize=9, rotation=45, ha='right')
-            ax.set_title(metric_label, fontsize=12, fontweight='bold')
-            ax.grid(True, alpha=0.25, linestyle='--', axis='y')
-
-        fig.suptitle('Method Accuracy on Tetraploid Networks\n(8 networks, 3 ILS configs)',
-                     fontsize=14, fontweight='bold', y=1.04)
+        fig.suptitle('Method Accuracy on Tetraploid Networks by ILS Config\n(8 networks)',
+                     fontsize=14, fontweight='bold')
         plt.tight_layout()
         fig.savefig(self.plots_dir / "01_tetra_accuracy_overview.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "01_tetra_accuracy_overview.png", bbox_inches='tight', dpi=300)
         plt.close('all')
         gc.collect()
-        print("  [1] Accuracy overview")
+        print("  [1] Accuracy overview (by ILS config)")
 
     # ------------------------------------------------------------------
     # 2. Accuracy by ILS level — shows degradation
@@ -1667,8 +1707,8 @@ class TetraploidSubsetAnalyzer:
 
         panel_metrics = [
             ('edit_distance_multree', 'Edit Distance'),
-            ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance'),
-            ('ret_sisters_jaccard.dist', 'Sister-Taxa Distance'),
+            ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
+            ('ret_sisters_jaccard.dist', 'Ret. Sister Measure'),
             ('num_rets_bias', 'Ret. Count Bias (%)'),
         ]
 
@@ -1826,8 +1866,16 @@ Examples:
                         help='Output directory (default: simulations/analysis/cross_config)')
     parser.add_argument('--network-stats', default=None,
                         help='Network stats CSV (default: auto-detect)')
+    parser.add_argument('--group-by', choices=['ils', 'dup'], default='ils',
+                        help='Column grouping: "ils" = group by ILS level (default), '
+                             '"dup" = group by dup/loss level (shows ILS effect within each group)')
 
     args = parser.parse_args()
+
+    # Swap grouping if requested
+    if args.group_by == 'dup':
+        global CONFIG_FAMILIES
+        CONFIG_FAMILIES = CONFIG_FAMILIES_BY_DUP
 
     # Determine configs
     configs = args.configs if args.configs else ALL_CONFIGS
@@ -1836,7 +1884,8 @@ Examples:
     if args.output:
         output_dir = Path(args.output)
     else:
-        output_dir = SCRIPT_DIR.parent / "analysis" / "summary" / "cross_config"
+        subdir = "cross_config_by_dup" if args.group_by == 'dup' else "cross_config"
+        output_dir = SCRIPT_DIR.parent / "analysis" / "summary" / subdir
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Network stats

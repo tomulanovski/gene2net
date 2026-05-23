@@ -33,8 +33,8 @@ METRIC_DISPLAY = {
     'edit_distance_multree': 'Edit Distance',
     'polyploid_species_jaccard': 'Polyploid Species\nDistance',
     # 'rf_distance': 'RF Distance',  # Disabled: RF not well-defined for MUL-trees
-    'ret_leaf_jaccard.dist': 'Reticulation Leaf\nDistance',
-    'ret_sisters_jaccard.dist': 'Sister-Taxa\nDistance',
+    'ret_leaf_jaccard.dist': 'Reticulation Descendants\nMeasure',
+    'ret_sisters_jaccard.dist': 'Reticulation Sister\nMeasure',
     'ploidy_diff.dist': 'Ploidy Distance',
     'num_rets_diff': 'Reticulation Count\nDifference (abs)',
 }
@@ -159,22 +159,30 @@ def main():
     parser.add_argument('--dataset', required=True,
                         help='Dataset name (e.g., Wu_2015)')
     parser.add_argument('--metrics', nargs='+',
-                        default=['edit_distance_multree', 'ret_leaf_jaccard.dist',
-                                 'ret_sisters_jaccard.dist', 'ploidy_diff.dist',
-                                 'num_rets_diff'],
-                        help='Metrics to plot')
+                        default=['ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist',
+                                 'edit_distance_multree', 'num_rets_diff'],
+                        help='Metrics to plot (only used with --individual)')
     parser.add_argument('--output', help='Output directory (default: plots/{dataset}/ next to CSV)')
     parser.add_argument('--combined', action='store_true',
                         help='Also generate a single combined figure with all metrics side by side')
+    parser.add_argument('--individual', action='store_true',
+                        help='Also generate individual per-metric heatmaps (one figure per metric)')
     parser.add_argument('--split', nargs=2, action='append', metavar=('UPPER', 'LOWER'),
                         help='Generate split heatmap with UPPER metric in upper triangle '
                              'and LOWER metric in lower triangle. Can be repeated for '
-                             'multiple split heatmaps. Example: '
-                             '--split ret_leaf_jaccard.dist ret_sisters_jaccard.dist '
-                             '--split edit_distance_multree ploidy_diff.dist')
+                             'multiple split heatmaps. Defaults to two splits: '
+                             'ret_leaf_jaccard.dist/ret_sisters_jaccard.dist and '
+                             'edit_distance_multree/num_rets_diff.')
     parser.add_argument('--dpi', type=int, default=300)
 
     args = parser.parse_args()
+
+    # Default split pairs for case-study figures
+    if args.split is None:
+        args.split = [
+            ['ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist'],
+            ['edit_distance_multree', 'num_rets_diff'],
+        ]
 
     # Load data
     df = pd.read_csv(args.comparisons_csv)
@@ -216,26 +224,27 @@ def main():
             fmt = '.2f'
         return vmax, fmt
 
-    # Generate one figure per metric
-    for metric in available_metrics:
-        df_metric = df_dataset[df_dataset['metric'] == metric]
-        matrix = make_symmetric_matrix(df_metric, all_methods)
-        vmax, fmt = get_scale(metric, matrix)
-        title = METRIC_DISPLAY.get(metric, metric)
+    # Generate one figure per metric (only when --individual is requested)
+    if args.individual:
+        for metric in available_metrics:
+            df_metric = df_dataset[df_dataset['metric'] == metric]
+            matrix = make_symmetric_matrix(df_metric, all_methods)
+            vmax, fmt = get_scale(metric, matrix)
+            title = METRIC_DISPLAY.get(metric, metric)
 
-        fig, ax = plt.subplots(1, 1, figsize=(6, 5.5))
-        im = plot_heatmap(ax, matrix, display_labels, title, vmin=0, vmax=vmax, fmt=fmt)
-        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, shrink=0.8)
-        cbar.ax.tick_params(labelsize=9)
-        plt.tight_layout()
+            fig, ax = plt.subplots(1, 1, figsize=(6, 5.5))
+            im = plot_heatmap(ax, matrix, display_labels, title, vmin=0, vmax=vmax, fmt=fmt)
+            cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, shrink=0.8)
+            cbar.ax.tick_params(labelsize=9)
+            plt.tight_layout()
 
-        safe_metric = metric.replace('.', '_')
-        pdf_path = plots_dir / f'{safe_metric}.pdf'
-        png_path = plots_dir / f'{safe_metric}.png'
-        fig.savefig(str(pdf_path), dpi=args.dpi, bbox_inches='tight')
-        fig.savefig(str(png_path), dpi=args.dpi, bbox_inches='tight')
-        print(f"Saved: {pdf_path}")
-        plt.close(fig)
+            safe_metric = metric.replace('.', '_')
+            pdf_path = plots_dir / f'{safe_metric}.pdf'
+            png_path = plots_dir / f'{safe_metric}.png'
+            fig.savefig(str(pdf_path), dpi=args.dpi, bbox_inches='tight')
+            fig.savefig(str(png_path), dpi=args.dpi, bbox_inches='tight')
+            print(f"Saved: {pdf_path}")
+            plt.close(fig)
 
     # Generate split heatmaps (two metrics in one: upper/lower triangle)
     if args.split:

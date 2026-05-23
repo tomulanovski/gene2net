@@ -45,10 +45,13 @@ ALL_CONFIGS = [
     "conf_dup_loss_low_10M_ne1M",
     "conf_dup_loss_medium_10M_ne1M",
     "conf_dup_loss_high_10M_ne1M",
+    "conf_dup_loss_low_10M_ne2M",
+    "conf_dup_loss_medium_10M_ne2M",
+    "conf_dup_loss_high_10M_ne2M",
 ]
 
 CONFIG_FAMILIES = {
-    'ILS': {
+    'ILS only': {
         'label': 'ILS Level',
         'configs': {
             'Low': 'conf_ils_low_10M',
@@ -57,7 +60,7 @@ CONFIG_FAMILIES = {
         }
     },
     'Dup/Loss\n(low ILS)': {
-        'label': 'Dup/Loss Rate',
+        'label': 'Dup/Loss Rate (low ILS)',
         'configs': {
             'Low': 'conf_dup_loss_low_10M',
             'Medium': 'conf_dup_loss_medium_10M',
@@ -65,11 +68,19 @@ CONFIG_FAMILIES = {
         }
     },
     'Dup/Loss\n(med ILS)': {
-        'label': 'Dup/Loss Rate (Ne=1M)',
+        'label': 'Dup/Loss Rate (med ILS)',
         'configs': {
             'Low': 'conf_dup_loss_low_10M_ne1M',
             'Medium': 'conf_dup_loss_medium_10M_ne1M',
             'High': 'conf_dup_loss_high_10M_ne1M',
+        }
+    },
+    'Dup/Loss\n(high ILS)': {
+        'label': 'Dup/Loss Rate (high ILS)',
+        'configs': {
+            'Low': 'conf_dup_loss_low_10M_ne2M',
+            'Medium': 'conf_dup_loss_medium_10M_ne2M',
+            'High': 'conf_dup_loss_high_10M_ne2M',
         }
     },
 }
@@ -78,8 +89,8 @@ LEVEL_ORDER = ['Low', 'Medium', 'High']
 
 TARGET_METRICS = {
     'edit_distance_multree': 'Edit Distance',
-    'ret_leaf_jaccard.dist': 'Reticulation Leaf Distance',
-    'ret_sisters_jaccard.dist': 'Sister-Taxa Distance',
+    'ret_leaf_jaccard.dist': 'Reticulation Descendants Measure',
+    'ret_sisters_jaccard.dist': 'Reticulation Sister Measure',
 }
 
 plt.rcParams['font.family'] = 'sans-serif'

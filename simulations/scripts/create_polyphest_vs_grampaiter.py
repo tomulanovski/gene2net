@@ -85,8 +85,8 @@ METHOD_DISPLAY = {
 
 METRICS = {
     'edit_distance_multree': 'Edit Distance',
-    'ret_leaf_jaccard.dist': 'Reticulation Leaf Distance',
-    'ret_sisters_jaccard.dist': 'Sister-Taxa Distance',
+    'ret_leaf_jaccard.dist': 'Reticulation Descendants Measure',
+    'ret_sisters_jaccard.dist': 'Reticulation Sister Measure',
     'ploidy_diff.dist': 'Ploidy Distance',
     'num_rets_diff': 'Reticulation Count Error (|diff|)',
     'num_rets_bias': 'Reticulation Count Bias (%)',
@@ -485,7 +485,7 @@ class PolyphestVsGrampaIter:
         box_metrics = [
             ('edit_distance_multree', 'Edit Distance'),
             ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance'),
-            ('ret_sisters_jaccard.dist', 'Sister-Taxa Distance'),
+            ('ret_sisters_jaccard.dist', 'Reticulation Sister Measure'),
             ('ploidy_diff.dist', 'Ploidy Distance'),
         ]
 

@@ -40,6 +40,9 @@ ALL_CONFIGS = [
     "conf_dup_loss_low_10M_ne1M",
     "conf_dup_loss_medium_10M_ne1M",
     "conf_dup_loss_high_10M_ne1M",
+    "conf_dup_loss_low_10M_ne2M",
+    "conf_dup_loss_medium_10M_ne2M",
+    "conf_dup_loss_high_10M_ne2M",
 ]
 
 CONFIG_FAMILIES = {
@@ -67,6 +70,14 @@ CONFIG_FAMILIES = {
             'High':   'conf_dup_loss_high_10M_ne1M',
         }
     },
+    'Dup/Loss\n(high ILS)': {
+        'label': 'Dup/Loss Rate (Ne=2M)',
+        'configs': {
+            'Low':    'conf_dup_loss_low_10M_ne2M',
+            'Medium': 'conf_dup_loss_medium_10M_ne2M',
+            'High':   'conf_dup_loss_high_10M_ne2M',
+        }
+    },
 }
 
 LEVEL_ORDER = ['Low', 'Medium', 'High']
@@ -87,8 +98,8 @@ METHOD_DISPLAY = {
 
 METRICS = {
     'edit_distance_multree':  'Edit Distance',
-    'ret_leaf_jaccard.dist':  'Reticulation Leaf Distance',
-    'ret_sisters_jaccard.dist': 'Sister-Taxa Distance',
+    'ret_leaf_jaccard.dist':  'Reticulation Descendants Measure',
+    'ret_sisters_jaccard.dist': 'Reticulation Sister Measure',
     'ploidy_diff.dist':       'Ploidy Distance',
     'num_rets_diff':          'Reticulation Count Error (|diff|)',
     'num_rets_bias':          'Reticulation Count Bias (%)',
@@ -419,7 +430,7 @@ class PriorComparison:
         box_metrics = [
             ('edit_distance_multree',   'Edit Distance'),
             ('ret_leaf_jaccard.dist',   'Ret. Leaf Distance'),
-            ('ret_sisters_jaccard.dist','Sister-Taxa Distance'),
+            ('ret_sisters_jaccard.dist','Reticulation Sister Measure'),
             ('ploidy_diff.dist',        'Ploidy Distance'),
         ]
 

@@ -463,28 +463,28 @@ class ConfigurationAnalyzer:
         print(f"[{plot_num}/{total_plots}] Reticulation Leaf Jaccard vs H_Strict (combined)...")
         self.plot_jaccard_vs_characteristic_combined(
             'H_Strict', 'Number of Reticulations (Holm Fold)',
-            'ret_leaf_jaccard', 'Reticulation Leaf Distance',
+            'ret_leaf_jaccard', 'Reticulation Descendants Measure',
             '21_combined_ret_leaf_jaccard_vs_h_strict')
 
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Reticulation Leaf Jaccard vs H_Strict (faceted)...")
         self.plot_jaccard_vs_characteristic_faceted(
             'H_Strict', 'Number of Reticulations (Holm Fold)',
-            'ret_leaf_jaccard', 'Reticulation Leaf Distance',
+            'ret_leaf_jaccard', 'Reticulation Descendants Measure',
             '21_faceted_ret_leaf_jaccard_vs_h_strict')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Sister-Taxa Distance vs H_Strict (combined)...")
+        print(f"[{plot_num}/{total_plots}] Reticulation Sister Measure vs H_Strict (combined)...")
         self.plot_jaccard_vs_characteristic_combined(
             'H_Strict', 'Number of Reticulations (Holm Fold)',
-            'ret_sisters_jaccard', 'Sister-Taxa Distance',
+            'ret_sisters_jaccard', 'Reticulation Sister Measure',
             '22_combined_ret_sisters_jaccard_vs_h_strict')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Sister-Taxa Distance vs H_Strict (faceted)...")
+        print(f"[{plot_num}/{total_plots}] Reticulation Sister Measure vs H_Strict (faceted)...")
         self.plot_jaccard_vs_characteristic_faceted(
             'H_Strict', 'Number of Reticulations (Holm Fold)',
-            'ret_sisters_jaccard', 'Sister-Taxa Distance',
+            'ret_sisters_jaccard', 'Reticulation Sister Measure',
             '22_faceted_ret_sisters_jaccard_vs_h_strict')
 
         plot_num += 1
@@ -494,13 +494,13 @@ class ConfigurationAnalyzer:
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Reticulation Leaf Jaccard Distribution...")
         self.plot_metric_distribution('ret_leaf_jaccard.dist',
-                                      'Reticulation Leaf Distance',
+                                      'Reticulation Descendants Measure',
                                       '08d_ret_leaf_jaccard_distribution')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Sister-Taxa Distance Distribution...")
+        print(f"[{plot_num}/{total_plots}] Reticulation Sister Measure Distribution...")
         self.plot_metric_distribution('ret_sisters_jaccard.dist',
-                                      'Sister-Taxa Distance',
+                                      'Reticulation Sister Measure',
                                       '08e_ret_sisters_jaccard_distribution')
 
         gc.collect()  # Free memory from Category 3
