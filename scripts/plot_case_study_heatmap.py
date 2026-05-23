@@ -89,18 +89,19 @@ def plot_heatmap(ax, matrix, labels, title, vmin=0, vmax=1, cmap='YlOrRd', fmt='
 
 def plot_split_heatmap(ax, matrix_upper, matrix_lower, labels,
                        title_upper, title_lower,
-                       vmin=0, vmax=1, cmap_upper='YlOrRd', cmap_lower='YlGnBu',
-                       fmt='.2f'):
+                       vmin=0, vmax_upper=1, vmax_lower=1,
+                       cmap_upper='YlOrRd', cmap_lower='YlGnBu',
+                       fmt_upper='.2f', fmt_lower='.2f'):
     """
     Plot a split heatmap: upper triangle shows one metric, lower triangle shows another.
-    Diagonal shows '—'.
+    Each triangle has its own color scale and number format. Diagonal shows '—'.
     """
     n = len(labels)
     cmap_u = plt.get_cmap(cmap_upper)
     cmap_l = plt.get_cmap(cmap_lower)
 
-    # Normalize values for coloring
-    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+    norm_u = mcolors.Normalize(vmin=vmin, vmax=vmax_upper)
+    norm_l = mcolors.Normalize(vmin=vmin, vmax=vmax_lower)
 
     # Draw cell-by-cell as colored rectangles
     for i in range(n):
@@ -119,11 +120,11 @@ def plot_split_heatmap(ax, matrix_upper, matrix_lower, labels,
                                  facecolor=color, edgecolor='black', linewidth=0.5))
                     ax.text(j, i, 'N/A', ha='center', va='center', fontsize=9, color='gray')
                 else:
-                    color = cmap_u(norm(val))
+                    color = cmap_u(norm_u(val))
                     ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1,
                                  facecolor=color, edgecolor='black', linewidth=0.5))
-                    text_color = 'white' if val > (vmax - vmin) * 0.65 + vmin else 'black'
-                    ax.text(j, i, f'{val:{fmt}}', ha='center', va='center',
+                    text_color = 'white' if val > (vmax_upper - vmin) * 0.65 + vmin else 'black'
+                    ax.text(j, i, f'{val:{fmt_upper}}', ha='center', va='center',
                             fontsize=11, fontweight='bold', color=text_color)
             else:
                 # Lower triangle
@@ -134,11 +135,11 @@ def plot_split_heatmap(ax, matrix_upper, matrix_lower, labels,
                                  facecolor=color, edgecolor='black', linewidth=0.5))
                     ax.text(j, i, 'N/A', ha='center', va='center', fontsize=9, color='gray')
                 else:
-                    color = cmap_l(norm(val))
+                    color = cmap_l(norm_l(val))
                     ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1,
                                  facecolor=color, edgecolor='black', linewidth=0.5))
-                    text_color = 'white' if val > (vmax - vmin) * 0.65 + vmin else 'black'
-                    ax.text(j, i, f'{val:{fmt}}', ha='center', va='center',
+                    text_color = 'white' if val > (vmax_lower - vmin) * 0.65 + vmin else 'black'
+                    ax.text(j, i, f'{val:{fmt_lower}}', ha='center', va='center',
                             fontsize=11, fontweight='bold', color=text_color)
 
     ax.set_xlim(-0.5, n - 0.5)
@@ -149,8 +150,8 @@ def plot_split_heatmap(ax, matrix_upper, matrix_lower, labels,
     ax.set_yticklabels(labels, fontsize=11)
     ax.set_aspect('equal')
 
-    # Return colormaps/norm for colorbar creation
-    return cmap_u, cmap_l, norm
+    # Return colormaps/norms for colorbar creation
+    return cmap_u, cmap_l, norm_u, norm_l
 
 
 def main():
@@ -262,40 +263,39 @@ def main():
             matrix_upper = make_symmetric_matrix(df_upper, all_methods)
             matrix_lower = make_symmetric_matrix(df_lower, all_methods)
 
-            # Determine scale — use 0-1 for normalized metrics, auto for counts
-            is_count = 'num_rets_diff' in (upper_metric, lower_metric)
-            if is_count:
-                all_vals = np.concatenate([
-                    matrix_upper[~np.isnan(matrix_upper)],
-                    matrix_lower[~np.isnan(matrix_lower)]
-                ])
-                vmax = max(1.0, np.nanmax(all_vals)) if len(all_vals) > 0 else 1.0
-                fmt = '.0f'
-            else:
-                vmax = 1.0
-                fmt = '.2f'
+            # Per-metric scale and format (counts auto-scale and use integer format)
+            def metric_scale(metric, matrix):
+                if metric == 'num_rets_diff':
+                    vals = matrix[~np.isnan(matrix)]
+                    vmax = max(1.0, np.nanmax(vals)) if len(vals) > 0 else 1.0
+                    return vmax, '.0f'
+                return 1.0, '.2f'
+
+            vmax_upper, fmt_upper = metric_scale(upper_metric, matrix_upper)
+            vmax_lower, fmt_lower = metric_scale(lower_metric, matrix_lower)
 
             title_upper = METRIC_DISPLAY.get(upper_metric, upper_metric)
             title_lower = METRIC_DISPLAY.get(lower_metric, lower_metric)
 
             fig, ax = plt.subplots(1, 1, figsize=(8, 7))
-            cmap_u, cmap_l, norm = plot_split_heatmap(
+            cmap_u, cmap_l, norm_u, norm_l = plot_split_heatmap(
                 ax, matrix_upper, matrix_lower, display_labels,
                 title_upper, title_lower,
-                vmin=0, vmax=vmax, fmt=fmt,
+                vmin=0, vmax_upper=vmax_upper, vmax_lower=vmax_lower,
+                fmt_upper=fmt_upper, fmt_lower=fmt_lower,
                 cmap_upper='YlOrRd', cmap_lower='YlGnBu'
             )
 
-            # Add two colorbars side by side on the right, sharing one set of tick labels
+            # Two colorbars side by side, each with its own scale
             import matplotlib.cm as cm
             from mpl_toolkits.axes_grid1 import make_axes_locatable
             divider = make_axes_locatable(ax)
             cax_u = divider.append_axes("right", size="3%", pad=0.15)
             cax_l = divider.append_axes("right", size="3%", pad=0.05)
-            sm_upper = cm.ScalarMappable(cmap=cmap_u, norm=norm)
-            sm_lower = cm.ScalarMappable(cmap=cmap_l, norm=norm)
-            fig.colorbar(sm_upper, cax=cax_u)
-            cax_u.set_yticks([])  # No ticks on the left bar
+            sm_upper = cm.ScalarMappable(cmap=cmap_u, norm=norm_u)
+            sm_lower = cm.ScalarMappable(cmap=cmap_l, norm=norm_l)
+            cb_u = fig.colorbar(sm_upper, cax=cax_u)
+            cax_u.tick_params(labelsize=8)
             cb_l = fig.colorbar(sm_lower, cax=cax_l)
             cax_l.tick_params(labelsize=8)
 
