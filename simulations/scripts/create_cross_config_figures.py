@@ -174,7 +174,11 @@ METHOD_DISPLAY = {
     'padre': 'PADRE',
     'alloppnet': 'AlloppNET',
     'grandma_split': r'GRAMPA$^{Iter}$',
+    'grandma_split_prior': r'GRAMPA$^{Iter}$ (prior)',
 }
+
+# Excluded from the main cross-config analysis — analyzed separately in create_prior_vs_noprior_figures.py
+CROSS_CONFIG_EXCLUDE = {'grandma_split_prior'}
 
 
 def display_name(method: str) -> str:
@@ -343,6 +347,14 @@ class CrossConfigAnalyzer:
             self.aggregated = reaggregate_metrics(self.comparisons)
         else:
             self.aggregated = build_combined_aggregated(data)
+
+        # Exclude methods handled separately (e.g. grandma_split_prior → create_prior_vs_noprior_figures.py)
+        if not self.inventory.empty:
+            self.inventory = self.inventory[~self.inventory['method'].isin(CROSS_CONFIG_EXCLUDE)]
+        if not self.comparisons.empty:
+            self.comparisons = self.comparisons[~self.comparisons['method'].isin(CROSS_CONFIG_EXCLUDE)]
+        if not self.aggregated.empty:
+            self.aggregated = self.aggregated[~self.aggregated['method'].isin(CROSS_CONFIG_EXCLUDE)]
 
         # Tag families
         if not self.inventory.empty:
