@@ -484,7 +484,10 @@ class CrossConfigAnalyzer:
         completion = completion[config_order]
 
         # Short config labels
-        short_labels = [c.replace('conf_', '').replace('_10M', '') for c in config_order]
+        config_to_level = {cfg: lvl for fam in CONFIG_FAMILIES.values()
+                           for lvl, cfg in fam['configs'].items()}
+        short_labels = [config_to_level.get(c, c.replace('conf_', '').replace('_10M', ''))
+                        for c in config_order]
 
         fig, ax = plt.subplots(figsize=(max(14, len(config_order) * 1.5), max(5, len(completion) * 0.7)))
 
@@ -499,7 +502,7 @@ class CrossConfigAnalyzer:
                         fontsize=10, fontweight='bold', color=text_color)
 
         ax.set_xticks(range(len(short_labels)))
-        ax.set_xticklabels(short_labels, rotation=45, ha='right', fontsize=10)
+        ax.set_xticklabels(short_labels, rotation=0, ha='center', fontsize=10)
         ax.set_yticks(range(len(completion.index)))
         ax.set_yticklabels([display_name(m) for m in completion.index], fontsize=11)
 
@@ -649,7 +652,10 @@ class CrossConfigAnalyzer:
                 config_order.append(c)
         pivot = pivot.reindex(columns=config_order)
 
-        short_labels = [c.replace('conf_', '').replace('_10M', '') for c in config_order]
+        config_to_level = {cfg: lvl for fam in CONFIG_FAMILIES.values()
+                           for lvl, cfg in fam['configs'].items()}
+        short_labels = [config_to_level.get(c, c.replace('conf_', '').replace('_10M', ''))
+                        for c in config_order]
 
         fig, ax = plt.subplots(figsize=(max(14, len(config_order) * 1.5), max(5, len(pivot) * 0.7)))
 
@@ -667,7 +673,7 @@ class CrossConfigAnalyzer:
                             fontsize=10, fontweight='bold', color=text_color)
 
         ax.set_xticks(range(len(short_labels)))
-        ax.set_xticklabels(short_labels, rotation=45, ha='right', fontsize=10)
+        ax.set_xticklabels(short_labels, rotation=0, ha='center', fontsize=10)
         ax.set_yticks(range(len(pivot.index)))
         ax.set_yticklabels([display_name(m) for m in pivot.index], fontsize=11)
 
@@ -1213,7 +1219,10 @@ class PolyphestThresholdAnalyzer:
                 config_order.append(c)
         completion = completion.reindex(columns=[c for c in config_order if c in completion.columns])
 
-        short_labels = [c.replace('conf_', '').replace('_10M', '') for c in completion.columns]
+        config_to_level = {cfg: lvl for fam in CONFIG_FAMILIES.values()
+                           for lvl, cfg in fam['configs'].items()}
+        short_labels = [config_to_level.get(c, c.replace('conf_', '').replace('_10M', ''))
+                        for c in completion.columns]
 
         fig, ax = plt.subplots(figsize=(max(12, len(completion.columns) * 1.3), max(3, len(completion) * 0.7)))
         im = ax.imshow(completion.values, cmap='RdYlGn', aspect='auto', vmin=0, vmax=100)
@@ -1226,7 +1235,7 @@ class PolyphestThresholdAnalyzer:
                         fontsize=10, fontweight='bold', color=text_color)
 
         ax.set_xticks(range(len(short_labels)))
-        ax.set_xticklabels(short_labels, rotation=45, ha='right', fontsize=10)
+        ax.set_xticklabels(short_labels, rotation=0, ha='center', fontsize=10)
         ax.set_yticks(range(len(completion.index)))
         ax.set_yticklabels([self._poly_display(m) for m in completion.index], fontsize=11)
         ax.set_title('Polyphest Completion Rate by Threshold', fontsize=14, fontweight='bold', pad=55)
