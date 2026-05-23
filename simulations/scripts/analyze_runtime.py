@@ -52,6 +52,9 @@ CONFIGS = [
     "conf_dup_loss_low_10M_ne1M",
     "conf_dup_loss_medium_10M_ne1M",
     "conf_dup_loss_high_10M_ne1M",
+    "conf_dup_loss_low_10M_ne2M",
+    "conf_dup_loss_medium_10M_ne2M",
+    "conf_dup_loss_high_10M_ne2M",
 ]
 
 # ── Methods and their log patterns ────────────────────────────────────────────
