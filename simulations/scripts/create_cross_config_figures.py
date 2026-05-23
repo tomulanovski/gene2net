@@ -515,14 +515,15 @@ class CrossConfigAnalyzer:
         for start, end, name in family_boundaries:
             if end < len(config_order):
                 ax.axvline(x=end - 0.5, color='black', linewidth=2)
-            # Add family label at top
             mid = (start + end - 1) / 2
-            ax.text(mid, -1.2, name, ha='center', va='bottom', fontsize=10, fontweight='bold')
+            # axes-fraction y so label sits just above the image, below the title
+            ax.text(mid, 1.02, name, ha='center', va='bottom', fontsize=10, fontweight='bold',
+                    transform=ax.get_xaxis_transform())
 
         cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
         cbar.set_label('Completion Rate (%)', fontsize=12)
 
-        ax.set_title('Method Completion Rate Across Configurations', fontsize=15, fontweight='bold', pad=40)
+        ax.set_title('Method Completion Rate Across Configurations', fontsize=15, fontweight='bold', pad=55)
         plt.tight_layout()
         fig.savefig(self.plots_dir / "01_completion_rate_heatmap.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "01_completion_rate_heatmap.png", bbox_inches='tight', dpi=300)
@@ -1228,7 +1229,7 @@ class PolyphestThresholdAnalyzer:
         ax.set_xticklabels(short_labels, rotation=45, ha='right', fontsize=10)
         ax.set_yticks(range(len(completion.index)))
         ax.set_yticklabels([self._poly_display(m) for m in completion.index], fontsize=11)
-        ax.set_title('Polyphest Completion Rate by Threshold', fontsize=14, fontweight='bold', pad=30)
+        ax.set_title('Polyphest Completion Rate by Threshold', fontsize=14, fontweight='bold', pad=55)
 
         # Family separators and labels (same as cross-config heatmap)
         family_boundaries = []
@@ -1242,8 +1243,8 @@ class PolyphestThresholdAnalyzer:
             if end < len(config_order):
                 ax.axvline(x=end - 0.5, color='black', linewidth=2)
             mid = (start + end - 1) / 2
-            ax.text(mid, -1.2, name, ha='center', va='bottom', fontsize=9,
-                    fontweight='bold', transform=ax.transData)
+            ax.text(mid, 1.02, name, ha='center', va='bottom', fontsize=9,
+                    fontweight='bold', transform=ax.get_xaxis_transform())
 
         fig.colorbar(im, ax=ax, shrink=0.8, label='Completion %')
         plt.tight_layout()
