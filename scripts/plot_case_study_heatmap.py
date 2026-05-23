@@ -247,65 +247,69 @@ def main():
             print(f"Saved: {pdf_path}")
             plt.close(fig)
 
+    # Per-metric scale and format (counts auto-scale and use integer format)
+    def metric_scale(metric, matrix):
+        if metric == 'num_rets_diff':
+            vals = matrix[~np.isnan(matrix)]
+            vmax = max(1.0, np.nanmax(vals)) if len(vals) > 0 else 1.0
+            return vmax, '.0f'
+        return 1.0, '.2f'
+
+    def render_split_panel(fig, ax, upper_metric, lower_metric):
+        """Render one split heatmap (with its two colorbars and title) onto ax."""
+        import matplotlib.cm as cm
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+        df_upper = df_dataset[df_dataset['metric'] == upper_metric]
+        df_lower = df_dataset[df_dataset['metric'] == lower_metric]
+        matrix_upper = make_symmetric_matrix(df_upper, all_methods)
+        matrix_lower = make_symmetric_matrix(df_lower, all_methods)
+
+        vmax_upper, fmt_upper = metric_scale(upper_metric, matrix_upper)
+        vmax_lower, fmt_lower = metric_scale(lower_metric, matrix_lower)
+
+        title_upper = METRIC_DISPLAY.get(upper_metric, upper_metric)
+        title_lower = METRIC_DISPLAY.get(lower_metric, lower_metric)
+
+        cmap_u, cmap_l, norm_u, norm_l = plot_split_heatmap(
+            ax, matrix_upper, matrix_lower, display_labels,
+            title_upper, title_lower,
+            vmin=0, vmax_upper=vmax_upper, vmax_lower=vmax_lower,
+            fmt_upper=fmt_upper, fmt_lower=fmt_lower,
+            cmap_upper='YlOrRd', cmap_lower='YlGnBu'
+        )
+
+        divider = make_axes_locatable(ax)
+        cax_u = divider.append_axes("right", size="3%", pad=0.15)
+        cax_l = divider.append_axes("right", size="3%", pad=0.05)
+        sm_upper = cm.ScalarMappable(cmap=cmap_u, norm=norm_u)
+        sm_lower = cm.ScalarMappable(cmap=cmap_l, norm=norm_l)
+        fig.colorbar(sm_upper, cax=cax_u)
+        cax_u.tick_params(labelsize=8)
+        fig.colorbar(sm_lower, cax=cax_l)
+        cax_l.tick_params(labelsize=8)
+
+        title_u_clean = title_upper.replace(chr(10), " ")
+        title_l_clean = title_lower.replace(chr(10), " ")
+        ax.set_title(f'Upper: {title_u_clean}  |  Lower: {title_l_clean}',
+                     fontsize=11, fontweight='bold', pad=12)
+
     # Generate split heatmaps (two metrics in one: upper/lower triangle)
+    valid_splits = []
     if args.split:
         for upper_metric, lower_metric in args.split:
-            # Validate both metrics exist
             if upper_metric not in df_dataset['metric'].unique():
                 print(f"WARNING: Metric '{upper_metric}' not found for {args.dataset}, skipping split")
                 continue
             if lower_metric not in df_dataset['metric'].unique():
                 print(f"WARNING: Metric '{lower_metric}' not found for {args.dataset}, skipping split")
                 continue
-
-            df_upper = df_dataset[df_dataset['metric'] == upper_metric]
-            df_lower = df_dataset[df_dataset['metric'] == lower_metric]
-            matrix_upper = make_symmetric_matrix(df_upper, all_methods)
-            matrix_lower = make_symmetric_matrix(df_lower, all_methods)
-
-            # Per-metric scale and format (counts auto-scale and use integer format)
-            def metric_scale(metric, matrix):
-                if metric == 'num_rets_diff':
-                    vals = matrix[~np.isnan(matrix)]
-                    vmax = max(1.0, np.nanmax(vals)) if len(vals) > 0 else 1.0
-                    return vmax, '.0f'
-                return 1.0, '.2f'
-
-            vmax_upper, fmt_upper = metric_scale(upper_metric, matrix_upper)
-            vmax_lower, fmt_lower = metric_scale(lower_metric, matrix_lower)
-
-            title_upper = METRIC_DISPLAY.get(upper_metric, upper_metric)
-            title_lower = METRIC_DISPLAY.get(lower_metric, lower_metric)
+            valid_splits.append((upper_metric, lower_metric))
 
             fig, ax = plt.subplots(1, 1, figsize=(8, 7))
-            cmap_u, cmap_l, norm_u, norm_l = plot_split_heatmap(
-                ax, matrix_upper, matrix_lower, display_labels,
-                title_upper, title_lower,
-                vmin=0, vmax_upper=vmax_upper, vmax_lower=vmax_lower,
-                fmt_upper=fmt_upper, fmt_lower=fmt_lower,
-                cmap_upper='YlOrRd', cmap_lower='YlGnBu'
-            )
-
-            # Two colorbars side by side, each with its own scale
-            import matplotlib.cm as cm
-            from mpl_toolkits.axes_grid1 import make_axes_locatable
-            divider = make_axes_locatable(ax)
-            cax_u = divider.append_axes("right", size="3%", pad=0.15)
-            cax_l = divider.append_axes("right", size="3%", pad=0.05)
-            sm_upper = cm.ScalarMappable(cmap=cmap_u, norm=norm_u)
-            sm_lower = cm.ScalarMappable(cmap=cmap_l, norm=norm_l)
-            cb_u = fig.colorbar(sm_upper, cax=cax_u)
-            cax_u.tick_params(labelsize=8)
-            cb_l = fig.colorbar(sm_lower, cax=cax_l)
-            cax_l.tick_params(labelsize=8)
-
-            # Title: Upper/Lower metric names
-            title_u_clean = title_upper.replace(chr(10), " ")
-            title_l_clean = title_lower.replace(chr(10), " ")
-            ax.set_title(f'Upper: {title_u_clean}  |  Lower: {title_l_clean}',
-                         fontsize=11, fontweight='bold', pad=12)
-
+            render_split_panel(fig, ax, upper_metric, lower_metric)
             plt.tight_layout()
+
             safe_u = upper_metric.replace('.', '_')
             safe_l = lower_metric.replace('.', '_')
             pdf_path = plots_dir / f'split_{safe_u}_vs_{safe_l}.pdf'
@@ -314,6 +318,23 @@ def main():
             fig.savefig(str(png_path), dpi=args.dpi, bbox_inches='tight')
             print(f"Saved split heatmap: {pdf_path}")
             plt.close(fig)
+
+    # Combined figure with all split heatmaps side by side
+    if len(valid_splits) > 1:
+        n = len(valid_splits)
+        fig, axes = plt.subplots(1, n, figsize=(8 * n, 7))
+        if n == 1:
+            axes = [axes]
+        for ax, (upper_metric, lower_metric) in zip(axes, valid_splits):
+            render_split_panel(fig, ax, upper_metric, lower_metric)
+        plt.tight_layout()
+
+        pdf_path = plots_dir / 'combined_split_heatmaps.pdf'
+        png_path = plots_dir / 'combined_split_heatmaps.png'
+        fig.savefig(str(pdf_path), dpi=args.dpi, bbox_inches='tight')
+        fig.savefig(str(png_path), dpi=args.dpi, bbox_inches='tight')
+        print(f"Saved combined split heatmaps: {pdf_path}")
+        plt.close(fig)
 
     # Generate combined figure with all metrics side by side
     if args.combined and len(available_metrics) > 1:
