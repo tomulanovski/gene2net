@@ -404,7 +404,7 @@ class PolyphestVsGrampaIter:
 
         panel_metrics = [
             ('edit_distance_multree', 'Edit Distance', None),
-            ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance', None),
+            ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure', None),
             ('num_rets_bias', 'Ret. Count Bias (%)', 0),  # 0 = reference line
         ]
 
@@ -495,8 +495,8 @@ class PolyphestVsGrampaIter:
 
         box_metrics = [
             ('edit_distance_multree', 'Edit Distance'),
-            ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance'),
-            ('ret_sisters_jaccard.dist', 'Reticulation Sister Measure'),
+            ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
+            ('ret_sisters_jaccard.dist', 'Ret. Sister Measure'),
             ('ploidy_diff.dist', 'Ploidy Distance'),
         ]
 
@@ -618,8 +618,8 @@ class PolyphestVsGrampaIter:
 
         line_metrics = [
             ('edit_distance_multree', 'Edit Distance'),
-            ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance'),
-            ('num_rets_bias', 'Ret. Bias (%)'),
+            ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
+            ('ret_sisters_jaccard.dist', 'Ret. Sister Measure'),
         ]
 
         fig, axes = plt.subplots(len(line_metrics), len(CONFIG_FAMILIES),

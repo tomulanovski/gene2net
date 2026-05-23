@@ -365,7 +365,7 @@ class PriorComparison:
 
         panel_metrics = [
             ('edit_distance_multree',  'Edit Distance',      None),
-            ('ret_leaf_jaccard.dist',  'Ret. Leaf Distance', None),
+            ('ret_leaf_jaccard.dist',  'Ret. Descendants Measure', None),
             ('num_rets_bias',          'Ret. Bias (%)',       0),
         ]
         n_fam  = len(CONFIG_FAMILIES)
@@ -429,8 +429,8 @@ class PriorComparison:
 
         box_metrics = [
             ('edit_distance_multree',   'Edit Distance'),
-            ('ret_leaf_jaccard.dist',   'Ret. Leaf Distance'),
-            ('ret_sisters_jaccard.dist','Reticulation Sister Measure'),
+            ('ret_leaf_jaccard.dist',   'Ret. Descendants Measure'),
+            ('ret_sisters_jaccard.dist','Ret. Sister Measure'),
             ('ploidy_diff.dist',        'Ploidy Distance'),
         ]
 
@@ -534,7 +534,7 @@ class PriorComparison:
 
         line_metrics = [
             ('edit_distance_multree', 'Edit Distance'),
-            ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance'),
+            ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
             ('num_rets_bias',         'Ret. Bias (%)'),
         ]
         n_fam = len(CONFIG_FAMILIES)

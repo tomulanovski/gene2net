@@ -891,8 +891,8 @@ class CrossConfigAnalyzer:
         rank_metrics = {
             'edit_distance_multree': 'Edit\nDistance',
             # 'rf_distance': 'Robinson-Foulds\nDistance',  # Disabled: RF not well-defined for MUL-trees
-            'ret_leaf_jaccard.dist': 'Reticulation\nLeaf Distance',
-            'ret_sisters_jaccard.dist': 'Sister-Taxa\nDistance',
+            'ret_leaf_jaccard.dist': 'Ret.\nDescendants',
+            'ret_sisters_jaccard.dist': 'Ret.\nSister',
             'ploidy_diff.dist': 'Ploidy\nDistance',
         }
 
@@ -1412,7 +1412,7 @@ class PolyphestThresholdAnalyzer:
 
         metrics = [
             ('edit_distance_multree', 'Edit Distance'),
-            ('ret_leaf_jaccard.dist', 'Ret. Leaf Distance'),
+            ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
             ('ploidy_diff.dist', 'Ploidy Distance'),
         ]
         available = [(k, l) for k, l in metrics
