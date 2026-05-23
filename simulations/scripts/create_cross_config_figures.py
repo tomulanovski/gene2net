@@ -1190,7 +1190,7 @@ class PolyphestThresholdAnalyzer:
         print(f"{'='*80}\n")
 
     def plot_completion_heatmap(self):
-        """Completion rate heatmap: rows=thresholds, columns=configs."""
+        """Completion rate heatmap: rows=thresholds, columns=configs (same grouping as cross-config)."""
         if self.inventory.empty:
             return
 
@@ -1214,7 +1214,7 @@ class PolyphestThresholdAnalyzer:
 
         short_labels = [c.replace('conf_', '').replace('_10M', '') for c in completion.columns]
 
-        fig, ax = plt.subplots(figsize=(max(12, len(completion.columns) * 1.3), 3))
+        fig, ax = plt.subplots(figsize=(max(12, len(completion.columns) * 1.3), max(3, len(completion) * 0.7)))
         im = ax.imshow(completion.values, cmap='RdYlGn', aspect='auto', vmin=0, vmax=100)
 
         for i in range(completion.shape[0]):
@@ -1228,7 +1228,22 @@ class PolyphestThresholdAnalyzer:
         ax.set_xticklabels(short_labels, rotation=45, ha='right', fontsize=10)
         ax.set_yticks(range(len(completion.index)))
         ax.set_yticklabels([self._poly_display(m) for m in completion.index], fontsize=11)
-        ax.set_title('Polyphest Completion Rate by Threshold', fontsize=14, fontweight='bold', pad=15)
+        ax.set_title('Polyphest Completion Rate by Threshold', fontsize=14, fontweight='bold', pad=30)
+
+        # Family separators and labels (same as cross-config heatmap)
+        family_boundaries = []
+        col_idx = 0
+        for fam_name, fam_info in CONFIG_FAMILIES.items():
+            n_in_fam = sum(1 for l in LEVEL_ORDER if fam_info['configs'].get(l) in config_order)
+            if n_in_fam > 0:
+                family_boundaries.append((col_idx, col_idx + n_in_fam, fam_name))
+                col_idx += n_in_fam
+        for start, end, name in family_boundaries:
+            if end < len(config_order):
+                ax.axvline(x=end - 0.5, color='black', linewidth=2)
+            mid = (start + end - 1) / 2
+            ax.text(mid, -1.2, name, ha='center', va='bottom', fontsize=9,
+                    fontweight='bold', transform=ax.transData)
 
         fig.colorbar(im, ax=ax, shrink=0.8, label='Completion %')
         plt.tight_layout()
@@ -1628,7 +1643,7 @@ class TetraploidSubsetAnalyzer:
     # 1. Accuracy overview — aggregated across 3 ILS levels
     # ------------------------------------------------------------------
     def plot_accuracy_overview(self):
-        """Grid bar chart: rows = ILS config (Low/Med/High), columns = metric, bars per method."""
+        """Grouped bar chart: one panel per metric, 3 adjacent bars per method (one per ILS config)."""
         if self.comparisons.empty:
             return
 
@@ -1644,66 +1659,60 @@ class TetraploidSubsetAnalyzer:
         ]
 
         ils_configs = [
-            ('Low',    'conf_ils_low_10M'),
-            ('Medium', 'conf_ils_medium_10M'),
-            ('High',   'conf_ils_high_10M'),
+            ('ILS Low',    'conf_ils_low_10M',    '#2ecc71'),
+            ('ILS Medium', 'conf_ils_medium_10M', '#f39c12'),
+            ('ILS High',   'conf_ils_high_10M',   '#e74c3c'),
         ]
 
-        n_rows = len(ils_configs)
         n_cols = len(panel_metrics)
-        fig, axes = plt.subplots(n_rows, n_cols,
-                                 figsize=(4.5 * n_cols, 4 * n_rows), squeeze=False)
+        n_ils = len(ils_configs)
+        n_methods = len(methods)
+        bar_width = 0.8 / n_ils
+        x = np.arange(n_methods)
 
-        method_labels = [display_name(m) for m in methods]
-        x = np.arange(len(methods))
+        fig, axes = plt.subplots(1, n_cols, figsize=(5 * n_cols, 5), squeeze=False)
+        axes = axes.flatten()
 
-        for row_idx, (ils_label, ils_cfg) in enumerate(ils_configs):
-            cfg_data = self.comparisons[
-                (self.comparisons['config'] == ils_cfg) &
+        for col_idx, (metric_key, metric_label) in enumerate(panel_metrics):
+            ax = axes[col_idx]
+            metric_data = self.comparisons[
+                (self.comparisons['metric'] == metric_key) &
                 (self.comparisons['status'] == 'SUCCESS')
             ]
 
-            for col_idx, (metric_key, metric_label) in enumerate(panel_metrics):
-                ax = axes[row_idx, col_idx]
-                metric_data = cfg_data[cfg_data['metric'] == metric_key]
-
-                centers, errs_low, errs_high, counts, colors = [], [], [], [], []
+            for i_ils, (ils_label, ils_cfg, ils_color) in enumerate(ils_configs):
+                cfg_data = metric_data[metric_data['config'] == ils_cfg]
+                centers, errs = [], []
                 for method in methods:
-                    vals = metric_data[metric_data['method'] == method]['value'].dropna()
+                    vals = cfg_data[cfg_data['method'] == method]['value'].dropna()
                     if len(vals) > 0:
                         c = vals.mean()
                         sem = vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0
-                        centers.append(c)
-                        errs_low.append(sem)
-                        errs_high.append(sem)
-                        counts.append(len(vals))
                     else:
-                        centers.append(0)
-                        errs_low.append(0)
-                        errs_high.append(0)
-                        counts.append(0)
-                    colors.append(METHOD_COLORS.get(method, '#888888'))
+                        c, sem = 0, 0
+                    centers.append(c)
+                    errs.append(sem)
 
-                bars = ax.bar(x, centers, yerr=[errs_low, errs_high], capsize=4,
-                              color=colors, edgecolor='white', linewidth=0.8, alpha=0.85)
+                offset = (i_ils - n_ils / 2 + 0.5) * bar_width
+                ax.bar(x + offset, centers, bar_width * 0.9,
+                       yerr=errs, capsize=3,
+                       color=ils_color, edgecolor='white', linewidth=0.6, alpha=0.85,
+                       label=ils_label if col_idx == 0 else None)
 
-                ax.set_xticks(x)
-                ax.set_xticklabels(method_labels, fontsize=9, rotation=45, ha='right')
-                ax.grid(True, alpha=0.25, linestyle='--', axis='y')
+            ax.set_xticks(x)
+            ax.set_xticklabels([display_name(m) for m in methods], fontsize=9, rotation=45, ha='right')
+            ax.set_title(metric_label, fontsize=12, fontweight='bold')
+            ax.grid(True, alpha=0.25, linestyle='--', axis='y')
 
-                if col_idx == 0:
-                    ax.set_ylabel(f'ILS {ils_label}', fontsize=11, fontweight='bold')
-                if row_idx == 0:
-                    ax.set_title(metric_label, fontsize=12, fontweight='bold')
-
-        fig.suptitle('Method Accuracy on Tetraploid Networks by ILS Config\n(8 networks)',
+        axes[0].legend(fontsize=9, framealpha=0.9, loc='upper right')
+        fig.suptitle('Method Accuracy on Tetraploid Networks\n(8 networks, all 3 ILS configs)',
                      fontsize=14, fontweight='bold')
         plt.tight_layout()
         fig.savefig(self.plots_dir / "01_tetra_accuracy_overview.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / "01_tetra_accuracy_overview.png", bbox_inches='tight', dpi=300)
         plt.close('all')
         gc.collect()
-        print("  [1] Accuracy overview (by ILS config)")
+        print("  [1] Accuracy overview (grouped by ILS config)")
 
     # ------------------------------------------------------------------
     # 2. Accuracy by ILS level — shows degradation
