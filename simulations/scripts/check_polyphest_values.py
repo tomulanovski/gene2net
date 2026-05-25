@@ -21,7 +21,7 @@ if diag_csv.exists():
     print("Metrics:", sorted(diag['metric'].unique()))
     print()
 
-for metric in ['ret_leaf', 'ret_sisters']:
+for metric in ['edit_distance_multree', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist']:
     print(f"\n--- {metric} ---")
     for config in configs:
         csv = BASE / config / 'comparisons_raw.csv'
