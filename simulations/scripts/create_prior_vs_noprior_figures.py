@@ -533,9 +533,9 @@ class PriorComparison:
             return
 
         line_metrics = [
-            ('edit_distance_multree', 'Edit Distance'),
-            ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
-            ('num_rets_bias',         'Ret. Bias (%)'),
+            ('edit_distance_multree',    'Edit Distance'),
+            ('ret_leaf_jaccard.dist',    'Reticulation Descendants Measure'),
+            ('ret_sisters_jaccard.dist', 'Reticulation Sister Measure'),
         ]
         n_fam = len(CONFIG_FAMILIES)
 
