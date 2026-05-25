@@ -6,10 +6,9 @@ POLYPHEST_THRESHOLDS = ['polyphest_p50', 'polyphest_p70', 'polyphest_p90']
 BASE = Path('/groups/itay_mayrose/tomulanovski/gene2net/simulations/analysis/summary')
 
 configs = [
-    'conf_ils_high_10M',
-    'conf_dup_loss_low_10M_ne2M',
-    'conf_dup_loss_medium_10M_ne2M',
-    'conf_dup_loss_high_10M_ne2M',
+    'conf_ils_medium_10M',
+    'conf_dup_loss_high_10M',
+    'conf_dup_loss_high_10M_ne1M',
 ]
 
 # Diagnostic: show available metrics and methods for first config
