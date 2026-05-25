@@ -5,7 +5,7 @@ from pathlib import Path
 POLYPHEST_THRESHOLDS = ['polyphest_p50', 'polyphest_p70', 'polyphest_p90']
 BASE = Path('/groups/itay_mayrose/tomulanovski/gene2net/simulations/analysis/summary')
 
-configs = [
+CONFIGS = [
     'conf_ils_low_10M',
     'conf_ils_medium_10M',
     'conf_ils_high_10M',
@@ -21,8 +21,13 @@ configs = [
 ]
 
 METRICS = ['edit_distance_multree', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist']
+METRIC_LABELS = {
+    'edit_distance_multree': 'Edit Distance',
+    'ret_leaf_jaccard.dist': 'Ret. Descendants',
+    'ret_sisters_jaccard.dist': 'Ret. Sister',
+}
 
-for config in configs:
+for config in CONFIGS:
     inv_path = BASE / config / 'inventory.csv'
     comp_path = BASE / config / 'comparisons_raw.csv'
     if not comp_path.exists():
@@ -35,8 +40,8 @@ for config in configs:
     print(f"{config}")
     print(f"{'='*60}")
 
-    # Completion rates per threshold
-    print("  Completion rates:")
+    # --- Polyphest: completion rates ---
+    print("  [Polyphest] Completion rates:")
     for t in POLYPHEST_THRESHOLDS:
         rows = inv[inv['method'] == t]
         if len(rows) == 0:
@@ -45,12 +50,27 @@ for config in configs:
         rate = rows['inferred_exists'].mean() * 100
         print(f"    {t}: {rate:.1f}%  ({rows['inferred_exists'].sum()}/{len(rows)})")
 
-    # Per-threshold accuracy
+    # --- Polyphest: per-threshold accuracy ---
+    print("  [Polyphest] Accuracy:")
     for metric in METRICS:
-        print(f"  {metric}:")
+        label = METRIC_LABELS[metric]
+        parts = []
         for t in POLYPHEST_THRESHOLDS:
             rows = df[(df['method'] == t) & (df['metric'] == metric) & (df['status'] == 'SUCCESS')]
             if len(rows) > 0:
-                print(f"    {t}: {rows['value'].mean():.3f}  (n={len(rows)})")
+                parts.append(f"{t.split('_')[-1]}={rows['value'].mean():.3f}(n={len(rows)})")
             else:
-                print(f"    {t}: no data")
+                parts.append(f"{t.split('_')[-1]}=n/a")
+        print(f"    {label}: {' | '.join(parts)}")
+
+    # --- GRAMPAIter: accuracy ---
+    print("  [GRAMPAIter] Accuracy:")
+    gi_rows = df[df['method'] == 'grandma_split']
+    gi_completion = len(gi_rows[gi_rows['status'] == 'SUCCESS']['replicate'].unique()) if len(gi_rows) > 0 else 0
+    for metric in METRICS:
+        label = METRIC_LABELS[metric]
+        rows = gi_rows[(gi_rows['metric'] == metric) & (gi_rows['status'] == 'SUCCESS')]
+        if len(rows) > 0:
+            print(f"    {label}: {rows['value'].mean():.3f}  (n={len(rows)})")
+        else:
+            print(f"    {label}: no data")
