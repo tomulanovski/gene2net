@@ -29,8 +29,9 @@ for metric in ['edit_distance_multree', 'ret_leaf_jaccard.dist', 'ret_sisters_ja
             print(f"  {config}: file not found")
             continue
         df = pd.read_csv(csv)
-        poly = df[df['method'].isin(POLYPHEST_THRESHOLDS) & (df['metric'] == metric)].copy()
 
+        # Polyphest: per-dataset lowest threshold
+        poly = df[df['method'].isin(POLYPHEST_THRESHOLDS) & (df['metric'] == metric)].copy()
         merged = []
         for key, group in poly.groupby(['network', 'replicate']):
             for method in POLYPHEST_THRESHOLDS:
@@ -38,9 +39,15 @@ for metric in ['edit_distance_multree', 'ret_leaf_jaccard.dist', 'ret_sisters_ja
                 if len(rows) > 0:
                     merged.append(rows.iloc[0])
                     break
-
         if merged:
             result = pd.DataFrame(merged)
-            print(f"  {config}: mean={result['value'].mean():.3f}  (n={len(result)})")
+            print(f"  {config} [Polyphest]:   mean={result['value'].mean():.3f}  (n={len(result)})")
         else:
-            print(f"  {config}: no data")
+            print(f"  {config} [Polyphest]:   no data")
+
+        # GRAMPAIter: straightforward
+        gi = df[(df['method'] == 'grandma_split') & (df['metric'] == metric) & (df['status'] == 'SUCCESS')]
+        if len(gi) > 0:
+            print(f"  {config} [GRAMPAIter]: mean={gi['value'].mean():.3f}  (n={len(gi)})")
+        else:
+            print(f"  {config} [GRAMPAIter]: no data")
