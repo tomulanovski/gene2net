@@ -12,6 +12,15 @@ configs = [
     'conf_dup_loss_high_10M_ne2M',
 ]
 
+# Diagnostic: show available metrics and methods for first config
+diag_csv = BASE / configs[0] / 'comparisons_raw.csv'
+if diag_csv.exists():
+    diag = pd.read_csv(diag_csv)
+    print("Columns:", list(diag.columns))
+    print("Methods:", sorted(diag['method'].unique()))
+    print("Metrics:", sorted(diag['metric'].unique()))
+    print()
+
 for metric in ['ret_leaf', 'ret_sisters']:
     print(f"\n--- {metric} ---")
     for config in configs:
