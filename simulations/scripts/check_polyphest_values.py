@@ -63,13 +63,27 @@ for config in CONFIGS:
                 parts.append(f"{t.split('_')[-1]}=n/a")
         print(f"    {label}: {' | '.join(parts)}")
 
-    # --- GRAMPAIter: accuracy ---
+    # --- GRAMPAIter (no prior): accuracy ---
     print("  [GRAMPAIter] Accuracy:")
     gi_rows = df[df['method'] == 'grandma_split']
-    gi_completion = len(gi_rows[gi_rows['status'] == 'SUCCESS']['replicate'].unique()) if len(gi_rows) > 0 else 0
     for metric in METRICS:
         label = METRIC_LABELS[metric]
         rows = gi_rows[(gi_rows['metric'] == metric) & (gi_rows['status'] == 'SUCCESS')]
+        if len(rows) > 0:
+            print(f"    {label}: {rows['value'].mean():.3f}  (n={len(rows)})")
+        else:
+            print(f"    {label}: no data")
+
+    # --- GRAMPAIter (with prior): completion + accuracy ---
+    prior_inv = inv[inv['method'] == 'grandma_split_prior']
+    if len(prior_inv) > 0:
+        rate = prior_inv['inferred_exists'].mean() * 100
+        print(f"  [GRAMPAIter+prior] Completion: {rate:.1f}%  ({prior_inv['inferred_exists'].sum()}/{len(prior_inv)})")
+    print("  [GRAMPAIter+prior] Accuracy:")
+    gp_rows = df[df['method'] == 'grandma_split_prior']
+    for metric in METRICS:
+        label = METRIC_LABELS[metric]
+        rows = gp_rows[(gp_rows['metric'] == metric) & (gp_rows['status'] == 'SUCCESS')]
         if len(rows) > 0:
             print(f"    {label}: {rows['value'].mean():.3f}  (n={len(rows)})")
         else:

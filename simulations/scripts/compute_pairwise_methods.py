@@ -37,6 +37,8 @@ SUMMARY_BASE = SCRIPT_DIR.parent / "analysis" / "summary"
 METHOD_A = "polyphest"
 METHOD_B = "grandma_split"
 
+# Output filename is derived at runtime from the method pair
+
 
 def file_hash(path):
     try:
@@ -83,7 +85,9 @@ def flatten_metrics(metrics):
     return flat
 
 
-def process_config(config, summary_base, force_recompute=False):
+def process_config(config, summary_base, method_a=None, method_b=None, force_recompute=False):
+    method_a = method_a or METHOD_A
+    method_b = method_b or METHOD_B
     config_dir = summary_base / config
     inv_path = config_dir / "inventory.csv"
     if not inv_path.exists():
@@ -92,7 +96,7 @@ def process_config(config, summary_base, force_recompute=False):
 
     inventory = pd.read_csv(inv_path)
     inventory = merge_polyphest_inventory(inventory)
-    inventory = inventory[inventory["method"].isin([METHOD_A, METHOD_B])].copy()
+    inventory = inventory[inventory["method"].isin([method_a, method_b])].copy()
 
     cache_dir = config_dir / "pairwise_cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -102,8 +106,8 @@ def process_config(config, summary_base, force_recompute=False):
 
     # Group by (network, replicate); keep pairs where both methods completed
     for (network, replicate), group in inventory.groupby(["network", "replicate"]):
-        a_row = group[(group["method"] == METHOD_A) & (group["inferred_exists"])]
-        b_row = group[(group["method"] == METHOD_B) & (group["inferred_exists"])]
+        a_row = group[(group["method"] == method_a) & (group["inferred_exists"])]
+        b_row = group[(group["method"] == method_b) & (group["inferred_exists"])]
         if a_row.empty or b_row.empty:
             continue
 
@@ -111,7 +115,7 @@ def process_config(config, summary_base, force_recompute=False):
         path_b = b_row.iloc[0]["inferred_path"]
         n_total += 1
 
-        cache_path = cache_dir / f"{network}_rep{replicate}_{METHOD_A}_vs_{METHOD_B}.pkl"
+        cache_path = cache_dir / f"{network}_rep{replicate}_{method_a}_vs_{method_b}.pkl"
         comparison = None
 
         if not force_recompute and cache_path.exists():
@@ -174,7 +178,8 @@ def process_config(config, summary_base, force_recompute=False):
             print(f"    [FAIL] {network} rep{replicate}: {comparison['error']}")
 
     df = pd.DataFrame(rows)
-    out_path = config_dir / "pairwise_polyphest_vs_grandma.csv"
+    out_name = f"pairwise_{method_a}_vs_{method_b}.csv"
+    out_path = config_dir / out_name
     df.to_csv(out_path, index=False)
     print(
         f"  [{config}] pairs={n_total} success={n_success} failed={n_failed} "
@@ -185,9 +190,11 @@ def process_config(config, summary_base, force_recompute=False):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Pairwise Polyphest-vs-grandma_split comparison for simulations"
+        description="Pairwise method comparison for simulations"
     )
     parser.add_argument("configs", nargs="+", help="One or more config names")
+    parser.add_argument("--method-a", default=METHOD_A, help=f"First method (default: {METHOD_A})")
+    parser.add_argument("--method-b", default=METHOD_B, help=f"Second method (default: {METHOD_B})")
     parser.add_argument(
         "--force-recompute",
         action="store_true",
@@ -195,11 +202,12 @@ def main():
     )
     args = parser.parse_args()
 
-    print(f"Pairwise comparison: {METHOD_A} vs {METHOD_B}")
+    print(f"Pairwise comparison: {args.method_a} vs {args.method_b}")
     print(f"Configs: {', '.join(args.configs)}\n")
 
     for config in args.configs:
-        process_config(config, SUMMARY_BASE, force_recompute=args.force_recompute)
+        process_config(config, SUMMARY_BASE, method_a=args.method_a, method_b=args.method_b,
+                       force_recompute=args.force_recompute)
 
 
 if __name__ == "__main__":
