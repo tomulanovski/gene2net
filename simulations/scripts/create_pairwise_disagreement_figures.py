@@ -105,7 +105,9 @@ plt.rcParams['axes.linewidth'] = 1.2
 def load_all_configs(configs):
     frames = []
     for config in configs:
-        path = SUMMARY_BASE / config / "pairwise_polyphest_vs_grandma.csv"
+        path = SUMMARY_BASE / config / "pairwise_polyphest_vs_grandma_split.csv"
+        if not path.exists():
+            path = SUMMARY_BASE / config / "pairwise_polyphest_vs_grandma.csv"
         if not path.exists():
             print(f"  WARNING: {config} — file not found, skipping")
             continue
