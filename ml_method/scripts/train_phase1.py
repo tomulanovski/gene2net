@@ -54,26 +54,44 @@ def main():
         print(f"GPU: {torch.cuda.get_device_name()}")
     print("=" * 70)
 
+    # Expected edge feature dim (samples not matching are skipped — e.g. ones
+    # that were never augmented to 9 dims because their source trees were missing).
+    expected_edge_dim = int(model_config.get("edge_feat_dim", 4))
+
     # Load dataset(s)
     all_samples = []
     skipped = 0
+    wrong_dim = 0
+    wrong_dim_by_dir = {}
     for data_dir in args.data_dir:
         print(f"Loading dataset from {data_dir}...")
         dataset = Gene2NetDataset(data_dir)
         dir_loaded = 0
+        dir_wrong = 0
         for i in range(len(dataset)):
             try:
                 sample = dataset[i]
-                if sample.labels is not None:
-                    all_samples.append(sample)
-                    dir_loaded += 1
-                else:
+                if sample.labels is None:
                     skipped += 1
+                    continue
+                ef = sample.species_tree_edge_features
+                if ef is None or ef.shape[1] != expected_edge_dim:
+                    wrong_dim += 1
+                    dir_wrong += 1
+                    continue
+                all_samples.append(sample)
+                dir_loaded += 1
             except Exception:
                 skipped += 1
-        print(f"  {dir_loaded} samples from {os.path.basename(data_dir)}")
+        if dir_wrong:
+            wrong_dim_by_dir[os.path.basename(data_dir)] = dir_wrong
+        print(f"  {dir_loaded} samples from {os.path.basename(data_dir)}"
+              + (f"  ({dir_wrong} wrong edge dim, skipped)" if dir_wrong else ""))
 
-    print(f"Total: {len(all_samples)} samples ({skipped} skipped)")
+    print(f"Total: {len(all_samples)} samples "
+          f"({skipped} no-label skipped, {wrong_dim} wrong-edge-dim skipped)")
+    if wrong_dim_by_dir:
+        print(f"  Wrong-dim samples need re-augmenting in: {wrong_dim_by_dir}")
 
     # Train/val split
     val_split = float(train_config.get("val_split", 0.2))
