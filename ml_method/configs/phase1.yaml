@@ -3,7 +3,7 @@
 
 model:
   node_feat_dim: 13          # 8 copy count + 5 clustering summary
-  edge_feat_dim: 4           # concordance, branch_length, clade_size, depth
+  edge_feat_dim: 9           # 4 base (concordance, branch_length, clade_size, depth) + 5 WGD-detection
   hidden_dim: 64
   n_gat_layers: 3
   n_gat_heads: 4

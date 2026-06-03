@@ -12,6 +12,7 @@ from gene2net_gnn.data.features import (
     compute_copy_count_features,
     compute_clustering_summary,
     compute_species_tree_edge_features,
+    compute_species_tree_edge_detection_features,
 )
 from gene2net_gnn.data.label_extractor import (
     TrainingLabels,
@@ -77,18 +78,27 @@ class Gene2NetSample:
                 node_features.append([0.0] * 13)
         sample.species_tree_node_features = torch.tensor(node_features, dtype=torch.float)
 
-        # Edge features
+        # Edge features: 4 base (concordance, branch length, clade size, depth)
+        # + 5 WGD-detection features (synchrony, mirrored-sister, copy-pair
+        # divergence mean/cv, clade-duplicated fraction) = 9 dims.
         edge_feats_dict = compute_species_tree_edge_features(species_tree, gene_trees)
+        det_feats_dict = compute_species_tree_edge_detection_features(species_tree, gene_trees)
         edge_feat_list = []
         # Process edges in pairs (we stored undirected, take every other)
         n_undirected = edge_index.shape[1] // 2
         for i in range(n_undirected):
             ef = edge_feats_dict.get(i, {})
+            df = det_feats_dict.get(i, {})
             edge_feat_list.append([
                 ef.get("concordance_factor", 0.0),
                 ef.get("branch_length", 0.0),
                 ef.get("clade_size", 0.0),
                 ef.get("depth", 0.0),
+                df.get("dup_synchrony", 0.0),
+                df.get("mirrored_sister_frac", 0.0),
+                df.get("copy_pair_div_mean", 0.0),
+                df.get("copy_pair_div_cv", 0.0),
+                df.get("frac_clade_duplicated", 0.0),
             ])
         sample.species_tree_edge_features = torch.tensor(edge_feat_list, dtype=torch.float)
 

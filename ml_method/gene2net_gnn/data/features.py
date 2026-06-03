@@ -1,6 +1,7 @@
 """Hand-crafted features for gene tree discordance and copy number patterns."""
 from collections import Counter
-from typing import Dict, List, Set
+from itertools import combinations
+from typing import Dict, List, Optional, Set, Tuple
 
 from ete3 import Tree
 
@@ -238,6 +239,220 @@ def compute_species_tree_edge_features(
             "branch_length": node.dist,
             "clade_size": len(node.get_leaves()),
             "depth": compute_depth(node),
+        }
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# WGD-detection features (per species-tree edge / clade).
+#
+# These target the signatures that copy-count and co-clustering summaries blur:
+#   - duplication synchrony: do clade members get duplicated *together*? (WGD
+#     duplicates the whole clade at once, so copy spikes are correlated;
+#     small-scale duplication hits species independently)
+#   - mirrored-sister fraction: the ((A,B),(A,B)) autopolyploidy signature
+#   - copy-pair divergence: Ks-analogue from gene tree branch lengths
+#     (substitutions per site). WGD copies share one "birthday" -> consistent,
+#     synchronized divergence; scattered gene duplicates -> variable divergence.
+# ---------------------------------------------------------------------------
+
+
+def _index_gene_tree(tree: Tree):
+    """Precompute per-tree structures reused by the detection features.
+
+    Returns
+    -------
+    leaf_nodes : dict mapping species name -> list of leaf nodes (the copies).
+    root_dist : dict mapping node -> cumulative branch-length distance to root.
+    scale : float, mean root-to-leaf distance (used to normalise divergences so
+        the per-sample substitution rate cancels out). Always > 0.
+    dup_sister_sets : list of frozenset, species sets of nodes whose two
+        children have identical species sets (the mirrored-sister pattern).
+    """
+    leaf_nodes: Dict[str, List] = {}
+    for leaf in tree.get_leaves():
+        leaf_nodes.setdefault(leaf.name, []).append(leaf)
+
+    root_dist: Dict[object, float] = {}
+    for node in tree.traverse("preorder"):
+        if node.is_root():
+            root_dist[node] = 0.0
+        else:
+            root_dist[node] = root_dist[node.up] + (node.dist or 0.0)
+
+    leaf_root_dists = [root_dist[l] for l in tree.get_leaves()]
+    scale = (sum(leaf_root_dists) / len(leaf_root_dists)) if leaf_root_dists else 1.0
+    if scale <= 0:
+        scale = 1.0
+
+    dup_sister_sets: List[frozenset] = []
+    for node in tree.traverse("postorder"):
+        if node.is_leaf():
+            continue
+        children = node.get_children()
+        if len(children) != 2:
+            continue
+        s0 = frozenset(l.name for l in children[0].get_leaves())
+        s1 = frozenset(l.name for l in children[1].get_leaves())
+        if s0 == s1 and len(s0) >= 1:
+            dup_sister_sets.append(s0)
+
+    return leaf_nodes, root_dist, scale, dup_sister_sets
+
+
+def _copy_pair_distance(copies: List, root_dist: Dict[object, float]) -> Optional[float]:
+    """Smallest path distance between any two copies of a species in one tree.
+
+    The minimum pair is taken because, with mixed WGD + gene duplications, the
+    most recent split is the best single proxy for the WGD copy pair. Distance
+    uses cumulative root distances: d(a,b) = root[a] + root[b] - 2*root[lca].
+    Returns None if fewer than two copies.
+    """
+    if len(copies) < 2:
+        return None
+    best = None
+    for a, b in combinations(copies, 2):
+        lca = a.get_common_ancestor(b) if a is not b else a
+        d = root_dist[a] + root_dist[b] - 2 * root_dist[lca]
+        if best is None or d < best:
+            best = d
+    return best
+
+
+def _mean_pairwise_correlation(indicator_matrix: List[List[int]]) -> float:
+    """Mean pairwise Pearson correlation between columns (species) of a 0/1 matrix.
+
+    Rows are gene trees, columns are clade species; entry is 1 if that species
+    has >= 2 copies in that gene tree. Columns with zero variance are skipped.
+    Returns 0.0 when fewer than two informative columns exist.
+    """
+    n_rows = len(indicator_matrix)
+    if n_rows == 0:
+        return 0.0
+    n_cols = len(indicator_matrix[0])
+    if n_cols < 2:
+        return 0.0
+
+    # Column means and variances
+    means = [0.0] * n_cols
+    for row in indicator_matrix:
+        for j, v in enumerate(row):
+            means[j] += v
+    means = [m / n_rows for m in means]
+
+    variances = [0.0] * n_cols
+    for row in indicator_matrix:
+        for j, v in enumerate(row):
+            variances[j] += (v - means[j]) ** 2
+
+    informative = [j for j in range(n_cols) if variances[j] > 1e-12]
+    if len(informative) < 2:
+        return 0.0
+
+    corr_sum = 0.0
+    n_pairs = 0
+    for j, k in combinations(informative, 2):
+        cov = 0.0
+        for row in indicator_matrix:
+            cov += (row[j] - means[j]) * (row[k] - means[k])
+        denom = (variances[j] * variances[k]) ** 0.5
+        if denom > 1e-12:
+            corr_sum += cov / denom
+            n_pairs += 1
+
+    return corr_sum / n_pairs if n_pairs > 0 else 0.0
+
+
+def compute_species_tree_edge_detection_features(
+    species_tree: Tree,
+    gene_trees: List[Tree],
+) -> Dict[int, dict]:
+    """Compute per-edge WGD-detection features keyed by the same edge index
+    as ``compute_species_tree_edge_features`` (preorder, non-root nodes).
+
+    For each edge with clade S (the species below it), returns:
+        - dup_synchrony: mean pairwise correlation of "duplicated" indicators
+          across clade species (high -> whole clade duplicated together -> WGD).
+        - mirrored_sister_frac: fraction of gene trees where some subset of S
+          appears as two identical sister subtrees (autopolyploidy signature).
+        - copy_pair_div_mean: mean normalised copy-pair divergence across clade
+          species and gene trees (Ks-analogue; copies' typical age).
+        - copy_pair_div_cv: coefficient of variation of those divergences
+          (low -> synchronised ages -> WGD; high -> scattered -> gene dup).
+        - frac_clade_duplicated: mean fraction of clade species duplicated per
+          gene tree (abundance of duplication within the clade).
+    """
+    # Edge enumeration must match compute_species_tree_edge_features.
+    edge_nodes: List[Tuple[int, object]] = []
+    idx = 0
+    for node in species_tree.traverse("preorder"):
+        if node.is_root():
+            continue
+        edge_nodes.append((idx, node))
+        idx += 1
+
+    # Precompute per gene tree once.
+    indexed = [_index_gene_tree(gt) for gt in gene_trees]
+    n_trees = len(gene_trees)
+
+    result: Dict[int, dict] = {}
+    for edge_idx, node in edge_nodes:
+        clade = sorted(node.get_leaf_names())
+        clade_set = frozenset(clade)
+
+        # Per-tree duplication indicators (1 if species has >= 2 copies).
+        indicator_matrix: List[List[int]] = []
+        frac_dup_per_tree: List[float] = []
+        # Copy-pair divergences gathered across clade species and trees.
+        divergences: List[float] = []
+        mirrored_count = 0
+
+        for (leaf_nodes, root_dist, scale, dup_sets) in indexed:
+            present = [sp for sp in clade if sp in leaf_nodes]
+            if present:
+                row = []
+                n_dup = 0
+                for sp in present:
+                    copies = leaf_nodes[sp]
+                    is_dup = 1 if len(copies) >= 2 else 0
+                    row.append(is_dup)
+                    if is_dup:
+                        n_dup += 1
+                        d = _copy_pair_distance(copies, root_dist)
+                        if d is not None:
+                            divergences.append(d / scale)
+                indicator_matrix.append(row)
+                frac_dup_per_tree.append(n_dup / len(present))
+
+            # Mirrored-sister: any duplicated sister set contained in this clade.
+            if any(m and m <= clade_set for m in dup_sets):
+                mirrored_count += 1
+
+        dup_synchrony = _mean_pairwise_correlation(indicator_matrix)
+
+        if divergences:
+            n = len(divergences)
+            mean_div = sum(divergences) / n
+            var_div = sum((d - mean_div) ** 2 for d in divergences) / n
+            std_div = var_div ** 0.5
+            cv_div = (std_div / mean_div) if mean_div > 1e-12 else 0.0
+        else:
+            mean_div = 0.0
+            cv_div = 0.0
+
+        frac_clade_dup = (
+            sum(frac_dup_per_tree) / len(frac_dup_per_tree)
+            if frac_dup_per_tree else 0.0
+        )
+        mirrored_frac = mirrored_count / n_trees if n_trees > 0 else 0.0
+
+        result[edge_idx] = {
+            "dup_synchrony": dup_synchrony,
+            "mirrored_sister_frac": mirrored_frac,
+            "copy_pair_div_mean": mean_div,
+            "copy_pair_div_cv": cv_div,
+            "frac_clade_duplicated": frac_clade_dup,
         }
 
     return result
