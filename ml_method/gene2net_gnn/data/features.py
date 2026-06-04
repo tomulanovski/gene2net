@@ -409,21 +409,25 @@ def compute_species_tree_edge_detection_features(
         mirrored_count = 0
 
         for (leaf_nodes, root_dist, scale, dup_sets) in indexed:
-            present = [sp for sp in clade if sp in leaf_nodes]
-            if present:
-                row = []
-                n_dup = 0
-                for sp in present:
-                    copies = leaf_nodes[sp]
-                    is_dup = 1 if len(copies) >= 2 else 0
-                    row.append(is_dup)
-                    if is_dup:
-                        n_dup += 1
-                        d = _copy_pair_distance(copies, root_dist)
-                        if d is not None:
-                            divergences.append(d / scale)
+            # Fixed columns = full clade, so rows stay aligned even when gene
+            # loss makes some species absent in a tree (absent -> not duplicated).
+            row = []
+            n_present = 0
+            n_dup = 0
+            for sp in clade:
+                copies = leaf_nodes.get(sp, [])
+                if copies:
+                    n_present += 1
+                is_dup = 1 if len(copies) >= 2 else 0
+                row.append(is_dup)
+                if is_dup:
+                    n_dup += 1
+                    d = _copy_pair_distance(copies, root_dist)
+                    if d is not None:
+                        divergences.append(d / scale)
+            if n_present:
                 indicator_matrix.append(row)
-                frac_dup_per_tree.append(n_dup / len(present))
+                frac_dup_per_tree.append(n_dup / n_present)
 
             # Mirrored-sister: any duplicated sister set contained in this clade.
             if any(m and m <= clade_set for m in dup_sets):

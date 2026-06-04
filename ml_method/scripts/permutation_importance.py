@@ -131,6 +131,11 @@ def main():
         ef = s.species_tree_edge_features
         if ef is None or ef.shape[1] != expected_edge_dim:
             continue
+        # Phase 1 ignores gene trees — drop them to keep memory small.
+        s.gene_tree_edge_indices = []
+        s.gene_tree_species_ids = []
+        s.gene_tree_branch_lengths = []
+        s.gene_tree_leaf_masks = []
         samples.append(s)
     print(f"Val samples used: {len(samples)}")
 

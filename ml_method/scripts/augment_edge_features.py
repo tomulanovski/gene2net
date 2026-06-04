@@ -126,18 +126,26 @@ def main():
 
     done = 0
     skipped = 0
+    errored = 0
     for i in range(args.n_batch):
-        msg = augment_one(
-            args.index + i, args.mul_trees_dir, args.config,
-            replicate=args.replicate, max_gene_trees=args.max_gene_trees,
-        )
+        idx = args.index + i
+        try:
+            msg = augment_one(
+                idx, args.mul_trees_dir, args.config,
+                replicate=args.replicate, max_gene_trees=args.max_gene_trees,
+            )
+        except Exception as e:
+            # Never let one bad sample kill the whole batch task.
+            print(f"ERROR [{idx:04d}]: {type(e).__name__}: {e}")
+            errored += 1
+            continue
         print(msg)
         if msg.startswith("SKIP"):
             skipped += 1
         else:
             done += 1
 
-    print(f"\nDone: {done} augmented, {skipped} skipped")
+    print(f"\nDone: {done} augmented, {skipped} skipped, {errored} errored")
 
 
 if __name__ == "__main__":
