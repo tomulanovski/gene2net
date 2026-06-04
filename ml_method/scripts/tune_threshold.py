@@ -87,6 +87,7 @@ def main():
     with open(config_path) as f:
         config = yaml.safe_load(f)
     model_config = config.get("model", {})
+    expected_edge_dim = int(model_config.get("edge_feat_dim", 4))
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -122,6 +123,11 @@ def main():
             except Exception:
                 continue
             if sample.labels is None:
+                continue
+            # Skip samples whose edge features were never augmented to the
+            # expected dim (avoids the shape mismatch the model would raise).
+            ef = sample.species_tree_edge_features
+            if ef is None or ef.shape[1] != expected_edge_dim:
                 continue
             prepared = prepare_sample(sample, torch.device(device))
             if prepared is None:
