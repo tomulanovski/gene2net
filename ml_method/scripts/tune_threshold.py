@@ -158,7 +158,7 @@ def main():
     best_f1 = 0
     best_thresh = 0.5
 
-    for thresh in np.arange(0.05, 0.95, 0.05):
+    for thresh in np.arange(0.05, 0.99, 0.025):
         preds = (probs >= thresh).astype(int)
         tp = ((preds == 1) & (targets == 1)).sum()
         fp = ((preds == 1) & (targets == 0)).sum()
