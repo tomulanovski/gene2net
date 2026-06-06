@@ -17,7 +17,7 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from gene2net_gnn.data.dataset import Gene2NetSample
-from gene2net_gnn.model.species_gnn_v2 import SpeciesTreeGNNv2
+from gene2net_gnn.model.species_gnn_v2 import SpeciesTreeGNNv2, propagate_to_internal
 
 
 def focal_loss(logits, targets, alpha=0.25, gamma=2.0, class_weights=None):
@@ -56,11 +56,23 @@ def prepare_sample(sample: Gene2NetSample, device: torch.device):
             if edge_idx < n_edges and i < len(labels.mask) and not labels.mask[i]:
                 mask[edge_idx] = False
 
+    # Cache the (weight-independent) internal-node propagation once per sample.
+    # Computed on CPU the first time, reused every epoch — removes the BFS from
+    # the per-forward hot loop. Persists because samples are held in memory.
+    if getattr(sample, "_prop_cache", None) is None:
+        sample._prop_cache = propagate_to_internal(
+            sample.species_tree_node_features,
+            sample.species_tree_edge_index,
+            sample.species_tree_is_leaf,
+            sample.species_tree_node_features.shape[1],
+        )
+
     model_inputs = {
         "node_features": sample.species_tree_node_features.to(device),
         "edge_index": sample.species_tree_edge_index.to(device),
         "edge_features": sample.species_tree_edge_features.to(device),
         "is_leaf": sample.species_tree_is_leaf.to(device),
+        "node_features_propagated": sample._prop_cache.to(device),
     }
 
     return model_inputs, wgd_targets, mask

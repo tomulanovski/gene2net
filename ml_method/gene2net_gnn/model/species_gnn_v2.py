@@ -15,6 +15,65 @@ import torch.nn as nn
 from torch_geometric.nn import GATConv
 
 
+def propagate_to_internal(node_features, edge_index, is_leaf, node_feat_dim):
+    """Fill internal node features by averaging their descendant leaf features.
+
+    Weight-independent: depends only on the input features and tree structure,
+    so the result can be cached once per sample instead of recomputed every
+    forward pass. Shared by the model's method and the training data prep.
+
+    Uses iterative bottom-up propagation on the tree structure.
+    """
+    x = node_features.clone()
+    n_nodes = x.shape[0]
+
+    # edge_index has parent→child at even indices, child→parent at odd
+    parent_to_children = {}
+    child_to_parent = {}
+    for i in range(0, edge_index.shape[1], 2):
+        parent = edge_index[0, i].item()
+        child = edge_index[1, i].item()
+        parent_to_children.setdefault(parent, []).append(child)
+        child_to_parent[child] = parent
+
+    leaf_indices = is_leaf.nonzero(as_tuple=True)[0].tolist()
+    internal_indices = (~is_leaf).nonzero(as_tuple=True)[0].tolist()
+
+    descendant_sum = torch.zeros(n_nodes, node_feat_dim, device=x.device)
+    descendant_count = torch.zeros(n_nodes, 1, device=x.device)
+
+    for leaf_idx in leaf_indices:
+        descendant_sum[leaf_idx] = x[leaf_idx]
+        descendant_count[leaf_idx] = 1.0
+
+    processed = set(leaf_indices)
+    queue = list(set(child_to_parent.get(l, -1) for l in leaf_indices) - {-1})
+
+    while queue:
+        next_queue = []
+        for node in queue:
+            children = parent_to_children.get(node, [])
+            if all(c in processed for c in children):
+                for c in children:
+                    descendant_sum[node] += descendant_sum[c]
+                    descendant_count[node] += descendant_count[c]
+                processed.add(node)
+                parent = child_to_parent.get(node, -1)
+                if parent != -1 and parent not in processed:
+                    next_queue.append(parent)
+            else:
+                next_queue.append(node)
+        if set(next_queue) == set(queue):
+            break
+        queue = list(set(next_queue))
+
+    for idx in internal_indices:
+        if descendant_count[idx] > 0:
+            x[idx] = descendant_sum[idx] / descendant_count[idx]
+
+    return x
+
+
 class SpeciesTreeGNNv2(nn.Module):
     """GNN on species tree with hand-crafted features only.
 
@@ -82,73 +141,43 @@ class SpeciesTreeGNNv2(nn.Module):
             nn.Linear(hidden_dim, 2),
         )
 
-    def propagate_features_to_internal(self, node_features, edge_index, is_leaf):
-        """Fill internal node features by averaging their descendant leaf features.
+        # Partner head: scores edge j as the partner of WGD edge i from the
+        # ordered pair of edge embeddings [emb_i || emb_j]. The diagonal (j==i)
+        # represents autopolyploidy; an off-diagonal partner is allopolyploidy.
+        self.partner_head = nn.Sequential(
+            nn.Linear(2 * hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, 1),
+        )
 
-        This is critical: without this, internal nodes have zero features and
-        the GNN has no signal for internal edges (where many WGD events occur).
+    def compute_partner_scores(self, edge_emb):
+        """Score every ordered edge pair for the partner relationship.
 
-        Uses iterative bottom-up propagation on the tree structure.
+        Args:
+            edge_emb: [E, hidden_dim] per-edge embeddings (from forward).
+
+        Returns:
+            scores: [E, E] where scores[i, j] is the compatibility of edge j as
+            the partner of WGD edge i. Row i softmaxed over j (including j==i,
+            which means autopolyploidy) gives the partner distribution.
         """
-        x = node_features.clone()
-        n_nodes = x.shape[0]
+        n = edge_emb.shape[0]
+        ei = edge_emb.unsqueeze(1).expand(n, n, -1)   # [E, E, H]  (i along dim 0)
+        ej = edge_emb.unsqueeze(0).expand(n, n, -1)   # [E, E, H]  (j along dim 1)
+        pair = torch.cat([ei, ej], dim=-1)            # [E, E, 2H]
+        return self.partner_head(pair).squeeze(-1)    # [E, E]
 
-        # Build adjacency: for each node, find its children
-        # edge_index has parent→child at even indices, child→parent at odd
-        parent_to_children = {}
-        child_to_parent = {}
-        for i in range(0, edge_index.shape[1], 2):
-            parent = edge_index[0, i].item()
-            child = edge_index[1, i].item()
-            parent_to_children.setdefault(parent, []).append(child)
-            child_to_parent[child] = parent
+    def propagate_features_to_internal(self, node_features, edge_index, is_leaf):
+        """Fill internal node features by averaging descendant leaves.
 
-        # Find leaf nodes and internal nodes
-        leaf_indices = is_leaf.nonzero(as_tuple=True)[0].tolist()
-        internal_indices = (~is_leaf).nonzero(as_tuple=True)[0].tolist()
+        Thin wrapper over the shared module-level ``propagate_to_internal`` so
+        the same logic is reused by the cached data-prep path.
+        """
+        return propagate_to_internal(node_features, edge_index, is_leaf, self.node_feat_dim)
 
-        # Bottom-up: for each internal node, average all descendant leaf features
-        # Use BFS from leaves upward
-        descendant_sum = torch.zeros(n_nodes, self.node_feat_dim, device=x.device)
-        descendant_count = torch.zeros(n_nodes, 1, device=x.device)
-
-        # Initialize leaves
-        for leaf_idx in leaf_indices:
-            descendant_sum[leaf_idx] = x[leaf_idx]
-            descendant_count[leaf_idx] = 1.0
-
-        # Process bottom-up: nodes whose all children are already processed
-        processed = set(leaf_indices)
-        queue = list(set(child_to_parent.get(l, -1) for l in leaf_indices) - {-1})
-
-        while queue:
-            next_queue = []
-            for node in queue:
-                children = parent_to_children.get(node, [])
-                if all(c in processed for c in children):
-                    # Aggregate children
-                    for c in children:
-                        descendant_sum[node] += descendant_sum[c]
-                        descendant_count[node] += descendant_count[c]
-                    processed.add(node)
-                    parent = child_to_parent.get(node, -1)
-                    if parent != -1 and parent not in processed:
-                        next_queue.append(parent)
-                else:
-                    next_queue.append(node)
-            if set(next_queue) == set(queue):
-                # Prevent infinite loop on edge cases
-                break
-            queue = list(set(next_queue))
-
-        # Fill internal nodes with average of descendant leaves
-        for idx in internal_indices:
-            if descendant_count[idx] > 0:
-                x[idx] = descendant_sum[idx] / descendant_count[idx]
-
-        return x
-
-    def forward(self, node_features, edge_index, edge_features, is_leaf):
+    def forward(self, node_features, edge_index, edge_features, is_leaf,
+                node_features_propagated=None):
         """Forward pass.
 
         Args:
@@ -156,13 +185,20 @@ class SpeciesTreeGNNv2(nn.Module):
             edge_index: [2, 2E] undirected edges.
             edge_features: [E, edge_feat_dim] per undirected edge.
             is_leaf: [N] boolean mask.
+            node_features_propagated: optional [N, node_feat_dim] precomputed
+                internal-node propagation. When provided, skips the (weight-
+                independent) BFS — this is the cached fast path. Falls back to
+                computing it when None, so the model still works standalone.
 
         Returns:
             wgd_logits: [E, 2] binary WGD logits per edge.
             edge_embeddings: [E, hidden_dim] for potential downstream use.
         """
-        # Step 1: Propagate leaf features to internal nodes
-        x = self.propagate_features_to_internal(node_features, edge_index, is_leaf)
+        # Step 1: Propagate leaf features to internal nodes (cached if provided)
+        if node_features_propagated is not None:
+            x = node_features_propagated
+        else:
+            x = self.propagate_features_to_internal(node_features, edge_index, is_leaf)
 
         # Step 2: Project to hidden dim
         x = self.node_proj(x)
