@@ -20,8 +20,35 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from gene2net_gnn.data.dataset import Gene2NetSample
+from gene2net_gnn.data.features import (
+    species_coclustering_matrix,
+    edge_clades_species,
+    pairwise_partner_features,
+)
 from gene2net_gnn.model.species_gnn_v2 import SpeciesTreeGNNv2
 from gene2net_gnn.training.trainer_phase1 import prepare_sample, focal_loss
+
+
+def build_pairwise_feat(sample):
+    """Compute (and cache) the [E, E, 2] clade co-clustering pairwise feature.
+
+    Uses the preorder edge ordering (sample._edge_index_pre, set by
+    prepare_sample) so it aligns with the model's edge embeddings.
+    """
+    cached = getattr(sample, "_pairwise_feat", None)
+    if cached is not None:
+        return cached
+    n_species = len(sample.species_list)
+    C = species_coclustering_matrix(
+        sample.gene_tree_edge_indices, sample.gene_tree_species_ids,
+        sample.gene_tree_leaf_masks, n_species,
+    )
+    sp_to_idx = {sp: i for i, sp in enumerate(sample.species_list)}
+    node_species = [sp_to_idx.get(name, -1) for name in sample.species_tree_node_names]
+    clades = edge_clades_species(sample._edge_index_pre, sample.species_tree_is_leaf, node_species)
+    feat = pairwise_partner_features(C, clades)
+    sample._pairwise_feat = feat
+    return feat
 
 
 def build_partner_targets(sample: Gene2NetSample, n_edges: int, device: torch.device):
@@ -96,7 +123,8 @@ class ReconstructTrainer:
         pmask = partner_targets >= 0
         partner_loss = None
         if pmask.any():
-            partner_scores = self.model.compute_partner_scores(edge_emb)  # [E, E]
+            pairwise_feat = build_pairwise_feat(sample).to(self.device)
+            partner_scores = self.model.compute_partner_scores(edge_emb, pairwise_feat)  # [E, E]
             partner_loss = F.cross_entropy(partner_scores[pmask], partner_targets[pmask])
 
         return det_loss, partner_loss, wgd_logits, mask, wgd_targets
@@ -166,7 +194,8 @@ class ReconstructTrainer:
             partner_targets = build_partner_targets(sample, n_edges, self.device)
             pmask = partner_targets >= 0
             if pmask.any():
-                scores = self.model.compute_partner_scores(edge_emb)
+                pairwise_feat = build_pairwise_feat(sample).to(self.device)
+                scores = self.model.compute_partner_scores(edge_emb, pairwise_feat)
                 pred_partner = scores[pmask].argmax(dim=-1)
                 tgt = partner_targets[pmask]
                 idx = pmask.nonzero(as_tuple=True)[0]

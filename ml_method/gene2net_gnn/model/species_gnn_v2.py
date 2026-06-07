@@ -101,6 +101,7 @@ class SpeciesTreeGNNv2(nn.Module):
         n_gat_layers: int = 3,
         n_gat_heads: int = 4,
         dropout: float = 0.2,
+        partner_pair_feat_dim: int = 0,
     ):
         super().__init__()
         self.node_feat_dim = node_feat_dim
@@ -142,20 +143,25 @@ class SpeciesTreeGNNv2(nn.Module):
         )
 
         # Partner head: scores edge j as the partner of WGD edge i from the
-        # ordered pair of edge embeddings [emb_i || emb_j]. The diagonal (j==i)
-        # represents autopolyploidy; an off-diagonal partner is allopolyploidy.
+        # ordered pair of edge embeddings [emb_i || emb_j] plus an optional
+        # pairwise feature (e.g. species co-clustering between clade i and j,
+        # the allopolyploidy signal). The diagonal (j==i) is autopolyploidy.
+        self.partner_pair_feat_dim = partner_pair_feat_dim
         self.partner_head = nn.Sequential(
-            nn.Linear(2 * hidden_dim, hidden_dim),
+            nn.Linear(2 * hidden_dim + partner_pair_feat_dim, hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, 1),
         )
 
-    def compute_partner_scores(self, edge_emb):
+    def compute_partner_scores(self, edge_emb, pairwise_feat=None):
         """Score every ordered edge pair for the partner relationship.
 
         Args:
             edge_emb: [E, hidden_dim] per-edge embeddings (from forward).
+            pairwise_feat: optional [E, E, partner_pair_feat_dim] pairwise
+                features (e.g. clade i↔j co-clustering). Required when the model
+                was built with partner_pair_feat_dim > 0.
 
         Returns:
             scores: [E, E] where scores[i, j] is the compatibility of edge j as
@@ -165,7 +171,12 @@ class SpeciesTreeGNNv2(nn.Module):
         n = edge_emb.shape[0]
         ei = edge_emb.unsqueeze(1).expand(n, n, -1)   # [E, E, H]  (i along dim 0)
         ej = edge_emb.unsqueeze(0).expand(n, n, -1)   # [E, E, H]  (j along dim 1)
-        pair = torch.cat([ei, ej], dim=-1)            # [E, E, 2H]
+        parts = [ei, ej]
+        if self.partner_pair_feat_dim > 0:
+            if pairwise_feat is None:
+                pairwise_feat = torch.zeros(n, n, self.partner_pair_feat_dim, device=edge_emb.device)
+            parts.append(pairwise_feat)
+        pair = torch.cat(parts, dim=-1)               # [E, E, 2H + pair_dim]
         return self.partner_head(pair).squeeze(-1)    # [E, E]
 
     def propagate_features_to_internal(self, node_features, edge_index, is_leaf):

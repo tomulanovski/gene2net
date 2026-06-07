@@ -30,6 +30,7 @@ from ete3 import Tree
 from gene2net_gnn.data.dataset import Gene2NetSample
 from gene2net_gnn.data.tree_io import reorder_edge_index_preorder
 from gene2net_gnn.model.species_gnn_v2 import SpeciesTreeGNNv2, propagate_to_internal
+from gene2net_gnn.training.trainer_reconstruct import build_pairwise_feat
 from gene2net_gnn.inference.mul_tree_builder import build_mul_tree, WGDEvent
 
 
@@ -51,6 +52,7 @@ def preorder_edge_clades(tree):
 def model_inputs_for(sample, device):
     """Build model inputs with the corrected (preorder) edge ordering."""
     ei = reorder_edge_index_preorder(sample.species_tree_edge_index)
+    sample._edge_index_pre = ei  # used by build_pairwise_feat
     prop = propagate_to_internal(
         sample.species_tree_node_features, ei,
         sample.species_tree_is_leaf, sample.species_tree_node_features.shape[1],
@@ -72,6 +74,7 @@ def load_model(model_dir, model_config, device):
         n_gat_layers=int(model_config.get("n_gat_layers", 3)),
         n_gat_heads=int(model_config.get("n_gat_heads", 4)),
         dropout=float(model_config.get("dropout", 0.2)),
+        partner_pair_feat_dim=int(model_config.get("partner_pair_feat_dim", 2)),
     )
     for name in ["best_model.pt", "best_partner_model.pt"]:
         p = os.path.join(model_dir, name)
@@ -90,7 +93,8 @@ def reconstruct_one(model, sample, astral_tree, threshold, device):
     with torch.no_grad():
         wgd_logits, edge_emb = model(**inputs)
         wgd_prob = torch.softmax(wgd_logits, dim=-1)[:, 1]
-        partner_scores = model.compute_partner_scores(edge_emb)
+        pairwise_feat = build_pairwise_feat(sample).to(device)
+        partner_scores = model.compute_partner_scores(edge_emb, pairwise_feat)
 
     n_edges = min(len(clades), wgd_prob.shape[0])
     events = []

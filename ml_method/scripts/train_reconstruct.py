@@ -91,6 +91,7 @@ def main():
         n_gat_layers=int(model_config.get("n_gat_layers", 3)),
         n_gat_heads=int(model_config.get("n_gat_heads", 4)),
         dropout=float(model_config.get("dropout", 0.2)),
+        partner_pair_feat_dim=int(model_config.get("partner_pair_feat_dim", 2)),
     )
     if args.init_from and os.path.exists(args.init_from):
         # Warm-start shared weights from a Phase 1 model; partner head stays fresh.

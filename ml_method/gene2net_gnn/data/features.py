@@ -460,3 +460,97 @@ def compute_species_tree_edge_detection_features(
         }
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Pairwise partner feature (for the allopolyploidy partner head).
+#
+# Allo signal is between two edges: clade i's duplicated copy lands next to the
+# partner clade j, so in the gene trees species of clade i co-cluster with
+# species of clade j. We measure species co-clustering, then aggregate it to an
+# E x E pairwise feature. Computed from the stored gene-tree tensors (topology
+# only) so no repackaging is needed. Imports torch lazily to keep the rest of
+# this module dependency-light.
+# ---------------------------------------------------------------------------
+
+
+def species_coclustering_matrix(gene_tree_edge_indices, gene_tree_species_ids,
+                                gene_tree_leaf_masks, n_species):
+    """[n_species, n_species]: fraction of gene trees where two species appear
+    as direct sibling leaves (same parent, both leaves)."""
+    import torch
+    C = torch.zeros(n_species, n_species)
+    n_trees = len(gene_tree_edge_indices)
+    if n_trees == 0:
+        return C
+
+    for ei, sp, lm in zip(gene_tree_edge_indices, gene_tree_species_ids, gene_tree_leaf_masks):
+        # Group leaf-children species by parent (even-indexed parent->child edges).
+        parent_leaf_species = {}
+        for k in range(0, ei.shape[1], 2):
+            p = int(ei[0, k]); c = int(ei[1, k])
+            if bool(lm[c]) and int(sp[c]) >= 0:
+                parent_leaf_species.setdefault(p, set()).add(int(sp[c]))
+        seen = set()
+        for specs in parent_leaf_species.values():
+            specs = sorted(specs)
+            for a_i in range(len(specs)):
+                for b_i in range(a_i + 1, len(specs)):
+                    seen.add((specs[a_i], specs[b_i]))
+        for a, b in seen:
+            C[a, b] += 1.0
+            C[b, a] += 1.0
+
+    return C / n_trees
+
+
+def edge_clades_species(edge_index_pre, is_leaf, node_species):
+    """Species-index set below each preorder edge's child node.
+
+    edge_index_pre: reordered (preorder) edge_index.
+    node_species: list/tensor length N; species index for leaf nodes else -1.
+    """
+    children = {}
+    for k in range(0, edge_index_pre.shape[1], 2):
+        p = int(edge_index_pre[0, k]); c = int(edge_index_pre[1, k])
+        children.setdefault(p, []).append(c)
+
+    memo = {}
+
+    def below(n):
+        if n in memo:
+            return memo[n]
+        if bool(is_leaf[n]):
+            sidx = int(node_species[n])
+            s = {sidx} if sidx >= 0 else set()
+        else:
+            s = set()
+            for c in children.get(n, []):
+                s |= below(c)
+        memo[n] = s
+        return s
+
+    clades = []
+    for k in range(0, edge_index_pre.shape[1], 2):
+        clades.append(below(int(edge_index_pre[1, k])))
+    return clades
+
+
+def pairwise_partner_features(coclust, edge_clades):
+    """[E, E, 2]: mean and max species co-clustering between clade i and clade j."""
+    import torch
+    E = len(edge_clades)
+    feat = torch.zeros(E, E, 2)
+    idx_lists = [torch.tensor(sorted(c), dtype=torch.long) for c in edge_clades]
+    for i in range(E):
+        ci = idx_lists[i]
+        if ci.numel() == 0:
+            continue
+        for j in range(E):
+            cj = idx_lists[j]
+            if cj.numel() == 0:
+                continue
+            sub = coclust[ci][:, cj]
+            feat[i, j, 0] = sub.mean()
+            feat[i, j, 1] = sub.max()
+    return feat

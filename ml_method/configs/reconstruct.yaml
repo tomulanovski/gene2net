@@ -8,6 +8,7 @@ model:
   n_gat_layers: 3
   n_gat_heads: 4
   dropout: 0.2
+  partner_pair_feat_dim: 2    # clade i<->j co-clustering (mean, max) for the allo partner head
 
 training:
   lr: 0.001
