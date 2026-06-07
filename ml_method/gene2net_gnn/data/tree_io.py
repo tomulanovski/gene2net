@@ -62,3 +62,38 @@ def tree_to_edge_index(tree: Tree) -> Tuple[torch.Tensor, List[str]]:
 
     edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
     return edge_index, node_names
+
+
+def reorder_edge_index_preorder(edge_index: torch.Tensor) -> torch.Tensor:
+    """Reorder undirected edge pairs so the k-th pair is the k-th non-root node
+    in preorder — matching the order used by the edge features and labels.
+
+    ``tree_to_edge_index`` emits edges grouped by parent, which is a *different*
+    order than the preorder-by-child order used in compute_species_tree_edge_*
+    and the label extractor. That mismatch pairs each prediction's node
+    embeddings with the wrong edge's features/label. This realigns them.
+
+    Node 0 is the tree root (preorder index 0). Children order is recovered from
+    the even-indexed (parent->child) edges, which preserves the original order.
+    """
+    children = {}
+    for k in range(0, edge_index.shape[1], 2):
+        p = int(edge_index[0, k])
+        c = int(edge_index[1, k])
+        children.setdefault(p, []).append(c)
+
+    # Iterative preorder: emit (parent, child) the moment the child is visited.
+    order = []
+    stack = [(None, 0)]
+    while stack:
+        parent, node = stack.pop()
+        if parent is not None:
+            order.append((parent, node))
+        for c in reversed(children.get(node, [])):
+            stack.append((node, c))
+
+    new_edges = []
+    for p, c in order:
+        new_edges.append([p, c])
+        new_edges.append([c, p])
+    return torch.tensor(new_edges, dtype=edge_index.dtype).t().contiguous()
