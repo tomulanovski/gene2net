@@ -120,12 +120,12 @@ class ReconstructTrainer:
         )
 
         partner_targets = build_partner_targets(sample, n_edges, self.device)
-        pmask = partner_targets >= 0
+        query_idx = (partner_targets >= 0).nonzero(as_tuple=True)[0]
         partner_loss = None
-        if pmask.any():
+        if query_idx.numel() > 0:
             pairwise_feat = build_pairwise_feat(sample).to(self.device)
-            partner_scores = self.model.compute_partner_scores(edge_emb, pairwise_feat)  # [E, E]
-            partner_loss = F.cross_entropy(partner_scores[pmask], partner_targets[pmask])
+            scores = self.model.compute_partner_scores_rows(edge_emb, query_idx, pairwise_feat)  # [Q, E]
+            partner_loss = F.cross_entropy(scores, partner_targets[query_idx])
 
         return det_loss, partner_loss, wgd_logits, mask, wgd_targets
 
@@ -192,17 +192,16 @@ class ReconstructTrainer:
 
             # Partner accuracy on edges with a partner label
             partner_targets = build_partner_targets(sample, n_edges, self.device)
-            pmask = partner_targets >= 0
-            if pmask.any():
+            query_idx = (partner_targets >= 0).nonzero(as_tuple=True)[0]
+            if query_idx.numel() > 0:
                 pairwise_feat = build_pairwise_feat(sample).to(self.device)
-                scores = self.model.compute_partner_scores(edge_emb, pairwise_feat)
-                pred_partner = scores[pmask].argmax(dim=-1)
-                tgt = partner_targets[pmask]
-                idx = pmask.nonzero(as_tuple=True)[0]
+                scores = self.model.compute_partner_scores_rows(edge_emb, query_idx, pairwise_feat)
+                pred_partner = scores.argmax(dim=-1)
+                tgt = partner_targets[query_idx]
                 partner_correct += int((pred_partner == tgt).sum())
-                partner_total += int(pmask.sum())
+                partner_total += int(query_idx.numel())
                 # auto = target points to self; allo = target points elsewhere
-                is_auto = (tgt == idx)
+                is_auto = (tgt == query_idx)
                 auto_total += int(is_auto.sum())
                 allo_total += int((~is_auto).sum())
                 auto_correct += int(((pred_partner == tgt) & is_auto).sum())

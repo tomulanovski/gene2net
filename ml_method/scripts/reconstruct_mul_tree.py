@@ -93,25 +93,28 @@ def reconstruct_one(model, sample, astral_tree, threshold, device):
     with torch.no_grad():
         wgd_logits, edge_emb = model(**inputs)
         wgd_prob = torch.softmax(wgd_logits, dim=-1)[:, 1]
-        pairwise_feat = build_pairwise_feat(sample).to(device)
-        partner_scores = model.compute_partner_scores(edge_emb, pairwise_feat)
 
     n_edges = min(len(clades), wgd_prob.shape[0])
+    wgd_edges = [i for i in range(n_edges) if wgd_prob[i].item() >= threshold]
+
     events = []
     n_auto = n_allo = 0
-    for i in range(n_edges):
-        if wgd_prob[i].item() < threshold:
-            continue
-        j = int(partner_scores[i, :n_edges].argmax())
-        if j == i:
-            n_auto += 1
-        else:
-            n_allo += 1
-        events.append(WGDEvent(
-            wgd_edge_clade=clades[i],
-            partner_edge_clade=clades[j],
-            confidence=wgd_prob[i].item(),
-        ))
+    if wgd_edges:
+        pairwise_feat = build_pairwise_feat(sample).to(device)
+        query = torch.tensor(wgd_edges, dtype=torch.long, device=device)
+        with torch.no_grad():
+            rows = model.compute_partner_scores_rows(edge_emb, query, pairwise_feat)  # [Q, E]
+        for q, i in enumerate(wgd_edges):
+            j = int(rows[q, :n_edges].argmax())
+            if j == i:
+                n_auto += 1
+            else:
+                n_allo += 1
+            events.append(WGDEvent(
+                wgd_edge_clade=clades[i],
+                partner_edge_clade=clades[j],
+                confidence=wgd_prob[i].item(),
+            ))
 
     mul_tree = build_mul_tree(astral_tree, events)
     return mul_tree, n_auto, n_allo

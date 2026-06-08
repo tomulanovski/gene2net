@@ -179,6 +179,35 @@ class SpeciesTreeGNNv2(nn.Module):
         pair = torch.cat(parts, dim=-1)               # [E, E, 2H + pair_dim]
         return self.partner_head(pair).squeeze(-1)    # [E, E]
 
+    def compute_partner_scores_rows(self, edge_emb, query_idx, pairwise_feat=None):
+        """Partner scores for a subset of rows (the WGD edges) against all edges.
+
+        Equivalent to compute_partner_scores(...)[query_idx] but only builds the
+        Q x E rows that are actually used, avoiding the full E x E cost when only
+        a few edges are WGD.
+
+        Args:
+            edge_emb: [E, hidden_dim].
+            query_idx: [Q] long tensor of edge indices to score (the WGD edges).
+            pairwise_feat: optional [E, E, partner_pair_feat_dim].
+
+        Returns:
+            scores: [Q, E] — row q is the partner distribution for edge query_idx[q].
+        """
+        n = edge_emb.shape[0]
+        q = query_idx.shape[0]
+        ei = edge_emb[query_idx].unsqueeze(1).expand(q, n, -1)   # [Q, E, H]
+        ej = edge_emb.unsqueeze(0).expand(q, n, -1)              # [Q, E, H]
+        parts = [ei, ej]
+        if self.partner_pair_feat_dim > 0:
+            if pairwise_feat is None:
+                pf = torch.zeros(q, n, self.partner_pair_feat_dim, device=edge_emb.device)
+            else:
+                pf = pairwise_feat[query_idx]                    # [Q, E, pair_dim]
+            parts.append(pf)
+        pair = torch.cat(parts, dim=-1)                          # [Q, E, 2H + pair_dim]
+        return self.partner_head(pair).squeeze(-1)               # [Q, E]
+
     def propagate_features_to_internal(self, node_features, edge_index, is_leaf):
         """Fill internal node features by averaging descendant leaves.
 
