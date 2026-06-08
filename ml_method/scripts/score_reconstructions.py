@@ -100,9 +100,12 @@ def main():
     parser.add_argument("--out-csv", default=None)
     args = parser.parse_args()
 
+    # Any subdir that contains an output.tre (works for sample_NNNN and the
+    # network-named dirs from benchmark_networks.py).
     sample_dirs = sorted(
         d for d in os.listdir(args.recon_dir)
-        if os.path.isdir(os.path.join(args.recon_dir, d)) and d.startswith("sample_")
+        if os.path.isdir(os.path.join(args.recon_dir, d))
+        and os.path.exists(os.path.join(args.recon_dir, d, "output.tre"))
     )
     tasks = [(d, os.path.join(args.recon_dir, d), args.sim_scripts) for d in sample_dirs]
     print(f"Scoring {len(tasks)} samples with {args.workers} workers...")
