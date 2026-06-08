@@ -1,25 +1,30 @@
 """Build inferred MUL-trees from the reconstruction model's predictions.
 
-For each packaged sample: run the model, take WGD edges (prob >= threshold) and
-each one's partner edge (argmax of the partner head; self => auto, other => allo),
-map edges to clades, assemble a MUL-tree with build_mul_tree, and write it as
-Newick (output.tre) next to a copy of the ground-truth MUL-tree. The output
-directory is laid out so the existing compare_nets.py / one_stop_compare can
-score it (edit distance / Jaccard) against the ground truth.
+For each packaged sample: run the model once (the expensive part: forward +
+co-clustering), then decode at one or more thresholds (cheap), assembling a
+MUL-tree with build_mul_tree per threshold and writing it as Newick (output.tre)
+next to the ground-truth MUL-tree, laid out for compare_nets / one_stop_compare.
 
-Edge i of the model output corresponds to the i-th non-root node in preorder
-(the alignment fixed in prepare_sample / reorder_edge_index_preorder), so clades
-are enumerated the same way here.
+Speed:
+  - --workers parallelises across samples (CPU; the model is tiny and the
+    bottleneck is the per-sample co-clustering, so CPU workers scale well).
+  - --thresholds runs the model once and emits every threshold in one pass,
+    so a sweep doesn't re-run the model per threshold.
+
+Edge i of the model output is the i-th non-root node in preorder (alignment
+fixed in reorder_edge_index_preorder), so clades are enumerated the same way.
 
 Usage:
     python scripts/reconstruct_mul_tree.py \
-        --model-dir output/reconstruct_aligned \
+        --model-dir output/reconstruct_allo \
         --mul-trees-dir data/mul_trees_2k --config ils_low \
-        --start 0 --n 50 --threshold 0.85 --out-dir output/reconstruct_aligned/mul_trees/ils_low
+        --start 0 --n 50 --thresholds 0.5,0.7,0.9,0.95 --workers 8
+Output: <out-base>/t{T}/sample_NNNN/{output.tre,ground_truth.nex}
 """
 import argparse
 import os
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -33,6 +38,9 @@ from gene2net_gnn.model.species_gnn_v2 import SpeciesTreeGNNv2, propagate_to_int
 from gene2net_gnn.training.trainer_reconstruct import build_pairwise_feat
 from gene2net_gnn.inference.mul_tree_builder import build_mul_tree, WGDEvent
 
+# Per-worker globals (set by init_worker).
+_M = {}
+
 
 def load_astral_tree(path):
     with open(path) as f:
@@ -40,7 +48,6 @@ def load_astral_tree(path):
 
 
 def preorder_edge_clades(tree):
-    """edge i -> frozenset of leaf names below the i-th non-root preorder node."""
     clades = []
     for node in tree.traverse("preorder"):
         if node.is_root():
@@ -50,7 +57,6 @@ def preorder_edge_clades(tree):
 
 
 def model_inputs_for(sample, device):
-    """Build model inputs with the corrected (preorder) edge ordering."""
     ei = reorder_edge_index_preorder(sample.species_tree_edge_index)
     sample._edge_index_pre = ei  # used by build_pairwise_feat
     prop = propagate_to_internal(
@@ -80,30 +86,19 @@ def load_model(model_dir, model_config, device):
         p = os.path.join(model_dir, name)
         if os.path.exists(p):
             model.load_state_dict(torch.load(p, map_location=device, weights_only=True))
-            print(f"Loaded {name}")
             break
     return model.to(device).eval()
 
 
-def reconstruct_one(model, sample, astral_tree, threshold, device):
-    """Return (mul_tree, n_auto, n_allo) for one sample."""
-    clades = preorder_edge_clades(astral_tree)
-    inputs = model_inputs_for(sample, device)
-
-    with torch.no_grad():
-        wgd_logits, edge_emb = model(**inputs)
-        wgd_prob = torch.softmax(wgd_logits, dim=-1)[:, 1]
-
+def decode(model, astral_tree, clades, wgd_prob, edge_emb, pairwise_feat, threshold):
+    """Decode predictions into a MUL-tree at one threshold. Cheap (rows-only)."""
     n_edges = min(len(clades), wgd_prob.shape[0])
     wgd_edges = [i for i in range(n_edges) if wgd_prob[i].item() >= threshold]
-
     events = []
     n_auto = n_allo = 0
     if wgd_edges:
-        pairwise_feat = build_pairwise_feat(sample).to(device)
-        query = torch.tensor(wgd_edges, dtype=torch.long, device=device)
-        with torch.no_grad():
-            rows = model.compute_partner_scores_rows(edge_emb, query, pairwise_feat)  # [Q, E]
+        query = torch.tensor(wgd_edges, dtype=torch.long)
+        rows = model.compute_partner_scores_rows(edge_emb, query, pairwise_feat)  # [Q, E]
         for q, i in enumerate(wgd_edges):
             j = int(rows[q, :n_edges].argmax())
             if j == i:
@@ -115,70 +110,113 @@ def reconstruct_one(model, sample, astral_tree, threshold, device):
                 partner_edge_clade=clades[j],
                 confidence=wgd_prob[i].item(),
             ))
+    return build_mul_tree(astral_tree, events), n_auto, n_allo
 
-    mul_tree = build_mul_tree(astral_tree, events)
-    return mul_tree, n_auto, n_allo
+
+def init_worker(model_dir, model_config, mul_trees_dir, config, replicate,
+                thresholds, out_base, edge_feat_dim):
+    _M["model"] = load_model(model_dir, model_config, "cpu")
+    _M["mul_trees_dir"] = mul_trees_dir
+    _M["config"] = config
+    _M["replicate"] = replicate
+    _M["thresholds"] = thresholds
+    _M["out_base"] = out_base
+    _M["edge_feat_dim"] = edge_feat_dim
+
+
+def process_index(idx):
+    """Run the model once for sample idx and write a MUL-tree per threshold."""
+    idx_str = f"{idx:04d}"
+    mul_trees_dir = _M["mul_trees_dir"]; config = _M["config"]
+    sample_dir = os.path.join(mul_trees_dir, "training", config, f"sample_{idx_str}")
+    gt_path = os.path.join(mul_trees_dir, f"mul_tree_{idx_str}.nex")
+    astral_path = os.path.join(
+        mul_trees_dir, "simphy", config, idx_str,
+        f"replicate_{_M['replicate']}", "astral_species.tre",
+    )
+    if not (os.path.isdir(sample_dir) and os.path.exists(astral_path)):
+        return None
+
+    sample = Gene2NetSample.load(sample_dir)
+    ef = sample.species_tree_edge_features
+    if ef is None or ef.shape[1] != _M["edge_feat_dim"]:
+        return None
+
+    astral_tree = load_astral_tree(astral_path)
+    clades = preorder_edge_clades(astral_tree)
+    model = _M["model"]
+
+    with torch.no_grad():
+        inputs = model_inputs_for(sample, "cpu")
+        wgd_logits, edge_emb = model(**inputs)
+        wgd_prob = torch.softmax(wgd_logits, dim=-1)[:, 1]
+        pairwise_feat = build_pairwise_feat(sample)
+
+    gt = open(gt_path).read() if os.path.exists(gt_path) else None
+    summary = {}
+    for T in _M["thresholds"]:
+        mul_tree, n_auto, n_allo = decode(model, astral_tree, clades, wgd_prob,
+                                          edge_emb, pairwise_feat, T)
+        case_dir = os.path.join(_M["out_base"], f"t{T}", f"sample_{idx_str}")
+        os.makedirs(case_dir, exist_ok=True)
+        mul_tree.write(outfile=os.path.join(case_dir, "output.tre"), format=9)
+        if gt is not None:
+            with open(os.path.join(case_dir, "ground_truth.nex"), "w") as f:
+                f.write(gt)
+        summary[T] = (n_auto, n_allo)
+    return idx_str, summary
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-dir", required=True)
     parser.add_argument("--mul-trees-dir", required=True)
-    parser.add_argument("--config", required=True, help="config name, e.g. ils_low")
-    parser.add_argument("--model-config", default=None, help="YAML (default: configs/reconstruct.yaml)")
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--model-config", default=None)
     parser.add_argument("--start", type=int, default=0)
     parser.add_argument("--n", type=int, default=50)
     parser.add_argument("--replicate", type=int, default=1)
-    parser.add_argument("--threshold", type=float, default=0.85)
-    parser.add_argument("--out-dir", default=None)
+    parser.add_argument("--thresholds", default="0.5",
+                        help="comma-separated, e.g. 0.5,0.7,0.9,0.95")
+    parser.add_argument("--out-base", default=None,
+                        help="output base dir (default: <model-dir>/mul_trees/<config>)")
+    parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
 
     base_dir = os.path.join(os.path.dirname(__file__), "..")
     cfg_path = args.model_config or os.path.join(base_dir, "configs", "reconstruct.yaml")
     with open(cfg_path) as f:
         model_config = yaml.safe_load(f).get("model", {})
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    edge_feat_dim = int(model_config.get("edge_feat_dim", 9))
 
-    out_dir = args.out_dir or os.path.join(args.model_dir, "mul_trees", args.config)
-    os.makedirs(out_dir, exist_ok=True)
+    thresholds = [round(float(t), 4) for t in args.thresholds.split(",")]
+    out_base = args.out_base or os.path.join(args.model_dir, "mul_trees", args.config)
+    indices = list(range(args.start, args.start + args.n))
 
-    model = load_model(args.model_dir, model_config, device)
+    print(f"Reconstructing {len(indices)} samples x {len(thresholds)} thresholds "
+          f"{thresholds} with {args.workers} workers -> {out_base}")
 
-    done = skipped = 0
-    for idx in range(args.start, args.start + args.n):
-        idx_str = f"{idx:04d}"
-        sample_dir = os.path.join(args.mul_trees_dir, "training", args.config, f"sample_{idx_str}")
-        gt_path = os.path.join(args.mul_trees_dir, f"mul_tree_{idx_str}.nex")
-        astral_path = os.path.join(
-            args.mul_trees_dir, "simphy", args.config, idx_str,
-            f"replicate_{args.replicate}", "astral_species.tre",
-        )
-        if not (os.path.isdir(sample_dir) and os.path.exists(astral_path)):
-            skipped += 1
-            continue
+    init_args = (args.model_dir, model_config, args.mul_trees_dir, args.config,
+                 args.replicate, thresholds, out_base, edge_feat_dim)
 
-        sample = Gene2NetSample.load(sample_dir)
-        if sample.species_tree_edge_features is None or sample.species_tree_edge_features.shape[1] != int(model_config.get("edge_feat_dim", 9)):
-            skipped += 1
-            continue
+    done = 0
+    if args.workers <= 1:
+        init_worker(*init_args)
+        for idx in indices:
+            r = process_index(idx)
+            if r:
+                done += 1
+    else:
+        with ProcessPoolExecutor(max_workers=args.workers,
+                                 initializer=init_worker, initargs=init_args) as ex:
+            futures = [ex.submit(process_index, idx) for idx in indices]
+            for i, fut in enumerate(as_completed(futures), 1):
+                if fut.result():
+                    done += 1
+                if i % 25 == 0:
+                    print(f"  {i}/{len(indices)} done")
 
-        astral_tree = load_astral_tree(astral_path)
-        mul_tree, n_auto, n_allo = reconstruct_one(model, sample, astral_tree, args.threshold, device)
-
-        case_dir = os.path.join(out_dir, f"sample_{idx_str}")
-        os.makedirs(case_dir, exist_ok=True)
-        mul_tree.write(outfile=os.path.join(case_dir, "output.tre"), format=9)
-        # Copy ground truth alongside for the comparison tool.
-        if os.path.exists(gt_path):
-            with open(gt_path) as f:
-                gt = f.read()
-            with open(os.path.join(case_dir, "ground_truth.nex"), "w") as f:
-                f.write(gt)
-
-        print(f"[{idx_str}] events={n_auto+n_allo} (auto={n_auto}, allo={n_allo}) -> {case_dir}/output.tre")
-        done += 1
-
-    print(f"\nDone: {done} reconstructed, {skipped} skipped. Output under {out_dir}")
+    print(f"\nDone: {done} reconstructed. Output under {out_base}/t<threshold>/")
 
 
 if __name__ == "__main__":
