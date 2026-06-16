@@ -119,4 +119,27 @@ def select_event_edges(
             raise ValueError("bound_driven strategy requires copy_bound")
         return _cap(list(range(n_edges)), wgd_probs, clades, copy_bound)
 
+    if strategy in ("clade_collapse", "clade_collapse_cap"):
+        # The model flags individual polyploid species (tips). When a set of
+        # flagged tips forms a clade, the true event is one duplication at their
+        # common ancestor — so place a single event at the most ancestral edge
+        # whose clade is entirely flagged. Greedy maximal-clade cover: take the
+        # largest all-flagged clade edges first; remaining flagged tips stay as
+        # their own events.
+        flagged_species = set()
+        for i in flagged:
+            flagged_species |= clades[i]
+        candidates = [i for i in range(n_edges) if clades[i] <= flagged_species]
+        candidates.sort(key=lambda i: -len(clades[i]))  # largest clades first
+        selected, covered = [], set()
+        for i in candidates:
+            if not (clades[i] & covered):
+                selected.append(i)
+                covered |= clades[i]
+        if strategy == "clade_collapse_cap":
+            if copy_bound is None:
+                raise ValueError("clade_collapse_cap strategy requires copy_bound")
+            selected = _cap(selected, wgd_probs, clades, copy_bound)
+        return selected
+
     raise ValueError(f"Unknown strategy: {strategy}")
