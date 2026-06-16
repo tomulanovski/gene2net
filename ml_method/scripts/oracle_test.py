@@ -31,7 +31,27 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from ete3 import Tree
 
 from gene2net_gnn.data.label_extractor import decompose_mul_tree
-from gene2net_gnn.inference.mul_tree_builder import build_mul_tree
+from gene2net_gnn.data.dataset import Gene2NetSample
+from gene2net_gnn.inference.mul_tree_builder import build_mul_tree, WGDEvent
+
+
+def preorder_clades(tree):
+    return [frozenset(n.get_leaf_names()) for n in tree.traverse("preorder") if not n.is_root()]
+
+
+def events_from_labels(labels, clades):
+    """True events expressed as ASTRAL edges (the labels) -> WGDEvents using the
+    ASTRAL clades. These always build cleanly (no exact-match dropping)."""
+    events = []
+    mask = labels.mask or []
+    for k in range(len(labels.wgd_edges)):
+        if k < len(mask) and not mask[k]:
+            continue
+        w = labels.wgd_edges[k]
+        p = labels.partner_edges[k] if k < len(labels.partner_edges) else w
+        if 0 <= w < len(clades) and 0 <= p < len(clades):
+            events.append(WGDEvent(wgd_edge_clade=clades[w], partner_edge_clade=clades[p], confidence=1.0))
+    return events
 
 
 def load_nexus_tree(path):
@@ -51,6 +71,9 @@ def main():
     parser.add_argument("--n", type=int, default=50)
     parser.add_argument("--replicate", type=int, default=1)
     parser.add_argument("--backbone", choices=["true", "astral"], default="true")
+    parser.add_argument("--events", choices=["decompose", "labels"], default="decompose",
+                        help="decompose: true-tree clades (exact match). labels: true events "
+                             "mapped to ASTRAL edges (the fair ceiling; implies --backbone astral).")
     parser.add_argument("--out-dir", required=True)
     args = parser.parse_args()
 
@@ -63,23 +86,34 @@ def main():
             skipped += 1
             continue
 
-        if args.backbone == "true":
-            bb_path = os.path.join(args.mul_trees_dir, f"species_tree_{idx_str}.nex")
-            if not os.path.exists(bb_path):
-                skipped += 1
-                continue
-            backbone = load_nexus_tree(bb_path)
-        else:
-            bb_path = os.path.join(args.mul_trees_dir, "simphy", args.config, idx_str,
-                                   f"replicate_{args.replicate}", "astral_species.tre")
-            if not os.path.exists(bb_path):
-                skipped += 1
-                continue
-            backbone = Tree(open(bb_path).read().strip(), format=1)
-
         gt_mul = load_nexus_tree(mul_path)
         try:
-            events = decompose_mul_tree(gt_mul)
+            if args.events == "labels":
+                # Fair ceiling: true events mapped to ASTRAL edges, built on ASTRAL.
+                astral_path = os.path.join(args.mul_trees_dir, "simphy", args.config, idx_str,
+                                           f"replicate_{args.replicate}", "astral_species.tre")
+                sample_dir = os.path.join(args.mul_trees_dir, "training", args.config, f"sample_{idx_str}")
+                if not (os.path.exists(astral_path) and os.path.isdir(sample_dir)):
+                    skipped += 1
+                    continue
+                backbone = Tree(open(astral_path).read().strip(), format=1)
+                sample = Gene2NetSample.load(sample_dir)
+                if sample.labels is None:
+                    skipped += 1
+                    continue
+                events = events_from_labels(sample.labels, preorder_clades(backbone))
+            else:
+                if args.backbone == "true":
+                    bb_path = os.path.join(args.mul_trees_dir, f"species_tree_{idx_str}.nex")
+                else:
+                    bb_path = os.path.join(args.mul_trees_dir, "simphy", args.config, idx_str,
+                                           f"replicate_{args.replicate}", "astral_species.tre")
+                if not os.path.exists(bb_path):
+                    skipped += 1
+                    continue
+                backbone = (load_nexus_tree(bb_path) if args.backbone == "true"
+                            else Tree(open(bb_path).read().strip(), format=1))
+                events = decompose_mul_tree(gt_mul)
             oracle = build_mul_tree(backbone, events)
         except Exception as e:
             print(f"  SKIP [{idx_str}]: {type(e).__name__}: {e}")
