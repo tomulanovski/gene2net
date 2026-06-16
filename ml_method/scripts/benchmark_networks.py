@@ -23,9 +23,12 @@ import yaml
 from ete3 import Tree
 
 from gene2net_gnn.data.dataset import Gene2NetSample
-from gene2net_gnn.inference.mul_tree_builder import build_mul_tree
+from gene2net_gnn.inference.mul_tree_builder import build_mul_tree, WGDEvent
+from gene2net_gnn.inference.build_strategies import (
+    select_event_edges, build_parent_edge_map, infer_copy_bound,
+)
 from scripts.reconstruct_mul_tree import (
-    load_model, model_inputs_for, preorder_edge_clades, decode, build_pairwise_feat,
+    load_model, model_inputs_for, preorder_edge_clades, build_pairwise_feat,
 )
 
 NETWORKS = [
@@ -83,19 +86,50 @@ def load_gene_trees(path, max_trees=500):
     return trees
 
 
+def build_for_strategy(model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
+                       strategy, threshold, parent_edge, copy_bound):
+    """Select events for a strategy, resolve partners, build the MUL-tree."""
+    event_edges = select_event_edges(strategy, wgd_list, threshold, parent_edge, clades, copy_bound)
+    events = []
+    n_auto = n_allo = 0
+    if event_edges:
+        query = torch.tensor(event_edges, dtype=torch.long)
+        rows = model.compute_partner_scores_rows(edge_emb, query, pairwise_feat)
+        n_edges = len(clades)
+        for q, i in enumerate(event_edges):
+            j = int(rows[q, :n_edges].argmax())
+            # Invalid partner (overlaps the WGD clade) -> treat as autopolyploidy.
+            if j != i and (clades[j] & clades[i]):
+                j = i
+            if j == i:
+                n_auto += 1
+            else:
+                n_allo += 1
+            events.append(WGDEvent(
+                wgd_edge_clade=clades[i], partner_edge_clade=clades[j],
+                confidence=float(wgd_list[i]),
+            ))
+    mul_tree = build_mul_tree(astral_tree, events)
+    return mul_tree, n_auto, n_allo
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-dir", required=True)
     parser.add_argument("--config", required=True, help="e.g. conf_ils_low_10M")
     parser.add_argument("--replicate", type=int, default=1)
     parser.add_argument("--threshold", type=float, default=0.9)
+    parser.add_argument("--strategies", default="raw,collapse,collapse_cap,bound_driven",
+                        help="comma-separated build strategies to generate")
     parser.add_argument("--model-config", default=None)
     parser.add_argument("--sim-base",
                         default="/groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations")
     parser.add_argument("--networks-dir",
                         default="/groups/itay_mayrose/tomulanovski/gene2net/simulations/networks")
     parser.add_argument("--max-gene-trees", type=int, default=500)
-    parser.add_argument("--out-dir", default=None)
+    parser.add_argument("--out-base", default=None,
+                        help="output base (default: <model-dir>/benchmark/<config>); "
+                             "each strategy writes to <out-base>/<strategy>/<network>/")
     args = parser.parse_args()
 
     base_dir = os.path.join(os.path.dirname(__file__), "..")
@@ -103,8 +137,8 @@ def main():
     with open(cfg_path) as f:
         model_config = yaml.safe_load(f).get("model", {})
     device = "cpu"
-    out_dir = args.out_dir or os.path.join(args.model_dir, "benchmark", args.config)
-    os.makedirs(out_dir, exist_ok=True)
+    strategies = [s.strip() for s in args.strategies.split(",")]
+    out_base = args.out_base or os.path.join(args.model_dir, "benchmark", args.config)
 
     model = load_model(args.model_dir, model_config, device)
 
@@ -129,34 +163,44 @@ def main():
             species_tree=astral_tree, gene_trees=gene_trees, species_list=species_list,
         )
         clades = preorder_edge_clades(astral_tree)
+        parent_edge = build_parent_edge_map(astral_tree)
+        copy_bound = infer_copy_bound(gene_trees)
+        inv_map = load_inverse_taxa_map(os.path.join(rep_dir, "taxa_map.txt"))
+
+        # One inference pass for the network.
         with torch.no_grad():
             inputs = model_inputs_for(sample, device)
             wgd_logits, edge_emb = model(**inputs)
             wgd_prob = torch.softmax(wgd_logits, dim=-1)[:, 1]
             pairwise_feat = build_pairwise_feat(sample)
-        mul_tree, n_auto, n_allo = decode(
-            model, astral_tree, clades, wgd_prob, edge_emb, pairwise_feat, args.threshold
-        )
+        wgd_list = wgd_prob.tolist()
 
-        # Reverse substring fixes so leaf names match the ground-truth network.
-        inv_map = load_inverse_taxa_map(os.path.join(rep_dir, "taxa_map.txt"))
-        rename_leaves(mul_tree, inv_map)
+        # Build + write one MUL-tree per strategy.
+        counts = []
+        for strat in strategies:
+            mul_tree, n_auto, n_allo = build_for_strategy(
+                model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
+                strat, args.threshold, parent_edge, copy_bound,
+            )
+            rename_leaves(mul_tree, inv_map)
+            case_dir = os.path.join(out_base, strat, net)
+            os.makedirs(case_dir, exist_ok=True)
+            mul_tree.write(outfile=os.path.join(case_dir, "output.tre"), format=9)
+            if os.path.exists(gt_path):
+                with open(gt_path) as f:
+                    gt = f.read()
+                with open(os.path.join(case_dir, "ground_truth.nex"), "w") as f:
+                    f.write(gt)
+            counts.append(f"{strat}={n_auto + n_allo}")
 
-        case_dir = os.path.join(out_dir, net)
-        os.makedirs(case_dir, exist_ok=True)
-        mul_tree.write(outfile=os.path.join(case_dir, "output.tre"), format=9)
-        if os.path.exists(gt_path):
-            with open(gt_path) as f:
-                gt = f.read()
-            with open(os.path.join(case_dir, "ground_truth.nex"), "w") as f:
-                f.write(gt)
-
-        print(f"[{net}] events={n_auto + n_allo} (auto={n_auto}, allo={n_allo}) -> {case_dir}/output.tre")
+        print(f"[{net}] events per strategy: {', '.join(counts)}")
         done += 1
 
-    print(f"\nDone: {done} networks reconstructed, {skipped} skipped. Output under {out_dir}")
-    print("Score with: python scripts/score_reconstructions.py "
-          f"--recon-dir {out_dir} --workers 8   (in the gene2net env)")
+    print(f"\nDone: {done} networks x {len(strategies)} strategies, {skipped} skipped.")
+    print(f"Output under {out_base}/<strategy>/")
+    print("Score each strategy (gene2net env):")
+    for strat in strategies:
+        print(f"  python scripts/score_reconstructions.py --recon-dir {out_base}/{strat} --workers 8")
 
 
 if __name__ == "__main__":
