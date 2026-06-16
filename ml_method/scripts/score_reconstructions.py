@@ -18,9 +18,9 @@ Usage:
         --recon-dir output/reconstruct_allo/mul_trees/ils_low_t09 --workers 8
 """
 import argparse
+import multiprocessing as mp
 import os
 import sys
-from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import pandas as pd
 
@@ -91,12 +91,39 @@ def score_one(task):
         return {"sample": name, "error": f"{type(e).__name__}: {e}"}
 
 
+def _score_worker(task, q):
+    q.put(score_one(task))
+
+
+def score_isolated(task, timeout):
+    """Score one sample in a disposable process with a timeout.
+
+    graph_edit_distance can hang or OOM on malformed networks (>2-parent
+    reticulations from over-ploidy); isolating each sample means one blow-up is
+    skipped instead of killing the whole run.
+    """
+    q = mp.Queue()
+    p = mp.Process(target=_score_worker, args=(task, q))
+    p.start()
+    p.join(timeout)
+    if p.is_alive():
+        p.terminate()
+        p.join()
+        return {"sample": task[0], "error": "timeout"}
+    try:
+        return q.get_nowait()
+    except Exception:
+        return {"sample": task[0], "error": "crashed (worker died)"}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--recon-dir", required=True)
     parser.add_argument("--sim-scripts",
                         default="/groups/itay_mayrose/tomulanovski/gene2net/simulations/scripts")
-    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--workers", type=int, default=4)  # kept for CLI compat; scoring is isolated/sequential
+    parser.add_argument("--timeout", type=int, default=120,
+                        help="per-sample seconds before skipping a hung/blown-up comparison")
     parser.add_argument("--out-csv", default=None)
     args = parser.parse_args()
 
@@ -108,23 +135,15 @@ def main():
         and os.path.exists(os.path.join(args.recon_dir, d, "output.tre"))
     )
     tasks = [(d, os.path.join(args.recon_dir, d), args.sim_scripts) for d in sample_dirs]
-    print(f"Scoring {len(tasks)} samples with {args.workers} workers...")
+    print(f"Scoring {len(tasks)} samples (isolated, timeout {args.timeout}s)...")
 
     rows = []
-    if args.workers <= 1:
-        for t in tasks:
-            r = score_one(t)
-            if r:
-                rows.append(r)
-    else:
-        with ProcessPoolExecutor(max_workers=args.workers) as ex:
-            futures = {ex.submit(score_one, t): t[0] for t in tasks}
-            for i, fut in enumerate(as_completed(futures), 1):
-                r = fut.result()
-                if r:
-                    rows.append(r)
-                if i % 25 == 0:
-                    print(f"  {i}/{len(tasks)} done")
+    for i, t in enumerate(tasks, 1):
+        r = score_isolated(t, args.timeout)
+        if r:
+            rows.append(r)
+        if i % 10 == 0:
+            print(f"  {i}/{len(tasks)} done")
 
     ok = [r for r in rows if "error" not in r]
     errs = [r for r in rows if "error" in r]
