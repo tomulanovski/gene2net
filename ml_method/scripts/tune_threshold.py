@@ -52,7 +52,15 @@ def load_model_and_prepare_fn(model_type, model_config, model_dir, device):
     for model_name in ["best_f1_model.pt", "best_model.pt"]:
         model_path = os.path.join(model_dir, model_name)
         if os.path.exists(model_path):
-            model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+            # strict=False: detection-only checkpoints (phase1_feat9_full) lack the
+            # partner_head keys the model class now always builds; that head is
+            # unused for threshold tuning, so ignore the missing keys.
+            missing, unexpected = model.load_state_dict(
+                torch.load(model_path, map_location=device, weights_only=True),
+                strict=False,
+            )
+            if missing:
+                print(f"  (ignoring {len(missing)} missing keys, e.g. {missing[0]})")
             print(f"Loaded {model_name}")
             break
     else:

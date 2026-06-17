@@ -174,7 +174,10 @@ def main():
     for name in ["best_f1_model.pt", "best_model.pt"]:
         p = os.path.join(args.model_dir, name)
         if os.path.exists(p):
-            model.load_state_dict(torch.load(p, map_location=device, weights_only=True))
+            # strict=False: detection-only checkpoints lack the partner_head keys
+            # the model class now builds; that head is unused here.
+            model.load_state_dict(
+                torch.load(p, map_location=device, weights_only=True), strict=False)
             print(f"Loaded {name}")
             break
     model = model.to(device).eval()
