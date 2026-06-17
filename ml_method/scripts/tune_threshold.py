@@ -157,12 +157,13 @@ def main():
 
     best_f1 = 0
     best_thresh = 0.5
+    table_rows = []  # keep every row so the full TP/FP/FN sweep is persisted
 
     for thresh in np.arange(0.05, 0.99, 0.025):
         preds = (probs >= thresh).astype(int)
-        tp = ((preds == 1) & (targets == 1)).sum()
-        fp = ((preds == 1) & (targets == 0)).sum()
-        fn = ((preds == 0) & (targets == 1)).sum()
+        tp = int(((preds == 1) & (targets == 1)).sum())
+        fp = int(((preds == 1) & (targets == 0)).sum())
+        fn = int(((preds == 0) & (targets == 1)).sum())
 
         prec = tp / max(tp + fp, 1)
         rec = tp / max(tp + fn, 1)
@@ -170,6 +171,7 @@ def main():
 
         marker = " <-- best" if f1 > best_f1 else ""
         print(f"{thresh:>10.2f} | {prec:>6.3f} | {rec:>6.3f} | {f1:>6.3f} | {tp:>6} | {fp:>6} | {fn:>6}{marker}")
+        table_rows.append((float(thresh), prec, rec, f1, tp, fp, fn))
 
         if f1 > best_f1:
             best_f1 = f1
@@ -177,11 +179,19 @@ def main():
 
     print(f"\nBest threshold: {best_thresh:.2f} → F1={best_f1:.3f}")
 
-    # Save results
+    # Save results: best line plus the full per-threshold table (so FP/FN at any
+    # operating point is recoverable without re-running).
     out_path = os.path.join(model_dir, "threshold_tuning.txt")
     with open(out_path, "w") as f:
         f.write(f"Best threshold: {best_thresh}\n")
         f.write(f"Best F1: {best_f1}\n")
+        f.write(f"Total edges: {len(targets)}  Positive: {int(targets.sum())} "
+                f"({100*targets.mean():.2f}%)\n\n")
+        f.write(f"{'thresh':>8} | {'prec':>6} | {'rec':>6} | {'f1':>6} | "
+                f"{'TP':>6} | {'FP':>6} | {'FN':>6}\n")
+        for thresh, prec, rec, f1, tp, fp, fn in table_rows:
+            f.write(f"{thresh:>8.2f} | {prec:>6.3f} | {rec:>6.3f} | {f1:>6.3f} | "
+                    f"{tp:>6} | {fp:>6} | {fn:>6}\n")
     print(f"Saved to {out_path}")
 
 

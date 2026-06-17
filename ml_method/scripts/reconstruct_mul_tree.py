@@ -47,6 +47,15 @@ def load_astral_tree(path):
         return Tree(f.read().strip(), format=1)
 
 
+def load_nexus_tree(path):
+    """Load the true backbone (species_tree_NNNN.nex) from a NEXUS file."""
+    for line in open(path).read().split("\n"):
+        line = line.strip()
+        if line.lower().startswith("tree") and "=" in line:
+            return Tree(line.split("=", 1)[1].strip(), format=1)
+    raise ValueError(f"No tree found in {path}")
+
+
 def preorder_edge_clades(tree):
     clades = []
     for node in tree.traverse("preorder"):
@@ -54,6 +63,25 @@ def preorder_edge_clades(tree):
             continue
         clades.append(frozenset(node.get_leaf_names()))
     return clades
+
+
+def map_clades_by_jaccard(src_clades, dst_clades):
+    """Map each source (ASTRAL) clade to the best-Jaccard destination (true
+    backbone) clade. Used to place predictions made on the ASTRAL topology onto
+    the true backbone, so we can score 'true backbone + model events' and isolate
+    the ASTRAL-backbone cost from the prediction cost."""
+    mapped = []
+    for c in src_clades:
+        best, best_j = c, -1.0
+        for d in dst_clades:
+            inter = len(c & d)
+            if inter == 0:
+                continue
+            j = inter / len(c | d)
+            if j > best_j:
+                best, best_j = d, j
+        mapped.append(best)
+    return mapped
 
 
 def model_inputs_for(sample, device):
@@ -90,8 +118,18 @@ def load_model(model_dir, model_config, device):
     return model.to(device).eval()
 
 
-def decode(model, astral_tree, clades, wgd_prob, edge_emb, pairwise_feat, threshold):
-    """Decode predictions into a MUL-tree at one threshold. Cheap (rows-only)."""
+def decode(model, build_tree, clades, wgd_prob, edge_emb, pairwise_feat, threshold,
+           event_clades=None):
+    """Decode predictions into a MUL-tree at one threshold. Cheap (rows-only).
+
+    `clades` aligns with the model edges (ASTRAL topology) and is used for
+    indexing/partner argmax. `event_clades` is what actually goes into the
+    WGDEvent and must exist in `build_tree`; it defaults to `clades` (build on
+    ASTRAL) but is the Jaccard-mapped true-backbone clades when building on the
+    true backbone.
+    """
+    if event_clades is None:
+        event_clades = clades
     n_edges = min(len(clades), wgd_prob.shape[0])
     wgd_edges = [i for i in range(n_edges) if wgd_prob[i].item() >= threshold]
     events = []
@@ -106,15 +144,15 @@ def decode(model, astral_tree, clades, wgd_prob, edge_emb, pairwise_feat, thresh
             else:
                 n_allo += 1
             events.append(WGDEvent(
-                wgd_edge_clade=clades[i],
-                partner_edge_clade=clades[j],
+                wgd_edge_clade=event_clades[i],
+                partner_edge_clade=event_clades[j],
                 confidence=wgd_prob[i].item(),
             ))
-    return build_mul_tree(astral_tree, events), n_auto, n_allo
+    return build_mul_tree(build_tree, events), n_auto, n_allo
 
 
 def init_worker(model_dir, model_config, mul_trees_dir, config, replicate,
-                thresholds, out_base, edge_feat_dim):
+                thresholds, out_base, edge_feat_dim, backbone):
     _M["model"] = load_model(model_dir, model_config, "cpu")
     _M["mul_trees_dir"] = mul_trees_dir
     _M["config"] = config
@@ -122,6 +160,7 @@ def init_worker(model_dir, model_config, mul_trees_dir, config, replicate,
     _M["thresholds"] = thresholds
     _M["out_base"] = out_base
     _M["edge_feat_dim"] = edge_feat_dim
+    _M["backbone"] = backbone
 
 
 def process_index(idx):
@@ -146,6 +185,20 @@ def process_index(idx):
     clades = preorder_edge_clades(astral_tree)
     model = _M["model"]
 
+    # Choose the backbone to build on. 'astral' (default) is the real pipeline.
+    # 'true' builds the model's predicted events on the true diploid backbone
+    # (species_tree_NNNN.nex), mapping ASTRAL clades to true-backbone clades by
+    # Jaccard, to isolate the ASTRAL-backbone cost from the prediction cost.
+    if _M["backbone"] == "true":
+        bb_path = os.path.join(mul_trees_dir, f"species_tree_{idx_str}.nex")
+        if not os.path.exists(bb_path):
+            return None
+        build_tree = load_nexus_tree(bb_path)
+        event_clades = map_clades_by_jaccard(clades, preorder_edge_clades(build_tree))
+    else:
+        build_tree = astral_tree
+        event_clades = clades
+
     with torch.no_grad():
         inputs = model_inputs_for(sample, "cpu")
         wgd_logits, edge_emb = model(**inputs)
@@ -155,8 +208,9 @@ def process_index(idx):
     gt = open(gt_path).read() if os.path.exists(gt_path) else None
     summary = {}
     for T in _M["thresholds"]:
-        mul_tree, n_auto, n_allo = decode(model, astral_tree, clades, wgd_prob,
-                                          edge_emb, pairwise_feat, T)
+        mul_tree, n_auto, n_allo = decode(model, build_tree, clades, wgd_prob,
+                                          edge_emb, pairwise_feat, T,
+                                          event_clades=event_clades)
         case_dir = os.path.join(_M["out_base"], f"t{T}", f"sample_{idx_str}")
         os.makedirs(case_dir, exist_ok=True)
         mul_tree.write(outfile=os.path.join(case_dir, "output.tre"), format=9)
@@ -180,6 +234,10 @@ def main():
                         help="comma-separated, e.g. 0.5,0.7,0.9,0.95")
     parser.add_argument("--out-base", default=None,
                         help="output base dir (default: <model-dir>/mul_trees/<config>)")
+    parser.add_argument("--backbone", choices=["astral", "true"], default="astral",
+                        help="astral: real pipeline. true: build predicted events on "
+                             "the true diploid backbone (species_tree_NNNN.nex) to "
+                             "isolate the ASTRAL-backbone cost.")
     parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
 
@@ -194,10 +252,11 @@ def main():
     indices = list(range(args.start, args.start + args.n))
 
     print(f"Reconstructing {len(indices)} samples x {len(thresholds)} thresholds "
-          f"{thresholds} with {args.workers} workers -> {out_base}")
+          f"{thresholds} on the {args.backbone} backbone with {args.workers} "
+          f"workers -> {out_base}")
 
     init_args = (args.model_dir, model_config, args.mul_trees_dir, args.config,
-                 args.replicate, thresholds, out_base, edge_feat_dim)
+                 args.replicate, thresholds, out_base, edge_feat_dim, args.backbone)
 
     done = 0
     if args.workers <= 1:
