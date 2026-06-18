@@ -10,6 +10,16 @@ reconstruction measures:
                  (flagged edge whose parent edge is not flagged). Fixes
                  over-fragmentation: a clade-spanning event becomes ONE clade
                  duplication -> folds to one reticulation.
+  dedup        - drop any flagged edge whose clade is a strict subset of another
+                 flagged edge's clade, keeping only the most ancestral flagged
+                 edge in each containment hierarchy. Motivated by FP analysis:
+                 ~87% of false positives are tips sitting INSIDE a truly-
+                 duplicated (flagged) clade — redundant with the ancestral event.
+                 Unlike collapse this uses clade containment, not parent-
+                 adjacency, so it catches descendants even across an unflagged
+                 intermediate edge. More conservative than clade_collapse: it
+                 never invents an ancestral event or merges separate flagged edges.
+  dedup_cap    - dedup, then cap.
   cap          - flagged edges, but cap duplications per species at the inferred
                  copy bound (fixes genuine over-ploidy). Confidence-ordered.
   collapse_cap - collapse, then cap.
@@ -102,6 +112,18 @@ def select_event_edges(
     if strategy == "collapse":
         # block tops: a flagged edge whose parent edge is not flagged
         return [i for i in flagged if parent_edge[i] not in flagged_set]
+
+    if strategy in ("dedup", "dedup_cap"):
+        # Keep a flagged edge only if its clade is NOT a strict subset of another
+        # flagged edge's clade (i.e. drop redundant descendants like the tip flags
+        # inside a truly-duplicated clade). Containment-based, not parent-adjacency.
+        kept = [i for i in flagged
+                if not any(i != j and clades[i] < clades[j] for j in flagged)]
+        if strategy == "dedup_cap":
+            if copy_bound is None:
+                raise ValueError("dedup_cap strategy requires copy_bound")
+            kept = _cap(kept, wgd_probs, clades, copy_bound)
+        return kept
 
     if strategy == "cap":
         if copy_bound is None:
