@@ -24,8 +24,13 @@ import sys
 
 import pandas as pd
 
-METRICS = ["edit_distance", "ret_leaf_jaccard", "ret_sisters_jaccard",
-           "num_rets_diff", "ploidy_diff"]
+# edit_distance (folded-network graph edit distance) is DROPPED: it is NP-hard
+# and hangs/times out on the highly-reticulate networks (the comparison core
+# itself disabled it in pairwise_compare's object path). We use edit_distance_multree
+# (edit distance on the MUL-trees) + rf_distance instead, plus the reticulation
+# metrics, which are cheap and never hang -> all 21 networks score, every config.
+METRICS = ["edit_distance_multree", "rf_distance", "num_rets_diff",
+           "ret_leaf_jaccard", "ret_sisters_jaccard", "ploidy_diff"]
 
 # Set by each worker (and the parent) so the comparison imports resolve.
 _SIM_SCRIPTS = None
@@ -38,8 +43,8 @@ def _ensure_imports(sim_scripts):
         sys.path.insert(0, sim_scripts)
     _SIM_SCRIPTS = sim_scripts
     from reticulate_tree import ReticulateTree
-    from compare_reticulations import pairwise_comparison
-    return ReticulateTree, pairwise_comparison
+    from compare_reticulations import pairwise_compare
+    return ReticulateTree, pairwise_compare
 
 
 def newick_from_file(path):
@@ -63,28 +68,28 @@ def build_rt(tree_str, ReticulateTree):
 
 
 def score_one(task):
-    """Score a single sample dir. task = (name, sample_dir, sim_scripts)."""
-    name, sdir, sim_scripts = task
+    """Score a single sample dir. task = (name, sample_dir, sim_scripts, partial_match)."""
+    name, sdir, sim_scripts, partial_match = task
     inf_path = os.path.join(sdir, "output.tre")
     gt_path = os.path.join(sdir, "ground_truth.nex")
     if not (os.path.exists(inf_path) and os.path.exists(gt_path)):
         return None
     try:
-        ReticulateTree, pairwise_comparison = _ensure_imports(sim_scripts)
+        ReticulateTree, pairwise_compare = _ensure_imports(sim_scripts)
         inf = newick_from_file(inf_path)
         gt = newick_from_file(gt_path)
         rt_gt = build_rt(gt, ReticulateTree)
         rt_inf = build_rt(inf, ReticulateTree)
-        df = pd.DataFrame([
-            {"name": "ground_truth", "object": rt_gt, **rt_gt.measure(printout=False)},
-            {"name": "gene2net", "object": rt_inf, **rt_inf.measure(printout=False)},
-        ]).set_index("name")
-        comp = pairwise_comparison(df, debug=False)
+        # Object-based path: no folded GED, so it never hangs.
+        comp = pairwise_compare(rt_inf, rt_gt, partial_match=partial_match)
         row = {"sample": name}
         for m in METRICS:
+            v = comp.get(m)
+            if isinstance(v, dict):
+                v = v.get("dist")  # Jaccard/ploidy metrics return {'dist','TP'}
             try:
-                row[m] = float(comp[m].loc["ground_truth", "gene2net"])
-            except Exception:
+                row[m] = float(v)
+            except (TypeError, ValueError):
                 row[m] = float("nan")
         return row
     except Exception as e:
@@ -124,6 +129,10 @@ def main():
     parser.add_argument("--workers", type=int, default=4)  # kept for CLI compat; scoring is isolated/sequential
     parser.add_argument("--timeout", type=int, default=120,
                         help="per-sample seconds before skipping a hung/blown-up comparison")
+    parser.add_argument("--partial-match", action="store_true",
+                        help="Jaccard metrics normalize by matched pairs only, no penalty "
+                             "for unmatched reticulations. Use to match Polyphest-style "
+                             "(lenient) scoring; default is strict.")
     parser.add_argument("--out-csv", default=None)
     args = parser.parse_args()
 
@@ -134,8 +143,10 @@ def main():
         if os.path.isdir(os.path.join(args.recon_dir, d))
         and os.path.exists(os.path.join(args.recon_dir, d, "output.tre"))
     )
-    tasks = [(d, os.path.join(args.recon_dir, d), args.sim_scripts) for d in sample_dirs]
-    print(f"Scoring {len(tasks)} samples (isolated, timeout {args.timeout}s)...")
+    tasks = [(d, os.path.join(args.recon_dir, d), args.sim_scripts, args.partial_match)
+             for d in sample_dirs]
+    print(f"Scoring {len(tasks)} samples (isolated, timeout {args.timeout}s, "
+          f"partial_match={args.partial_match})...")
 
     rows = []
     for i, t in enumerate(tasks, 1):
