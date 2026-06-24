@@ -125,7 +125,7 @@ def main():
     parser.add_argument("--max-gene-trees", type=int, default=500)
     args = parser.parse_args()
 
-    orig_ok = cons_ok = freq_ok = mid_ok = total = 0
+    orig_ok = cons_ok = freq_ok = mid_ok = hybrid_ok = total = 0
     cons_failed = freq_failed = 0
 
     for idx in range(args.start, args.start + args.n):
@@ -194,6 +194,10 @@ def main():
             freq_failed += 1
         if midpoint is not None and matches_true(midpoint, true_bip, all_species):
             mid_ok += 1
+        # hybrid: gene-tree consensus when it produced a clean reroot, else midpoint
+        hybrid = rerooted if rerooted is not None else midpoint
+        if hybrid is not None and matches_true(hybrid, true_bip, all_species):
+            hybrid_ok += 1
 
     print(f"\nRoot-recovery on {total} samples ({args.config}):")
     print(f"  original ASTRAL (arbitrary) recovers true root: {orig_ok}/{total} "
@@ -204,6 +208,8 @@ def main():
           f"({100*freq_ok/max(total,1):.0f}%)   [reroot failed on {freq_failed}]")
     print(f"  MIDPOINT rooting recovers true root:            {mid_ok}/{total} "
           f"({100*mid_ok/max(total,1):.0f}%)")
+    print(f"  HYBRID (consensus-if-clean else midpoint):      {hybrid_ok}/{total} "
+          f"({100*hybrid_ok/max(total,1):.0f}%)")
     print("\nIf consensus (or midpoint) >> original, that rooting method is the fix:")
     print("wire it in, recompute features on the rooted tree, re-run reconstruction.")
 
