@@ -72,6 +72,40 @@ def root_bip(tree):
     return s
 
 
+def freq_reroot(astral, basal_freq, n_gt):
+    """Root ASTRAL using per-species basal frequency from the gene trees.
+
+    basal_freq[s] = how often species s sat on the basal (smaller-root) side
+    across gene trees. We root at the ASTRAL edge whose clade is most enriched
+    for high-basal-frequency species, i.e. the most 'outgroup-like' clade. This
+    uses the full distribution of gene-tree roots and always picks a real edge."""
+    species = set(astral.get_leaf_names())
+    freq = {s: basal_freq.get(s, 0) / max(n_gt, 1) for s in species}
+    overall = sum(freq.values()) / max(len(freq), 1)
+    best_node, best_score = None, -1e9
+    for node in astral.traverse():
+        if node.is_root() or node.is_leaf():
+            continue
+        clade = node.get_leaf_names()
+        if len(clade) >= len(species):
+            continue
+        inside = sum(freq[s] for s in clade) / len(clade)
+        # prefer smaller, strongly-basal clades
+        score = inside - overall
+        if score > best_score:
+            best_score, best_node = score, node
+    if best_node is None:
+        return None
+    t = astral.copy()
+    try:
+        t.set_outgroup(t.get_common_ancestor(best_node.get_leaf_names())
+                       if len(best_node.get_leaf_names()) > 1
+                       else best_node.get_leaf_names()[0])
+        return t
+    except Exception:
+        return None
+
+
 def matches_true(tree, true_bip, all_species):
     """Does this tree's root bipartition equal the true root bipartition?"""
     b = root_bip(tree)
@@ -91,8 +125,8 @@ def main():
     parser.add_argument("--max-gene-trees", type=int, default=500)
     args = parser.parse_args()
 
-    orig_ok = cons_ok = mid_ok = total = 0
-    cons_failed = 0
+    orig_ok = cons_ok = freq_ok = mid_ok = total = 0
+    cons_failed = freq_failed = 0
 
     for idx in range(args.start, args.start + args.n):
         idx_str = f"{idx:04d}"
@@ -113,8 +147,9 @@ def main():
         all_species = set(astral.get_leaf_names())
         true_bip = root_bip(true)
 
-        # consensus basal split across gene trees
+        # consensus basal split across gene trees + per-species basal frequency
         counter = Counter()
+        basal_freq = Counter()
         n_read = 0
         for line in open(gt_path):
             line = line.strip()
@@ -127,6 +162,8 @@ def main():
             b = root_smaller_side(gt)
             if b:
                 counter[b] += 1
+                for s in b:
+                    basal_freq[s] += 1
             n_read += 1
             if n_read >= args.max_gene_trees:
                 break
@@ -135,6 +172,7 @@ def main():
 
         consensus = counter.most_common(1)[0][0]
         rerooted = reroot_on(astral, consensus)
+        freq_rooted = freq_reroot(astral, basal_freq, n_read)
         midpoint = astral.copy()
         try:
             midpoint.set_outgroup(midpoint.get_midpoint_outgroup())
@@ -149,14 +187,21 @@ def main():
                 cons_ok += 1
         else:
             cons_failed += 1
+        if freq_rooted is not None:
+            if matches_true(freq_rooted, true_bip, all_species):
+                freq_ok += 1
+        else:
+            freq_failed += 1
         if midpoint is not None and matches_true(midpoint, true_bip, all_species):
             mid_ok += 1
 
     print(f"\nRoot-recovery on {total} samples ({args.config}):")
     print(f"  original ASTRAL (arbitrary) recovers true root: {orig_ok}/{total} "
           f"({100*orig_ok/max(total,1):.0f}%)")
-    print(f"  gene-tree CONSENSUS rooting recovers true root: {cons_ok}/{total} "
+    print(f"  gene-tree CONSENSUS (mode split) recovers root: {cons_ok}/{total} "
           f"({100*cons_ok/max(total,1):.0f}%)   [reroot failed on {cons_failed}]")
+    print(f"  gene-tree FREQUENCY rooting recovers true root: {freq_ok}/{total} "
+          f"({100*freq_ok/max(total,1):.0f}%)   [reroot failed on {freq_failed}]")
     print(f"  MIDPOINT rooting recovers true root:            {mid_ok}/{total} "
           f"({100*mid_ok/max(total,1):.0f}%)")
     print("\nIf consensus (or midpoint) >> original, that rooting method is the fix:")
