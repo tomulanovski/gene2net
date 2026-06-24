@@ -6,8 +6,9 @@ The original goal was to design informative features and predict, for each edge 
 
 Headline points:
 - Detection of WGD edges and of polyploid lineages is strong and robust to gene tree noise.
-- On the reticulation identification metrics we beat GRAMPA-iter under noise.
-- On full network edit distance we are behind Polyphest, and we identified exactly why through a controlled oracle experiment. The limitation is the ASTRAL based backbone, not the predictions.
+- Against the prior free GRAMPA-iter, the fair peer, we win on both edit distance and reticulation identification, and the margin grows under noise because our accuracy stays flat while GRAMPA-iter degrades.
+- The with prior GRAMPA-iter, which is given the true polyploid set, is stronger at the easy end, which motivates adding our own inferred ploidy bound.
+- We are behind Polyphest on edit distance, and we identified exactly why through a controlled oracle experiment. The limitation is the ASTRAL based backbone, not the predictions.
 
 ## 2. Problem framing
 
@@ -113,17 +114,31 @@ Why this matters. The current evidence is that the event selection strategy stro
 
 ### Reconstruction on the 21 real networks
 - Polyploid lineage detection is strong. The predicted number of polyploid lineages matches the true number of polyploids almost exactly for about 17 of 21 networks.
-- Reticulation identification. We beat GRAMPA-iter on the reticulation descendant metric, and our accuracy stays flat as noise increases while GRAMPA-iter degrades.
-- Full network edit distance is behind Polyphest and roughly tied with GRAMPA-iter at the hard end. The per config table across all 12 configurations is being produced now and will be added here.
+- The benchmark is now complete and clean. All 21 networks are scored in every one of the 12 configurations, using the MUL-tree edit distance, the same metric as the thesis, and strict matching, the same mode the thesis uses for Polyphest and GRAMPA-iter.
+- Our accuracy is remarkably flat across all 12 configurations. Edit distance stays in 0.76 to 0.82, reticulation descendants in 0.37 to 0.56, reticulation sister in 0.62 to 0.76. Going from the easiest to the hardest scenario barely moves any metric, which is the noise robustness story.
 
 ## 7. Comparison to GRAMPA-iter and Polyphest
 
-Reference numbers from the thesis benchmark, edit distance, lower is better:
-- Polyphest ranges from about 0.42 at low ILS to about 0.56 at high ILS, and degrades at high duplication and loss.
-- GRAMPA-iter ranges from about 0.80 to 0.91.
-- Our method sits around 0.86 to 0.92 and is roughly flat across configurations, which means it is noise robust but behind on this metric.
+All numbers are MUL-tree edit distance, lower is better, scored in the same strict mode for every method. Our values are the new clean benchmark, the competitor values are from the thesis.
 
-On reticulation identification metrics our method is competitive with or better than GRAMPA-iter, especially under noise, and approaches Polyphest. Polyphest remains the most accurate overall, but it requires a consensus copy number bound and runs an integer program search. Our method is prior free in the same sense, since the copy number signal it uses is also derived from the gene trees, and it is a forward pass rather than a search.
+| condition | Polyphest | GRAMPA-iter, no prior | GRAMPA-iter, with prior | Ours |
+| --- | --- | --- | --- | --- |
+| low ILS, no dup loss | 0.42 | 0.80 | 0.73 | 0.79 |
+| medium ILS, no dup loss | 0.44 | 0.83 | see note | 0.76 |
+| high ILS, no dup loss | 0.56 | 0.91 | see note | 0.79 |
+| low ILS, high dup loss | 0.75 | 0.86 | see note | 0.82 |
+| medium ILS, high dup loss | 0.77 | 0.90 | see note | 0.81 |
+| high ILS, high dup loss | 0.53 | 0.88 | see note | 0.78 |
+
+Note on the with prior column. The thesis reports the with prior version explicitly at low ILS with no duplication and loss, namely 0.73, and reports that the prior improves edit distance by 0.06 to 0.14 across configurations. The exact per condition with prior numbers can be slotted in from the thesis figure.
+
+Reticulation descendants, lower is better. Polyphest ranges from 0.02 at the easiest to about 0.34. GRAMPA-iter with no prior ranges from 0.39 to 0.61, and is 0.48 at low ILS. Our method ranges from 0.37 to 0.56, and is 0.38 at low ILS. GRAMPA-iter with prior improves by 0.17 to 0.32, reaching 0.29 at high ILS, because the prior hands it the polyploid identities that this metric rewards.
+
+What this says.
+- Polyphest is the most accurate on edit distance everywhere. The oracle in section 8 explains why, namely it builds its own backbone while we build on ASTRAL.
+- Against the prior free GRAMPA-iter, which is the fair peer since our method infers its own copy number signal rather than being given it, we win. We are tied at the easy end on edit distance, 0.79 versus 0.80, and we pull clearly ahead as conditions harden because we stay flat near 0.78 to 0.82 while GRAMPA-iter degrades to 0.88 to 0.91. We also beat it on reticulation descendants, 0.38 versus 0.48 at low ILS, and across the range.
+- The with prior GRAMPA-iter is given the true polyploid set, which we are not. It is stronger at the easy end on edit distance, 0.73 versus 0.79, and stronger on reticulation descendants. This points directly at our next step, which is to add our own inferred ploidy bound from the copy count features.
+- Polyphest remains the most accurate overall, but it runs an integer program search while our method is a single forward pass, and the copy number bound it uses is itself inferred from the gene trees, so it is prior free in the same sense we are.
 
 ## 8. The key finding: where the edit distance gap comes from
 

@@ -80,8 +80,9 @@ def score_one(task):
         gt = newick_from_file(gt_path)
         rt_gt = build_rt(gt, ReticulateTree)
         rt_inf = build_rt(inf, ReticulateTree)
-        # Object-based path: no folded GED, so it never hangs.
-        comp = pairwise_compare(rt_inf, rt_gt, partial_match=partial_match)
+        # Object-based path (no folded GED, never hangs). Argument order matches
+        # the thesis pipeline compute_comparisons.py: pairwise_compare(gt, inf).
+        comp = pairwise_compare(rt_gt, rt_inf, partial_match=partial_match)
         row = {"sample": name}
         for m in METRICS:
             v = comp.get(m)
