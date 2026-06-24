@@ -58,10 +58,14 @@ def build_rt(tree_str):
 
 
 def counts(newick):
-    t = Tree(newick, format=9)
-    leaves = t.get_leaves()
-    total = len(list(t.traverse()))
-    return len(leaves), total
+    # recon trees are format 9 (names only); the GT has branch lengths (format 1).
+    for fmt in (1, 9, 0):
+        try:
+            t = Tree(newick, format=fmt)
+            return len(t.get_leaves()), len(list(t.traverse()))
+        except Exception:
+            continue
+    return None, None
 
 
 def edit(a_str, b_str):
