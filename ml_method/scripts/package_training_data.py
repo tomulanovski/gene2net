@@ -57,7 +57,8 @@ def load_astral_tree(filepath):
     return Tree(newick, format=1)
 
 
-def package_one(index, mul_trees_dir, config, replicate=1, max_gene_trees=500):
+def package_one(index, mul_trees_dir, config, replicate=1, max_gene_trees=500,
+                root_species_tree=False):
     """Package one training example from existing files."""
     idx_str = f"{index:04d}"
 
@@ -96,6 +97,7 @@ def package_one(index, mul_trees_dir, config, replicate=1, max_gene_trees=500):
         gene_trees=gene_trees,
         species_list=species_list,
         mul_tree=mul_tree,
+        root_species_tree=root_species_tree,
     )
 
     return sample
@@ -117,6 +119,10 @@ def main():
                         help="Which replicate to use (default: 1)")
     parser.add_argument("--max-gene-trees", type=int, default=500,
                         help="Max gene trees per sample (default: 500)")
+    parser.add_argument("--root-species-tree", action="store_true",
+                        help="Re-root the ASTRAL species tree (hybrid gene-tree+midpoint) "
+                             "before computing features/labels. Use when re-packaging for "
+                             "the rooted-tree experiment.")
     args = parser.parse_args()
 
     output_dir = args.output_dir or os.path.join(args.mul_trees_dir, "training", args.config)
@@ -131,6 +137,7 @@ def main():
             idx, args.mul_trees_dir, args.config,
             replicate=args.replicate,
             max_gene_trees=args.max_gene_trees,
+            root_species_tree=args.root_species_tree,
         )
 
         if sample is None:

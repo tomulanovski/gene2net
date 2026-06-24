@@ -43,12 +43,24 @@ class Gene2NetSample:
     labels: Optional[TrainingLabels] = None
 
     @classmethod
-    def from_trees(cls, species_tree, gene_trees, species_list, mul_tree=None):
-        """Build sample from ETE3 trees."""
+    def from_trees(cls, species_tree, gene_trees, species_list, mul_tree=None,
+                   root_species_tree=False):
+        """Build sample from ETE3 trees.
+
+        root_species_tree: if True, re-root the (unrooted) ASTRAL species tree with
+        the hybrid gene-tree-consensus + midpoint method before deriving anything.
+        ASTRAL output is unrooted and its arbitrary root inflates the MUL-tree edit
+        distance; rooting here makes features, edge ordering, AND labels all consistent
+        with a correct root. Default False to preserve existing packaged-data behavior.
+        """
         sample = cls()
         sample.species_list = species_list
         sample.n_species = len(species_list)
         sp_to_idx = {sp: i for i, sp in enumerate(species_list)}
+
+        if root_species_tree:
+            from gene2net_gnn.data.rooting import hybrid_root
+            species_tree = hybrid_root(species_tree, gene_trees)
 
         # Convert species tree
         edge_index, node_names = tree_to_edge_index(species_tree)

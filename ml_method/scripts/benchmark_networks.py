@@ -127,6 +127,9 @@ def main():
     parser.add_argument("--networks-dir",
                         default="/groups/itay_mayrose/tomulanovski/gene2net/simulations/networks")
     parser.add_argument("--max-gene-trees", type=int, default=500)
+    parser.add_argument("--root-species-tree", action="store_true",
+                        help="Re-root the ASTRAL species tree (hybrid gene-tree+midpoint) "
+                             "before features/build. Use with a model trained on rooted data.")
     parser.add_argument("--out-base", default=None,
                         help="output base (default: <model-dir>/benchmark/<config>); "
                              "each strategy writes to <out-base>/<strategy>/<network>/")
@@ -158,6 +161,13 @@ def main():
         gene_trees = load_gene_trees(gene_trees_path, args.max_gene_trees)
         astral_tree = Tree(open(astral_path).read().strip(), format=1)
         species_list = sorted(set(astral_tree.get_leaf_names()))
+
+        # Root the species tree ONCE here so the sample features, the clades, and the
+        # parent-edge map all derive from the same (rooted) tree. from_trees then
+        # gets root=False since the tree is already rooted.
+        if args.root_species_tree:
+            from gene2net_gnn.data.rooting import hybrid_root
+            astral_tree = hybrid_root(astral_tree, gene_trees)
 
         sample = Gene2NetSample.from_trees(
             species_tree=astral_tree, gene_trees=gene_trees, species_list=species_list,
