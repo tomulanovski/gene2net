@@ -65,6 +65,30 @@ def preorder_edge_clades(tree):
     return clades
 
 
+def reroot_to_match(astral_tree, true_tree):
+    """Re-root the ASTRAL tree so its root split matches the true backbone's root.
+
+    ASTRAL output is unrooted, so ete3 roots it arbitrarily. The MUL-tree edit
+    distance is rooting-sensitive, so a correct unrooted topology with the wrong
+    root still scores badly. We pick the smaller side of the true root as the
+    outgroup and set it on the ASTRAL tree. Falls back to the original tree if the
+    outgroup is not monophyletic in ASTRAL (i.e. unrooted topologies differ)."""
+    kids = true_tree.children
+    if len(kids) < 2:
+        return astral_tree
+    sides = [set(c.get_leaf_names()) for c in kids]
+    outgroup = min(sides, key=len)
+    try:
+        og = list(outgroup)
+        if len(og) == 1:
+            astral_tree.set_outgroup(og[0])
+        else:
+            astral_tree.set_outgroup(astral_tree.get_common_ancestor(og))
+    except Exception:
+        pass  # outgroup not monophyletic in ASTRAL -> leave as-is
+    return astral_tree
+
+
 def map_clades_by_jaccard(src_clades, dst_clades):
     """Map each source (ASTRAL) clade to the best-Jaccard destination (true
     backbone) clade. Used to place predictions made on the ASTRAL topology onto
@@ -195,6 +219,15 @@ def process_index(idx):
             return None
         build_tree = load_nexus_tree(bb_path)
         event_clades = map_clades_by_jaccard(clades, preorder_edge_clades(build_tree))
+    elif _M["backbone"] == "astral_rerooted":
+        # ASTRAL topology, but re-rooted to the true root. Isolates the rooting
+        # effect: if this lands near the 'true' score, the gap is just rooting.
+        bb_path = os.path.join(mul_trees_dir, f"species_tree_{idx_str}.nex")
+        if not os.path.exists(bb_path):
+            return None
+        true_tree = load_nexus_tree(bb_path)
+        build_tree = reroot_to_match(astral_tree.copy(), true_tree)
+        event_clades = map_clades_by_jaccard(clades, preorder_edge_clades(build_tree))
     else:
         build_tree = astral_tree
         event_clades = clades
@@ -234,10 +267,12 @@ def main():
                         help="comma-separated, e.g. 0.5,0.7,0.9,0.95")
     parser.add_argument("--out-base", default=None,
                         help="output base dir (default: <model-dir>/mul_trees/<config>)")
-    parser.add_argument("--backbone", choices=["astral", "true"], default="astral",
+    parser.add_argument("--backbone", choices=["astral", "true", "astral_rerooted"],
+                        default="astral",
                         help="astral: real pipeline. true: build predicted events on "
                              "the true diploid backbone (species_tree_NNNN.nex) to "
-                             "isolate the ASTRAL-backbone cost.")
+                             "isolate the ASTRAL-backbone cost. astral_rerooted: ASTRAL "
+                             "topology re-rooted to the true root, to isolate rooting.")
     parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
 
