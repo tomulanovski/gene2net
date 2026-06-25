@@ -22,8 +22,15 @@ export PYTHONPATH="${PYTHONPATH:-}:${BASE_DIR}"
 N_PER_JOB="${N_PER_JOB:-1}"
 TREE_INDEX=$(( SLURM_ARRAY_TASK_ID * N_PER_JOB + ${INDEX_OFFSET:-0} ))
 
+# Optional: re-root the species tree (rooted-tree experiment) and/or a custom
+# output dir so rooted data lands separately from the unrooted data.
+EXTRA_ARGS=()
+[ "${ROOT_SPECIES_TREE:-0}" = "1" ] && EXTRA_ARGS+=(--root-species-tree)
+[ -n "${OUTPUT_DIR:-}" ] && EXTRA_ARGS+=(--output-dir "$OUTPUT_DIR")
+
 python "${BASE_DIR}/scripts/package_training_data.py" \
     --index "$TREE_INDEX" \
     --n-batch "$N_PER_JOB" \
     --mul-trees-dir "$MUL_TREES_DIR" \
-    --config "$CONFIG_NAME"
+    --config "$CONFIG_NAME" \
+    "${EXTRA_ARGS[@]}"

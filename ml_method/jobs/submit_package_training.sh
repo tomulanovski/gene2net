@@ -40,5 +40,5 @@ sbatch \
     --partition=itaym-pool \
     --account=itaym-users_v2 \
     --qos=owner \
-    --export=ALL,MUL_TREES_DIR="${MUL_TREES_DIR}",CONFIG_NAME="${CONFIG_NAME}",INDEX_OFFSET="${START_INDEX}",N_PER_JOB="${N_PER_JOB}" \
+    --export=ALL,MUL_TREES_DIR="${MUL_TREES_DIR}",CONFIG_NAME="${CONFIG_NAME}",INDEX_OFFSET="${START_INDEX}",N_PER_JOB="${N_PER_JOB}",ROOT_SPECIES_TREE="${ROOT_SPECIES_TREE:-0}",OUTPUT_DIR="${OUTPUT_DIR:-}" \
     "${BASE_DIR}/jobs/package_training_job.sh"
