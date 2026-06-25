@@ -31,6 +31,19 @@ methods:
   grandma_split_prior:
     directory: "grandma_split_prior"
     output_file: "grandma_split_prior_result.tre"
+  # Real (ground-truth) ploidy prior runs (see run_*_real.sh)
+  polyphest_real_p50:
+    directory: "polyphest_real_p50"
+    output_file: "polyphest_result.tre"
+  polyphest_real_p70:
+    directory: "polyphest_real_p70"
+    output_file: "polyphest_result.tre"
+  polyphest_real_p90:
+    directory: "polyphest_real_p90"
+    output_file: "polyphest_result.tre"
+  grandma_split_prior_real:
+    directory: "grandma_split_prior_real"
+    output_file: "grandma_split_prior_real_result.tre"
 
 # Network list (21 networks)
 networks:

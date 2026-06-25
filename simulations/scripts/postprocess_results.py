@@ -419,7 +419,7 @@ class ResultPostprocessor:
                 input_file = result_dir / "mpsugar_results.txt"
             elif method == 'alloppnet':
                 input_file = result_dir / "sampledmultrees.txt"
-            elif method in ('grandma_split', 'grandma_split_prior'):
+            elif method in ('grandma_split', 'grandma_split_prior', 'grandma_split_prior_real'):
                 input_file = result_dir / "final_multree.tre"
             else:
                 print(f"  ERROR: Unknown method '{method}'")
@@ -458,7 +458,7 @@ class ResultPostprocessor:
             return False
 
         # Reverse substring fix for methods that use GRAMPA inputs
-        if method in ('grampa', 'grandma_split', 'grandma_split_prior') and tree_string is not None:
+        if method in ('grampa', 'grandma_split', 'grandma_split_prior', 'grandma_split_prior_real') and tree_string is not None:
             reverse_map = self._load_taxa_map(network, replicate)
             if reverse_map:
                 tree_string = self._reverse_substring_fix(tree_string, reverse_map)

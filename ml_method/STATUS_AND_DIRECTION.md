@@ -202,6 +202,25 @@ re-package and retrain is not worth the marginal gain. It is shelved as a polish
 
 ---
 
+## 7b. Limitations and assumptions (measured, for the PI)
+
+- Coverage of the per-edge framing is NOT a limitation. We assume each reticulation
+  localizes to a single species-tree clade, and events that do not map to an ASTRAL edge
+  by Jaccard 0.5 are excluded during label generation. Measured drop rate: 1.3 percent
+  (low ILS), 1.5 percent (high dup/loss), 1.7 percent (high ILS), affecting 4 to 6 percent
+  of samples. So about 98.5 percent of true events are representable. The detection F1 is
+  therefore not meaningfully inflated by exclusion, and the gap to Polyphest is about
+  placement accuracy, not coverage. A single allopolyploid species is a leaf in the species
+  tree, so it is detected and its partner predicted normally. Events are dropped only when
+  ASTRAL fails to recover the duplicated clade, mainly from mis-placing polyploid species,
+  which is rare.
+- WGD events are placed uniformly at random in the simulation, which does not reflect the
+  biological tendency of allopolyploidy toward related, sympatric lineages. A deliberately
+  assumption-free setup, worth acknowledging.
+- The detection threshold (0.90) is a single global value tuned on validation.
+- The node features contribute about zero to detection (permutation importance). They are
+  retained pending a check of whether the partner head needs them.
+
 ## 8. Where we stand, honestly
 
 - Detection of WGD edges and polyploid lineages: strong, noise robust.

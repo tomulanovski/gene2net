@@ -69,7 +69,12 @@ def main():
     parser.add_argument("--model-dir", required=True)
     parser.add_argument("--model-config", default=None)
     parser.add_argument("--max-samples", type=int, default=1000)
+    parser.add_argument("--permute-node-features", action="store_true",
+                        help="Shuffle node features (leaf rows) to test whether the partner "
+                             "head needs them. Compare allo accuracy to the un-permuted run.")
     args = parser.parse_args()
+    random.seed(42)
+    torch.manual_seed(42)
 
     base = os.path.join(os.path.dirname(__file__), "..")
     cfg = args.model_config or os.path.join(base, "configs", "reconstruct.yaml")
@@ -108,6 +113,19 @@ def main():
         wgd_edges = [i for i in range(n_edges) if int(targets[i]) >= 0]
         if not wgd_edges:
             continue
+
+        # Node-feature importance for the PARTNER head: shuffle which species gets
+        # which node-feature vector (leaf rows), breaking the species<->feature
+        # association. If allo accuracy barely drops, the partner head does not rely
+        # on node features and they can be pruned. model_inputs_for recomputes the
+        # internal-node propagation from the permuted features.
+        if args.permute_node_features:
+            nf = s.species_tree_node_features.clone()
+            leaf_idx = torch.nonzero(s.species_tree_is_leaf).flatten()
+            perm = leaf_idx[torch.randperm(len(leaf_idx))]
+            nf[leaf_idx] = nf[perm]
+            s.species_tree_node_features = nf
+            s._prop_cache = None  # force propagation recompute on permuted features
 
         clades = edge_clades(s)
         with torch.no_grad():
