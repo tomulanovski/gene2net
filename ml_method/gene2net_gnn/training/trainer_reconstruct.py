@@ -24,15 +24,20 @@ from gene2net_gnn.data.features import (
     species_coclustering_matrix,
     edge_clades_species,
     pairwise_partner_features,
+    copy_aware_cluster_support,
 )
 from gene2net_gnn.model.species_gnn_v2 import SpeciesTreeGNNv2
 from gene2net_gnn.training.trainer_phase1 import prepare_sample, focal_loss
 
 
 def build_pairwise_feat(sample):
-    """Compute (and cache) the [E, E, 2] clade co-clustering pairwise feature.
+    """Compute (and cache) the [E, E, 4] pairwise partner feature.
 
-    Uses the preorder edge ordering (sample._edge_index_pre, set by
+    Channels 0-1 are the thin clade co-clustering feature (mean, max sister
+    co-occurrence); channels 2-3 are the copy-aware cluster-support feature
+    (support intensity, peak support) that sharpens the allopolyploid signal.
+    Both are computed from the stored gene-tree tensors so no repackaging is
+    needed. Uses the preorder edge ordering (sample._edge_index_pre, set by
     prepare_sample) so it aligns with the model's edge embeddings.
     """
     cached = getattr(sample, "_pairwise_feat", None)
@@ -46,9 +51,26 @@ def build_pairwise_feat(sample):
     sp_to_idx = {sp: i for i, sp in enumerate(sample.species_list)}
     node_species = [sp_to_idx.get(name, -1) for name in sample.species_tree_node_names]
     clades = edge_clades_species(sample._edge_index_pre, sample.species_tree_is_leaf, node_species)
-    feat = pairwise_partner_features(C, clades)
+    coclust_feat = pairwise_partner_features(C, clades)
+    cluster_feat = copy_aware_cluster_support(
+        sample.gene_tree_edge_indices, sample.gene_tree_species_ids,
+        sample.gene_tree_leaf_masks, clades, n_species,
+    )
+    feat = torch.cat([coclust_feat, cluster_feat], dim=-1)
     sample._pairwise_feat = feat
     return feat
+
+
+def filter_compatible_state_dict(state: dict, model_state: dict) -> dict:
+    """Keep only checkpoint entries whose key exists in the model with a matching
+    shape. Used for warm-starting: layers that changed shape (e.g. the partner
+    head after widening its pairwise feature) are dropped so they reinitialize
+    fresh instead of crashing load_state_dict on a size mismatch.
+    """
+    return {
+        k: v for k, v in state.items()
+        if k in model_state and tuple(model_state[k].shape) == tuple(v.shape)
+    }
 
 
 def build_partner_targets(sample: Gene2NetSample, n_edges: int, device: torch.device):

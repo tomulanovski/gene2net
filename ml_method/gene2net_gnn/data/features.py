@@ -554,3 +554,132 @@ def pairwise_partner_features(coclust, edge_clades):
             feat[i, j, 0] = sub.mean()
             feat[i, j, 1] = sub.max()
     return feat
+
+
+# ---------------------------------------------------------------------------
+# Copy-aware cluster-support partner feature.
+#
+# The thin pairwise-sister feature above is symmetric and direct-sister only.
+# This richer feature is copy-aware: for a species duplicated in a gene tree, one
+# copy stays "home" (its local neighborhood is dominated by its own species-tree
+# clade) and the other lands "away" near its allopolyploid partner. For each away
+# copy we measure what fraction of its local neighborhood is each partner clade's
+# species, accumulated over gene trees. This is the sharp allo signal the partner
+# head needs, and it is computed from the same stored gene-tree tensors so no
+# repackaging is required. Imports torch lazily like the functions above.
+# ---------------------------------------------------------------------------
+
+
+def gene_tree_copy_neighborhoods(edge_index, species_ids, leaf_mask, k):
+    """Per-copy local neighborhoods for the duplicated species of one gene tree.
+
+    A species is "duplicated" if it has >= 2 leaf copies in this gene tree. For
+    each copy of each duplicated species, the neighborhood is the smallest
+    enclosing clade grown upward while its total leaf count stays <= ``k`` (the
+    copy's parent subtree at minimum). The focal copy itself is excluded.
+
+    Parameters
+    ----------
+    edge_index : LongTensor [2, 2E]
+        Undirected edges, parent->child at even indices (as stored on disk).
+    species_ids : LongTensor [N]
+        Species index per node; -1 for internal nodes.
+    leaf_mask : BoolTensor [N]
+    k : int
+        Maximum neighborhood leaf count.
+
+    Returns
+    -------
+    list of (species_id:int, neighborhood:Counter[species_id -> count])
+        One entry per copy of each duplicated species.
+    """
+    children: Dict[int, List[int]] = {}
+    parent: Dict[int, int] = {}
+    for t in range(0, edge_index.shape[1], 2):
+        p = int(edge_index[0, t]); c = int(edge_index[1, t])
+        children.setdefault(p, []).append(c)
+        parent[c] = p
+
+    memo: Dict[int, List[int]] = {}
+
+    def leaves_under(n: int) -> List[int]:
+        if n in memo:
+            return memo[n]
+        if bool(leaf_mask[n]):
+            r = [n]
+        else:
+            r = []
+            for c in children.get(n, []):
+                r += leaves_under(c)
+        memo[n] = r
+        return r
+
+    leaf_nodes = [n for n in range(len(leaf_mask)) if bool(leaf_mask[n])]
+    sp_count = Counter(int(species_ids[n]) for n in leaf_nodes if int(species_ids[n]) >= 0)
+    duplicated = {s for s, ct in sp_count.items() if ct >= 2}
+
+    results: List[Tuple[int, Counter]] = []
+    for ln in leaf_nodes:
+        a = int(species_ids[ln])
+        if a < 0 or a not in duplicated or ln not in parent:
+            continue
+        # Grow the neighborhood upward while staying within the size cap.
+        cand = parent[ln]
+        while cand in parent and len(leaves_under(parent[cand])) <= k:
+            cand = parent[cand]
+        neigh: Counter = Counter()
+        for x in leaves_under(cand):
+            if x == ln:
+                continue
+            s = int(species_ids[x])
+            if s >= 0:
+                neigh[s] += 1
+        results.append((a, neigh))
+    return results
+
+
+def copy_aware_cluster_support(gene_tree_edge_indices, gene_tree_species_ids,
+                               gene_tree_leaf_masks, edge_clades, n_species,
+                               k=10, away_threshold=0.5):
+    """[E, E, 2]: copy-aware cluster support between clade i and clade j.
+
+    For each away copy of a species in clade i (a copy whose neighborhood is less
+    than ``away_threshold`` clade-i species), accumulate the fraction of its
+    neighborhood that is clade-j species. Channel 0 is that sum normalized by the
+    gene-tree count (support intensity); channel 1 is the per-copy max (peak
+    support).
+    """
+    import torch
+    E = len(edge_clades)
+    support_sum = torch.zeros(E, E)
+    support_max = torch.zeros(E, E)
+    n_trees = len(gene_tree_edge_indices)
+    if n_trees == 0 or E == 0:
+        return torch.stack([support_sum, support_max], dim=-1)
+
+    membership = torch.zeros(E, n_species)
+    for i, clade in enumerate(edge_clades):
+        for s in clade:
+            if 0 <= s < n_species:
+                membership[i, s] = 1.0
+
+    for ei, sp, lm in zip(gene_tree_edge_indices, gene_tree_species_ids, gene_tree_leaf_masks):
+        for a, neigh in gene_tree_copy_neighborhoods(ei, sp, lm, k):
+            size = sum(neigh.values())
+            if size == 0:
+                continue
+            counts = torch.zeros(n_species)
+            for s, c in neigh.items():
+                if 0 <= s < n_species:
+                    counts[s] = c
+            fracs = (membership @ counts) / size            # [E]: frac of neighborhood in each clade
+            for i in range(E):
+                if membership[i, a] == 0:
+                    continue                                 # species a not in clade i
+                if fracs[i].item() >= away_threshold:
+                    continue                                 # home copy w.r.t. clade i
+                support_sum[i] += fracs
+                support_max[i] = torch.maximum(support_max[i], fracs)
+
+    support_sum /= n_trees
+    return torch.stack([support_sum, support_max], dim=-1)

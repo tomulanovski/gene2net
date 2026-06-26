@@ -19,7 +19,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from gene2net_gnn.data.dataset import Gene2NetDataset
 from gene2net_gnn.model.species_gnn_v2 import SpeciesTreeGNNv2
-from gene2net_gnn.training.trainer_reconstruct import ReconstructTrainer
+from gene2net_gnn.training.trainer_reconstruct import (
+    ReconstructTrainer,
+    filter_compatible_state_dict,
+)
 
 
 def main():
@@ -94,8 +97,11 @@ def main():
         partner_pair_feat_dim=int(model_config.get("partner_pair_feat_dim", 2)),
     )
     if args.init_from and os.path.exists(args.init_from):
-        # Warm-start shared weights from a Phase 1 model; partner head stays fresh.
+        # Warm-start shared weights from a prior model. Shape-incompatible layers
+        # (e.g. the partner head when its pairwise feature width changed) are
+        # dropped so they reinitialize fresh instead of erroring on load.
         state = torch.load(args.init_from, map_location="cpu", weights_only=True)
+        state = filter_compatible_state_dict(state, model.state_dict())
         missing, unexpected = model.load_state_dict(state, strict=False)
         print(f"Warm-started from {args.init_from} (missing={len(missing)}, unexpected={len(unexpected)})")
 

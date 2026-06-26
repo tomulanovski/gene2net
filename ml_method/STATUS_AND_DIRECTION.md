@@ -61,10 +61,15 @@ Detection rides on two edge features:
 | everything else (incl. all 13 node features) | about 0 or negative |
 
 Implication: for detection the node features (copy-count stats and co-clustering summaries)
-contribute nothing. They could be pruned for speed, pending a check that the partner head does
-not need them. The GNN earns its place through localization (clade_size plus the attention
-picking the right edge in the high-frac ancestor chain), lifting precision over a single-feature
-threshold baseline of about 0.62.
+contribute nothing. But they are NOT dead weight overall: a permutation test on the partner head
+shows allo partner accuracy drops from 0.856 to 0.691 when node features are shuffled, while auto
+drops only 0.993 to 0.948. So node features carry the allopolyploid-partner signal (which species
+your copies co-cluster with) even though they do not help detection. The feature roles split
+cleanly: edge features (frac_clade_dup, clade_size) drive detection, mirrored_sister drives auto,
+node co-clustering features drive allo placement. This is the architectural justification, and it
+is biologically sensible. The GNN earns its detection place through localization (clade_size plus
+the attention picking the right edge in the high-frac ancestor chain), lifting precision over a
+single-feature threshold baseline of about 0.62.
 
 ---
 
@@ -218,8 +223,10 @@ re-package and retrain is not worth the marginal gain. It is shelved as a polish
   biological tendency of allopolyploidy toward related, sympatric lineages. A deliberately
   assumption-free setup, worth acknowledging.
 - The detection threshold (0.90) is a single global value tuned on validation.
-- The node features contribute about zero to detection (permutation importance). They are
-  retained pending a check of whether the partner head needs them.
+- The node features contribute about zero to detection, but a permutation test confirms the
+  partner head needs them: allo accuracy drops 0.856 to 0.691 when they are shuffled. So they
+  are retained with justification, not arbitrarily. Feature roles: edge features drive
+  detection, node co-clustering features drive allo placement.
 
 ## 8. Where we stand, honestly
 
