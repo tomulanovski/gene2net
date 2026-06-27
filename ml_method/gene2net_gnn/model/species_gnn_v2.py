@@ -175,7 +175,9 @@ class SpeciesTreeGNNv2(nn.Module):
         if self.partner_pair_feat_dim > 0:
             if pairwise_feat is None:
                 pairwise_feat = torch.zeros(n, n, self.partner_pair_feat_dim, device=edge_emb.device)
-            parts.append(pairwise_feat)
+            # Use only the columns this head was built for, so a wider feature
+            # (e.g. the 4-dim feature fed to a 2-dim checkpoint) still works.
+            parts.append(pairwise_feat[..., :self.partner_pair_feat_dim])
         pair = torch.cat(parts, dim=-1)               # [E, E, 2H + pair_dim]
         return self.partner_head(pair).squeeze(-1)    # [E, E]
 
@@ -203,7 +205,9 @@ class SpeciesTreeGNNv2(nn.Module):
             if pairwise_feat is None:
                 pf = torch.zeros(q, n, self.partner_pair_feat_dim, device=edge_emb.device)
             else:
-                pf = pairwise_feat[query_idx]                    # [Q, E, pair_dim]
+                # Use only the columns this head was built for, so a wider
+                # feature (e.g. 4-dim fed to a 2-dim checkpoint) still works.
+                pf = pairwise_feat[query_idx][..., :self.partner_pair_feat_dim]  # [Q, E, pair_dim]
             parts.append(pf)
         pair = torch.cat(parts, dim=-1)                          # [Q, E, 2H + pair_dim]
         return self.partner_head(pair).squeeze(-1)               # [Q, E]
