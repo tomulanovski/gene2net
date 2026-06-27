@@ -72,7 +72,7 @@ sbatch \
     --output="${LOG_DIR}/reconstruct_%j.out" \
     --error="${LOG_DIR}/reconstruct_%j.err" \
     --time=1-00:00:00 \
-    --mem=96G \
+    --mem=128G \
     --cpus-per-task=4 \
     --partition=${PARTITION} \
     ${ACCOUNT} \

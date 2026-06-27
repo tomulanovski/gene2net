@@ -134,11 +134,18 @@ def load_model(model_dir, model_config, device):
         dropout=float(model_config.get("dropout", 0.2)),
         partner_pair_feat_dim=int(model_config.get("partner_pair_feat_dim", 2)),
     )
+    loaded = False
     for name in ["best_model.pt", "best_partner_model.pt"]:
         p = os.path.join(model_dir, name)
         if os.path.exists(p):
             model.load_state_dict(torch.load(p, map_location=device, weights_only=True))
+            loaded = True
             break
+    if not loaded:
+        raise FileNotFoundError(
+            f"No checkpoint (best_model.pt or best_partner_model.pt) found in {model_dir!r}. "
+            "Refusing to evaluate a randomly initialized model."
+        )
     return model.to(device).eval()
 
 

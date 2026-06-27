@@ -8,8 +8,11 @@ made of partner-clade species, accumulated into an [E, E, 2] (sum, max) tensor.
 The ``sample_gene_trees`` fixture is exactly this case: species D is an
 allotetraploid whose away copy sits next to B (the A/B clade) in 7 of 10 trees.
 """
+import random
+
 import pytest
 import torch
+from ete3 import Tree
 
 from gene2net_gnn.data.tree_io import tree_to_edge_index, reorder_edge_index_preorder
 from gene2net_gnn.data.dataset import Gene2NetSample
@@ -121,6 +124,75 @@ def test_cluster_support_zero_for_non_duplicated_clade(sample_gene_trees):
     )
     a_edge = 1  # clade {A}; A is never duplicated
     assert feat[a_edge].sum().item() == pytest.approx(0.0, abs=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Randomized equivalence: a slow, obvious reference vs the (vectorized) function.
+# This is the safety net for the performance rewrite — same numbers, not just
+# the same shape.
+# ---------------------------------------------------------------------------
+
+def _random_numeric_gene_tree(n_species, n_leaves, rng):
+    t = Tree()
+    t.populate(n_leaves)
+    for leaf in t.get_leaves():
+        leaf.name = str(rng.randint(0, n_species - 1))
+    return t
+
+
+def _numeric_to_tensors(tree):
+    ei, _ = tree_to_edge_index(tree)
+    sp, lm = [], []
+    for node in tree.traverse("preorder"):  # same order tree_to_edge_index uses
+        if node.is_leaf():
+            sp.append(int(node.name)); lm.append(True)
+        else:
+            sp.append(-1); lm.append(False)
+    return ei, torch.tensor(sp, dtype=torch.long), torch.tensor(lm, dtype=torch.bool)
+
+
+def _random_clades(E, n_species, rng):
+    return [set(rng.sample(range(n_species), rng.randint(1, n_species))) for _ in range(E)]
+
+
+def _reference_cluster_support(eis, sps, lms, edge_clades, n_species, k, thr):
+    """Deliberately naive O(copies * E^2) reference."""
+    E = len(edge_clades)
+    ss, sm = torch.zeros(E, E), torch.zeros(E, E)
+    nt = len(eis)
+    member = [set(c) for c in edge_clades]
+    for ei, sp, lm in zip(eis, sps, lms):
+        for a, neigh in gene_tree_copy_neighborhoods(ei, sp, lm, k):
+            size = sum(neigh.values())
+            if size == 0:
+                continue
+            fr = torch.zeros(E)
+            for j in range(E):
+                fr[j] = sum(c for s, c in neigh.items() if s in member[j]) / size
+            for i in range(E):
+                if a not in member[i] or fr[i].item() >= thr:
+                    continue
+                ss[i] = ss[i] + fr
+                sm[i] = torch.maximum(sm[i], fr)
+    if nt > 0:
+        ss /= nt
+    return torch.stack([ss, sm], dim=-1)
+
+
+def test_cluster_support_matches_reference_randomized():
+    rng = random.Random(0)
+    for trial in range(8):
+        n_species = rng.randint(3, 8)
+        eis, sps, lms = [], [], []
+        for _ in range(rng.randint(3, 12)):
+            t = _random_numeric_gene_tree(n_species, rng.randint(n_species, 2 * n_species), rng)
+            ei, sp, lm = _numeric_to_tensors(t)
+            eis.append(ei); sps.append(sp); lms.append(lm)
+        clades = _random_clades(rng.randint(2, 6), n_species, rng)
+        k, thr = rng.randint(2, 5), 0.5
+        fast = copy_aware_cluster_support(eis, sps, lms, clades, n_species, k=k, away_threshold=thr)
+        ref = _reference_cluster_support(eis, sps, lms, clades, n_species, k, thr)
+        assert torch.allclose(fast, ref, atol=1e-6), f"trial {trial} mismatch"
 
 
 def test_build_pairwise_feat_concatenates_cluster_support(

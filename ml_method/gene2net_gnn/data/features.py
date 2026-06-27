@@ -484,13 +484,19 @@ def species_coclustering_matrix(gene_tree_edge_indices, gene_tree_species_ids,
     if n_trees == 0:
         return C
 
+    # Collect all co-sister species pairs across trees, then accumulate in one
+    # scatter instead of per-pair scalar increments. Tensors -> lists once to
+    # avoid per-element tensor access in the loop.
+    rows, cols = [], []
     for ei, sp, lm in zip(gene_tree_edge_indices, gene_tree_species_ids, gene_tree_leaf_masks):
+        src, dst = ei.tolist()
+        spl, lml = sp.tolist(), lm.tolist()
         # Group leaf-children species by parent (even-indexed parent->child edges).
         parent_leaf_species = {}
-        for k in range(0, ei.shape[1], 2):
-            p = int(ei[0, k]); c = int(ei[1, k])
-            if bool(lm[c]) and int(sp[c]) >= 0:
-                parent_leaf_species.setdefault(p, set()).add(int(sp[c]))
+        for k in range(0, len(src), 2):
+            p = src[k]; c = dst[k]
+            if lml[c] and spl[c] >= 0:
+                parent_leaf_species.setdefault(p, set()).add(spl[c])
         seen = set()
         for specs in parent_leaf_species.values():
             specs = sorted(specs)
@@ -498,8 +504,12 @@ def species_coclustering_matrix(gene_tree_edge_indices, gene_tree_species_ids,
                 for b_i in range(a_i + 1, len(specs)):
                     seen.add((specs[a_i], specs[b_i]))
         for a, b in seen:
-            C[a, b] += 1.0
-            C[b, a] += 1.0
+            rows.append(a); cols.append(b)
+            rows.append(b); cols.append(a)
+
+    if rows:
+        C.index_put_((torch.tensor(rows), torch.tensor(cols)),
+                     torch.ones(len(rows)), accumulate=True)
 
     return C / n_trees
 
@@ -541,18 +551,30 @@ def pairwise_partner_features(coclust, edge_clades):
     import torch
     E = len(edge_clades)
     feat = torch.zeros(E, E, 2)
-    idx_lists = [torch.tensor(sorted(c), dtype=torch.long) for c in edge_clades]
-    for i in range(E):
-        ci = idx_lists[i]
-        if ci.numel() == 0:
-            continue
-        for j in range(E):
-            cj = idx_lists[j]
-            if cj.numel() == 0:
-                continue
-            sub = coclust[ci][:, cj]
-            feat[i, j, 0] = sub.mean()
-            feat[i, j, 1] = sub.max()
+    n = coclust.shape[0]
+    idx_lists = [[s for s in c if 0 <= s < n] for c in edge_clades]
+
+    # Mean: membership @ coclust @ membership.T gives the per-pair sum over
+    # Ci x Cj; divide by |Ci| * |Cj|.
+    membership = torch.zeros(E, n)
+    for i, idx in enumerate(idx_lists):
+        for s in idx:
+            membership[i, s] = 1.0
+    sizes = membership.sum(dim=1)                                   # [E]
+    pair_sum = membership @ coclust @ membership.t()               # [E, E]
+    denom = sizes.unsqueeze(1) * sizes.unsqueeze(0)                # [E, E]
+    feat[..., 0] = torch.where(denom > 0, pair_sum / denom.clamp(min=1.0),
+                               torch.zeros_like(pair_sum))
+
+    # Max over Ci x Cj: first max over rows a in Ci (per column b), then over
+    # columns b in Cj. Two E-length loops with vectorized amax inside.
+    row_max = torch.zeros(E, n)
+    for i, idx in enumerate(idx_lists):
+        if idx:
+            row_max[i] = coclust[torch.tensor(idx)].amax(dim=0)
+    for j, idx in enumerate(idx_lists):
+        if idx:
+            feat[:, j, 1] = row_max[:, torch.tensor(idx)].amax(dim=1)
     return feat
 
 
@@ -593,10 +615,16 @@ def gene_tree_copy_neighborhoods(edge_index, species_ids, leaf_mask, k):
     list of (species_id:int, neighborhood:Counter[species_id -> count])
         One entry per copy of each duplicated species.
     """
+    # Pull tensors into Python lists once; per-element tensor access in a loop is
+    # ~1us each and dominates the per-tree cost otherwise.
+    src, dst = edge_index.tolist()
+    sp = species_ids.tolist()
+    lm = leaf_mask.tolist()
+
     children: Dict[int, List[int]] = {}
     parent: Dict[int, int] = {}
-    for t in range(0, edge_index.shape[1], 2):
-        p = int(edge_index[0, t]); c = int(edge_index[1, t])
+    for t in range(0, len(src), 2):
+        p = src[t]; c = dst[t]
         children.setdefault(p, []).append(c)
         parent[c] = p
 
@@ -605,7 +633,7 @@ def gene_tree_copy_neighborhoods(edge_index, species_ids, leaf_mask, k):
     def leaves_under(n: int) -> List[int]:
         if n in memo:
             return memo[n]
-        if bool(leaf_mask[n]):
+        if lm[n]:
             r = [n]
         else:
             r = []
@@ -614,13 +642,13 @@ def gene_tree_copy_neighborhoods(edge_index, species_ids, leaf_mask, k):
         memo[n] = r
         return r
 
-    leaf_nodes = [n for n in range(len(leaf_mask)) if bool(leaf_mask[n])]
-    sp_count = Counter(int(species_ids[n]) for n in leaf_nodes if int(species_ids[n]) >= 0)
+    leaf_nodes = [n for n in range(len(lm)) if lm[n]]
+    sp_count = Counter(sp[n] for n in leaf_nodes if sp[n] >= 0)
     duplicated = {s for s, ct in sp_count.items() if ct >= 2}
 
     results: List[Tuple[int, Counter]] = []
     for ln in leaf_nodes:
-        a = int(species_ids[ln])
+        a = sp[ln]
         if a < 0 or a not in duplicated or ln not in parent:
             continue
         # Grow the neighborhood upward while staying within the size cap.
@@ -631,7 +659,7 @@ def gene_tree_copy_neighborhoods(edge_index, species_ids, leaf_mask, k):
         for x in leaves_under(cand):
             if x == ln:
                 continue
-            s = int(species_ids[x])
+            s = sp[x]
             if s >= 0:
                 neigh[s] += 1
         results.append((a, neigh))
@@ -663,23 +691,46 @@ def copy_aware_cluster_support(gene_tree_edge_indices, gene_tree_species_ids,
             if 0 <= s < n_species:
                 membership[i, s] = 1.0
 
+    # Gather every away-candidate copy across all gene trees into flat tensors,
+    # then do the per-pair arithmetic as a couple of matmuls instead of a
+    # Python double loop. The only per-copy work left is building index lists
+    # (cheap), with no torch ops inside the loop.
+    rows, cols, vals = [], [], []   # COO for the [C, n_species] neighborhood-count matrix
+    sizes, a_list = [], []
+    c_idx = 0
     for ei, sp, lm in zip(gene_tree_edge_indices, gene_tree_species_ids, gene_tree_leaf_masks):
         for a, neigh in gene_tree_copy_neighborhoods(ei, sp, lm, k):
             size = sum(neigh.values())
             if size == 0:
                 continue
-            counts = torch.zeros(n_species)
             for s, c in neigh.items():
                 if 0 <= s < n_species:
-                    counts[s] = c
-            fracs = (membership @ counts) / size            # [E]: frac of neighborhood in each clade
-            for i in range(E):
-                if membership[i, a] == 0:
-                    continue                                 # species a not in clade i
-                if fracs[i].item() >= away_threshold:
-                    continue                                 # home copy w.r.t. clade i
-                support_sum[i] += fracs
-                support_max[i] = torch.maximum(support_max[i], fracs)
+                    rows.append(c_idx); cols.append(s); vals.append(float(c))
+            sizes.append(float(size)); a_list.append(a)
+            c_idx += 1
 
-    support_sum /= n_trees
+    C = c_idx
+    if C == 0:
+        return torch.stack([support_sum, support_max], dim=-1)
+
+    counts = torch.zeros(C, n_species)
+    if rows:
+        counts.index_put_(
+            (torch.tensor(rows), torch.tensor(cols)),
+            torch.tensor(vals), accumulate=True,
+        )
+    size_col = torch.tensor(sizes).unsqueeze(1)               # [C, 1]; > 0 by construction
+    fracs = (counts @ membership.t()) / size_col              # [C, E]: frac of copy's neighborhood in each clade
+    a_idx = torch.tensor(a_list)                              # [C]
+    member_a = membership[:, a_idx].t()                       # [C, E]: is copy's species in clade i
+    away = (member_a > 0) & (fracs < away_threshold)          # [C, E]: copy is "away" w.r.t. clade i
+
+    # support_sum[i, j] = sum over copies away w.r.t. i of frac in clade j.
+    support_sum = (away.to(fracs.dtype).t() @ fracs) / n_trees
+    # support_max[i, j] = max over those copies of frac in clade j (E small).
+    for i in range(E):
+        sel = away[:, i]
+        if bool(sel.any()):
+            support_max[i] = fracs[sel].amax(dim=0)
+
     return torch.stack([support_sum, support_max], dim=-1)
