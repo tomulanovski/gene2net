@@ -43,6 +43,20 @@ def wgd_positive_edges(labels):
     return pos
 
 
+def edge_to_partner_map(labels):
+    """wgd_edge -> partner_edge for mappable events."""
+    m = {}
+    if labels is None or not labels.wgd_edges:
+        return m
+    mask = labels.mask or []
+    for k, e in enumerate(labels.wgd_edges):
+        if k < len(mask) and not mask[k]:
+            continue
+        if k < len(labels.partner_edges):
+            m[e] = labels.partner_edges[k]
+    return m
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-dir", required=True)
@@ -56,6 +70,7 @@ def main():
     size_hist = Counter()        # clade size of every WGD-positive edge
     n_tip_pos = n_internal_pos = 0
     n_sig_edges = 0
+    n_sig_edges_inward = 0       # signature edges whose tips point at each other (true fragmentation)
     n_samples_sig = 0
     examined = 0
 
@@ -74,6 +89,7 @@ def main():
         ef = s.species_tree_edge_features
 
         pos = {e for e in wgd_positive_edges(s.labels) if 0 <= e < E}
+        partner_of = edge_to_partner_map(s.labels)
 
         for e in pos:
             sz = len(clades[e])
@@ -96,11 +112,15 @@ def main():
             fdup = float(ef[e, FRAC_DUP_IDX]) if (ef is not None and e < ef.shape[0]) else 0.0
             if fdup < args.frac_dup_threshold:
                 continue
-            desc_pos_tips = [sp_to_tip[sp] for sp in clades[e]
-                             if sp in sp_to_tip and sp_to_tip[sp] in pos]
+            desc_tips = {sp_to_tip[sp] for sp in clades[e] if sp in sp_to_tip}
+            desc_pos_tips = [t for t in desc_tips if t in pos]
             if len(desc_pos_tips) >= 2:
                 n_sig_edges += 1
                 sample_sig = True
+                # Do the positive tips point at each other (partner inside the clade)?
+                inward = sum(1 for t in desc_pos_tips if partner_of.get(t) in desc_tips)
+                if inward >= 2 and inward > len(desc_pos_tips) / 2:
+                    n_sig_edges_inward += 1
         if sample_sig:
             n_samples_sig += 1
         del s
@@ -115,11 +135,13 @@ def main():
     print("  (internal edge: WGD-negative, frac_clade_duplicated >= "
           f"{args.frac_dup_threshold}, >=2 descendant tips WGD-positive)")
     print(f"  signature edges:            {n_sig_edges}")
+    print(f"  ...of which 'inward' (tips point at each other = true fragmentation): "
+          f"{n_sig_edges_inward} ({100 * n_sig_edges_inward / max(n_sig_edges, 1):.1f}%)")
     print(f"  samples with >=1 signature: {n_samples_sig}/{examined} "
           f"({100 * n_samples_sig / max(examined, 1):.1f}%)")
     print("\nReading:")
-    print("  many signatures -> clade-level events ARE fragmented onto tips -> label fix is high-leverage")
-    print("  ~0 signatures + positives all tips -> data is genuinely tip-only allo (train/test mismatch question)")
+    print("  high 'inward' share -> genuine clade-level events fragmented onto reciprocal tips -> label fix is high-leverage")
+    print("  low 'inward' share  -> mostly independent co-located tip events -> fragmentation is rarer than the raw signature suggests")
 
 
 if __name__ == "__main__":
