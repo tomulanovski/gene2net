@@ -31,6 +31,7 @@ USE_ALL=false
 CONFIG="${BASE_DIR}/configs/reconstruct.yaml"
 OUTPUT_DIR="${BASE_DIR}/output/reconstruct"
 INIT_FROM=""
+CLADE_LABELS=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -39,6 +40,7 @@ while [ $# -gt 0 ]; do
         --config) CONFIG="${BASE_DIR}/$2"; shift 2;;
         --output-dir) OUTPUT_DIR="${BASE_DIR}/$2"; shift 2;;
         --init-from) INIT_FROM="${BASE_DIR}/$2"; shift 2;;
+        --clade-labels) CLADE_LABELS=1; shift;;
         *) [ -z "$DATA_DIR" ] && DATA_DIR="$1"; shift;;
     esac
 done
@@ -64,6 +66,7 @@ echo "Data: ${DATA_DIR}"
 echo "Config: ${CONFIG}"
 echo "Output: ${OUTPUT_DIR}"
 echo "Init from: ${INIT_FROM:-<none>}"
+echo "Clade labels: ${CLADE_LABELS:-<no>}"
 echo "Partition: ${PARTITION}"
 echo "================================================"
 
@@ -78,5 +81,5 @@ sbatch \
     ${ACCOUNT} \
     --qos=${QOS} \
     --gres=gpu:1 \
-    --export=ALL,DATA_DIR="${DATA_DIR}",BASE_DIR="${BASE_DIR}",CONFIG="${CONFIG}",OUTPUT_DIR="${OUTPUT_DIR}",INIT_FROM="${INIT_FROM}" \
+    --export=ALL,DATA_DIR="${DATA_DIR}",BASE_DIR="${BASE_DIR}",CONFIG="${CONFIG}",OUTPUT_DIR="${OUTPUT_DIR}",INIT_FROM="${INIT_FROM}",CLADE_LABELS="${CLADE_LABELS}" \
     "${BASE_DIR}/jobs/train_reconstruct_job.sh"

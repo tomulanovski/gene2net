@@ -27,8 +27,12 @@ echo "Device: $(python -c 'import torch; print("cuda" if torch.cuda.is_available
 echo "Date: $(date)"
 echo "============================================================================"
 
+echo "Clade labels: ${CLADE_LABELS:-<no>}"
+echo "============================================================================"
+
 python "${BASE_DIR}/scripts/train_reconstruct.py" \
     --data-dir ${DATA_DIR} \
     --config "${CONFIG:-${BASE_DIR}/configs/reconstruct.yaml}" \
     --output-dir "${OUTPUT_DIR:-${BASE_DIR}/output/reconstruct}" \
-    ${INIT_FROM:+--init-from "$INIT_FROM"}
+    ${INIT_FROM:+--init-from "$INIT_FROM"} \
+    ${CLADE_LABELS:+--clade-labels}
