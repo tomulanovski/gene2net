@@ -173,21 +173,36 @@ class Gene2NetSample:
             pickle.dump(data, f)
 
     @classmethod
-    def load(cls, directory):
-        """Load sample from directory."""
+    def load(cls, directory, clade_labels=False):
+        """Load sample from directory.
+
+        clade_labels: if True, load corrected clade-level labels from
+        labels_clade.pkl instead of the (fragmented) labels in sample.pkl.
+        Raises FileNotFoundError if requested but the sidecar is absent — never
+        silently falls back.
+        """
         with open(os.path.join(directory, "sample.pkl"), "rb") as f:
             data = pickle.load(f)
         sample = cls()
         for key, val in data.items():
             setattr(sample, key, val)
+        if clade_labels:
+            sidecar = os.path.join(directory, "labels_clade.pkl")
+            if not os.path.exists(sidecar):
+                raise FileNotFoundError(
+                    f"clade_labels=True but {sidecar} is missing — run relabel_from_metadata.py first"
+                )
+            with open(sidecar, "rb") as f:
+                sample.labels = pickle.load(f)
         return sample
 
 
 class Gene2NetDataset:
     """Dataset of Gene2Net training examples stored on disk."""
 
-    def __init__(self, root_dir):
+    def __init__(self, root_dir, clade_labels=False):
         self.root_dir = root_dir
+        self.clade_labels = clade_labels
         self.example_dirs = sorted([
             os.path.join(root_dir, d) for d in os.listdir(root_dir)
             if os.path.isdir(os.path.join(root_dir, d))
@@ -197,4 +212,4 @@ class Gene2NetDataset:
         return len(self.example_dirs)
 
     def __getitem__(self, idx):
-        return Gene2NetSample.load(self.example_dirs[idx])
+        return Gene2NetSample.load(self.example_dirs[idx], clade_labels=self.clade_labels)

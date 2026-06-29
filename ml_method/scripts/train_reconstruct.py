@@ -32,6 +32,8 @@ def main():
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--init-from", default=None,
                         help="Optional Phase 1 checkpoint to warm-start the shared backbone")
+    parser.add_argument("--clade-labels", action="store_true",
+                        help="Train on corrected clade-level labels (labels_clade.pkl)")
     args = parser.parse_args()
 
     base_dir = os.path.join(os.path.dirname(__file__), "..")
@@ -57,7 +59,7 @@ def main():
     skipped = wrong_dim = 0
     for data_dir in args.data_dir:
         print(f"Loading dataset from {data_dir}...")
-        dataset = Gene2NetDataset(data_dir)
+        dataset = Gene2NetDataset(data_dir, clade_labels=args.clade_labels)
         dir_loaded = dir_wrong = 0
         for i in range(len(dataset)):
             try:
