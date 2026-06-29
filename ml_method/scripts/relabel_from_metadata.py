@@ -43,13 +43,26 @@ def relabel_one_sample(sample_dir, metadata, *, dry_run=False):
 
     bip = sample_edge_bipartitions(sample_dict)
 
-    # Index-alignment guard: metadata polyploids must match the sample's polyploids.
+    # Index-alignment guard 1: species count must match the metadata.
+    n_species_md = metadata.get("n_species")
+    if n_species_md is not None and len(sample_dict["species_list"]) != n_species_md:
+        raise ValueError(
+            f"species-count mismatch in {sample_dir}: sample "
+            f"{len(sample_dict['species_list'])} != metadata n_species {n_species_md} "
+            "(wrong metadata index?)"
+        )
+
+    # Index-alignment guard 2: the sample's labeled polyploids must be a SUBSET of
+    # the metadata's true polyploids. The old pipeline may have dropped some
+    # (unmappable events), so subset (not equality) is expected; a species in the
+    # sample but NOT in metadata means the indices don't correspond.
     md_poly = set((metadata.get("polyploid_species") or {}).keys())
     sample_poly = _sample_duplicated_species(sample_dict, bip)
-    if md_poly and sample_poly and md_poly != sample_poly:
+    if sample_poly and not sample_poly.issubset(md_poly):
         raise ValueError(
-            f"polyploid mismatch in {sample_dir}: metadata {sorted(md_poly)} != "
-            f"sample {sorted(sample_poly)} (wrong metadata index?)"
+            f"polyploid mismatch in {sample_dir}: sample has "
+            f"{sorted(sample_poly - md_poly)} not in metadata {sorted(md_poly)} "
+            "(wrong metadata index?)"
         )
 
     labels = labels_from_metadata_for_sample(metadata["events"], sample_dict)

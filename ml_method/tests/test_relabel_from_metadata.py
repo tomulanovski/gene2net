@@ -30,6 +30,31 @@ def test_relabel_writes_clade_labels(tmp_path):
     assert len(labels.wgd_edges) == 1  # one clade event, NOT two fragmented tips
 
 
+def test_relabel_allows_subset_polyploids(tmp_path):
+    # The sample's labeled polyploids ({D,E}) are a SUBSET of metadata's
+    # ({C,D,E}) — the old pipeline dropped an unmappable event. This must NOT
+    # raise; metadata is the fuller ground truth.
+    d = _write_sample(tmp_path)
+    metadata = {
+        "n_species": 5,
+        "polyploid_species": {"C": 2, "D": 2, "E": 2},
+        "events": [{"target_clade": ["D", "E"], "partner_clade": ["A", "B"], "event_type": "allo"}],
+    }
+    labels = relabel_one_sample(d, metadata)
+    assert labels.mask == [True]
+
+
+def test_relabel_rejects_wrong_species_count(tmp_path):
+    d = _write_sample(tmp_path)
+    metadata = {
+        "n_species": 99,  # sample has 5 species -> wrong index
+        "polyploid_species": {"D": 2, "E": 2},
+        "events": [{"target_clade": ["D", "E"], "partner_clade": ["A", "B"], "event_type": "allo"}],
+    }
+    with pytest.raises(ValueError, match="species-count"):
+        relabel_one_sample(d, metadata)
+
+
 def test_relabel_rejects_index_mismatch(tmp_path):
     d = _write_sample(tmp_path)
     # metadata for a DIFFERENT sample (wrong polyploids) -> must fail loud
