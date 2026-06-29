@@ -16,32 +16,29 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from gene2net_gnn.data.metadata_labels import (
-    labels_from_metadata_for_sample,
-    sample_edge_bipartitions,
-)
+from gene2net_gnn.data.metadata_labels import labels_from_metadata_for_sample
 
 
-def _sample_duplicated_species(sample_dict, bip):
-    """Species under the sample's existing WGD-positive edges (mappable events)."""
-    labels = sample_dict.get("labels")
-    if labels is None or not labels.wgd_edges:
-        return set()
-    bip_map = dict(bip)
-    mask = labels.mask or []
+def _sample_polyploids_from_copies(sample_dict, min_mode=2):
+    """Species whose gene-tree MODE copy count >= min_mode.
+
+    Derived from the data (node copy-count features), not the ASTRAL-mapped labels,
+    so it is not corrupted by label mis-mapping. node feature col 2 = mode_copies.
+    """
+    names = sample_dict["species_tree_node_names"]
+    is_leaf = sample_dict["species_tree_is_leaf"]
+    feats = sample_dict["species_tree_node_features"]
+    species = set(sample_dict["species_list"])
     out = set()
-    for k, e in enumerate(labels.wgd_edges):
-        if k < len(mask) and not mask[k]:
-            continue
-        out |= set(bip_map.get(e, frozenset()))
+    for i, nm in enumerate(names):
+        if bool(is_leaf[i]) and nm in species and float(feats[i, 2]) >= min_mode:
+            out.add(nm)
     return out
 
 
 def relabel_one_sample(sample_dir, metadata, *, dry_run=False):
     with open(os.path.join(sample_dir, "sample.pkl"), "rb") as f:
         sample_dict = pickle.load(f)
-
-    bip = sample_edge_bipartitions(sample_dict)
 
     # Index-alignment guard 1: species count must match the metadata.
     n_species_md = metadata.get("n_species")
@@ -52,15 +49,16 @@ def relabel_one_sample(sample_dir, metadata, *, dry_run=False):
             "(wrong metadata index?)"
         )
 
-    # Index-alignment guard 2: the sample's labeled polyploids must be a SUBSET of
-    # the metadata's true polyploids. The old pipeline may have dropped some
-    # (unmappable events), so subset (not equality) is expected; a species in the
-    # sample but NOT in metadata means the indices don't correspond.
+    # Index-alignment guard 2: the sample's OBSERVED polyploids (gene-tree copy
+    # counts) must be a subset of the metadata's true polyploids. Subset (not
+    # equality) is expected because dup/loss can make a true polyploid look diploid
+    # in most gene trees; a copy-count polyploid NOT in metadata means the indices
+    # don't correspond.
     md_poly = set((metadata.get("polyploid_species") or {}).keys())
-    sample_poly = _sample_duplicated_species(sample_dict, bip)
+    sample_poly = _sample_polyploids_from_copies(sample_dict)
     if sample_poly and not sample_poly.issubset(md_poly):
         raise ValueError(
-            f"polyploid mismatch in {sample_dir}: sample has "
+            f"polyploid mismatch in {sample_dir}: sample copy-count polyploids "
             f"{sorted(sample_poly - md_poly)} not in metadata {sorted(md_poly)} "
             "(wrong metadata index?)"
         )
@@ -94,6 +92,7 @@ def main():
     )
 
     n_done = n_unmappable = total_events = 0
+    errors = []
     for name in sample_dirs:
         idx = name.replace("sample_", "")
         md_path = os.path.join(args.data_root, f"metadata_{idx}.json")
@@ -101,14 +100,27 @@ def main():
             raise FileNotFoundError(f"missing metadata for {name}: {md_path}")
         with open(md_path) as f:
             metadata = json.load(f)
-        labels = relabel_one_sample(os.path.join(train_dir, name), metadata, dry_run=args.dry_run)
+        try:
+            labels = relabel_one_sample(os.path.join(train_dir, name), metadata, dry_run=args.dry_run)
+        except ValueError as e:
+            errors.append(str(e))
+            continue
         n_done += 1
         total_events += len(labels.wgd_edges)
         n_unmappable += labels.n_unmappable
 
-    print(f"Relabeled {n_done} samples in {train_dir}")
+    print(f"Relabeled {n_done} samples in {train_dir}"
+          + (" (dry-run, nothing written)" if args.dry_run else ""))
     print(f"  total events: {total_events}, unmappable (clade not in ASTRAL): {n_unmappable} "
           f"({100 * n_unmappable / max(total_events, 1):.1f}%)")
+
+    if errors:
+        print(f"\n{len(errors)} samples FAILED consistency checks (NOT relabeled):")
+        for e in errors[:10]:
+            print("  " + e)
+        if len(errors) > 10:
+            print(f"  ... and {len(errors) - 10} more")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
