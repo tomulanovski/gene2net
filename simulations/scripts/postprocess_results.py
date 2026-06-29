@@ -449,7 +449,7 @@ class ResultPostprocessor:
             tree_string = self.extract_mpsugar_newick(input_file)
         elif method == 'padre':
             tree_string = self.copy_padre_result(input_file)
-        elif method in ('grandma_split', 'grandma_split_prior'):
+        elif method in ('grandma_split', 'grandma_split_prior', 'grandma_split_prior_real'):
             tree_string = self.extract_grandma_split_tree(input_file)
         elif method == 'alloppnet':
             # AlloppNET post-processing runs via sbatch (handled in process_all)
