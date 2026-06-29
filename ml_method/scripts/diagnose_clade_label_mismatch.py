@@ -62,9 +62,11 @@ def main():
     ap.add_argument("--data-dir", required=True)
     ap.add_argument("--max-samples", type=int, default=500)
     ap.add_argument("--frac-dup-threshold", type=float, default=0.5)
+    ap.add_argument("--clade-labels", action="store_true",
+                    help="Read corrected clade-level labels (labels_clade.pkl) instead of sample.pkl labels")
     args = ap.parse_args()
 
-    ds = Gene2NetDataset(args.data_dir)
+    ds = Gene2NetDataset(args.data_dir, clade_labels=args.clade_labels)
     n = min(args.max_samples, len(ds))
 
     size_hist = Counter()        # clade size of every WGD-positive edge
