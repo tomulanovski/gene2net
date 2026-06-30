@@ -41,10 +41,15 @@ def load_tree_any(path):
 
 
 def norm_rf(t1, t2):
+    """Unrooted normalized RF, or None if incomparable (ete3 returns 'NaN' string
+    when the trees are too small to have informative splits)."""
     try:
-        return t1.compare(t2, unrooted=True)["norm_rf"]
-    except Exception:
+        v = float(t1.compare(t2, unrooted=True)["norm_rf"])
+    except (TypeError, ValueError, Exception):
         return None
+    if v != v:  # NaN
+        return None
+    return v
 
 
 def prune_to(tree, keep_names):
