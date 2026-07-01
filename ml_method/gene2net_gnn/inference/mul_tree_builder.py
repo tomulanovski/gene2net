@@ -29,6 +29,12 @@ def _apply_wgd_event(tree: Tree, event: WGDEvent) -> bool:
     if wgd_node is None:
         return False
 
+    # A whole-tree clade is the root: duplicating it aliases `tree` into its own
+    # child (self-cycle) and hangs any later traversal. Skip it. Real predicted
+    # WGD edges are always non-root, so this only guards degenerate/hand-built input.
+    if wgd_node.up is None:
+        return False
+
     is_auto = event.partner_edge_clade == event.wgd_edge_clade
 
     # Deep-copy the subtree to be duplicated
@@ -74,18 +80,28 @@ def _apply_wgd_event(tree: Tree, event: WGDEvent) -> bool:
     return True
 
 
-def build_mul_tree(species_tree: Tree, events: List[WGDEvent]) -> Tree:
+def build_mul_tree(species_tree: Tree, events: List[WGDEvent], return_dropped: bool = False):
     """Build MUL-tree by applying WGD events to species tree.
 
     Events are sorted bottom-up (smallest clades first) so nested events
     are applied before outer events that may duplicate them.
+
+    An event whose target/partner clade cannot be found in the current tree is
+    dropped (this happens when an earlier allo graft added foreign leaves into
+    that clade's ancestors). With return_dropped=True, returns (tree, n_dropped)
+    so callers can see how many predicted events were lost; otherwise returns the
+    tree (backward-compatible).
     """
     mul_tree = species_tree.copy("deepcopy")
 
     # Sort by clade size ascending (deepest events first)
     sorted_events = sorted(events, key=lambda e: len(e.wgd_edge_clade))
 
+    dropped = 0
     for event in sorted_events:
-        _apply_wgd_event(mul_tree, event)
+        if not _apply_wgd_event(mul_tree, event):
+            dropped += 1
 
+    if return_dropped:
+        return mul_tree, dropped
     return mul_tree

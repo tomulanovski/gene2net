@@ -80,8 +80,14 @@ def reroot_to_match(astral_tree, true_tree):
     outgroup = min(sides, key=len)
     # robust_set_outgroup handles the case where the outgroup spans ASTRAL's
     # arbitrary root (the old inline version silently fell back ~42% of the time).
+    # If the true outgroup isn't monophyletic in ASTRAL (topologies differ), don't
+    # silently keep the arbitrary root — fall back to midpoint, matching hybrid_root.
     from gene2net_gnn.data.rooting import robust_set_outgroup
-    robust_set_outgroup(astral_tree, outgroup)
+    if not robust_set_outgroup(astral_tree, outgroup):
+        try:
+            astral_tree.set_outgroup(astral_tree.get_midpoint_outgroup())
+        except Exception:
+            pass
     return astral_tree
 
 

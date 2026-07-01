@@ -15,6 +15,7 @@ Hybrid = use the gene-tree consensus root when it gives a clean clade, else fall
 back to midpoint. The gene trees carry the rooting signal where the clock breaks
 down (high ILS), midpoint covers the rest.
 """
+import warnings
 from collections import Counter
 from typing import List
 
@@ -98,6 +99,10 @@ def hybrid_root(species_tree: Tree, gene_trees: List[Tree],
     t = species_tree.copy()
     try:
         t.set_outgroup(t.get_midpoint_outgroup())
-    except Exception:
-        pass
+    except Exception as e:
+        warnings.warn(
+            f"hybrid_root: both consensus and midpoint rooting failed ({e!r}); "
+            "returning an arbitrarily-rooted tree",
+            RuntimeWarning,
+        )
     return t

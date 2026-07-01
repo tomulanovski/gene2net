@@ -50,12 +50,16 @@ def prepare_sample(sample: Gene2NetSample, device: torch.device):
         if labels.wgd_counts[edge_idx] > 0:
             wgd_targets[edge_idx] = 1
 
-    # Apply unmappable mask
+    # Apply unmappable mask: exclude an unmappable event's best-match edge from the
+    # loss — but never mask an edge that carries a real positive (a different,
+    # mappable event mapped there). Otherwise a coincidental collision would
+    # silently drop a true-positive detection label.
     if labels.mask is not None:
         for i in range(len(labels.wgd_edges)):
             edge_idx = labels.wgd_edges[i]
             if edge_idx < n_edges and i < len(labels.mask) and not labels.mask[i]:
-                mask[edge_idx] = False
+                if wgd_targets[edge_idx] == 0:
+                    mask[edge_idx] = False
 
     # Realign edge ordering to preorder (matching edge_features and labels) and
     # cache it. tree_to_edge_index emits edges grouped by parent, which differs

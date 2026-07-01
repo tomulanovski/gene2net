@@ -109,8 +109,8 @@ def build_for_strategy(model, astral_tree, clades, wgd_list, edge_emb, pairwise_
                 wgd_edge_clade=clades[i], partner_edge_clade=clades[j],
                 confidence=float(wgd_list[i]),
             ))
-    mul_tree = build_mul_tree(astral_tree, events)
-    return mul_tree, n_auto, n_allo
+    mul_tree, n_dropped = build_mul_tree(astral_tree, events, return_dropped=True)
+    return mul_tree, n_auto, n_allo, n_dropped
 
 
 def main():
@@ -146,6 +146,7 @@ def main():
     model = load_model(args.model_dir, model_config, device)
 
     done = skipped = 0
+    total_dropped = {}
     for net in NETWORKS:
         rep_dir = os.path.join(args.sim_base, net, "processed", args.config,
                                "grampa_input", f"replicate_{args.replicate}")
@@ -188,7 +189,7 @@ def main():
         # Build + write one MUL-tree per strategy.
         counts = []
         for strat in strategies:
-            mul_tree, n_auto, n_allo = build_for_strategy(
+            mul_tree, n_auto, n_allo, n_dropped = build_for_strategy(
                 model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
                 strat, args.threshold, parent_edge, copy_bound,
             )
@@ -201,12 +202,16 @@ def main():
                     gt = f.read()
                 with open(os.path.join(case_dir, "ground_truth.nex"), "w") as f:
                     f.write(gt)
-            counts.append(f"{strat}={n_auto + n_allo}")
+            total_dropped[strat] = total_dropped.get(strat, 0) + n_dropped
+            counts.append(f"{strat}={n_auto + n_allo}" + (f" (dropped {n_dropped})" if n_dropped else ""))
 
         print(f"[{net}] events per strategy: {', '.join(counts)}")
         done += 1
 
     print(f"\nDone: {done} networks x {len(strategies)} strategies, {skipped} skipped.")
+    if any(total_dropped.values()):
+        print("Silently-dropped events (clade unfindable after earlier grafts): "
+              + ", ".join(f"{s}={n}" for s, n in total_dropped.items()))
     print(f"Output under {out_base}/<strategy>/")
     print("Score each strategy (gene2net env):")
     for strat in strategies:
