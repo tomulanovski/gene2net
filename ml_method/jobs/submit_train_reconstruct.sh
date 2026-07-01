@@ -32,6 +32,7 @@ CONFIG="${BASE_DIR}/configs/reconstruct.yaml"
 OUTPUT_DIR="${BASE_DIR}/output/reconstruct"
 INIT_FROM=""
 CLADE_LABELS=""
+ROOTED=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -41,6 +42,7 @@ while [ $# -gt 0 ]; do
         --output-dir) OUTPUT_DIR="${BASE_DIR}/$2"; shift 2;;
         --init-from) INIT_FROM="${BASE_DIR}/$2"; shift 2;;
         --clade-labels) CLADE_LABELS=1; shift;;
+        --rooted) ROOTED=1; shift;;
         *) [ -z "$DATA_DIR" ] && DATA_DIR="$1"; shift;;
     esac
 done
@@ -49,6 +51,11 @@ if [ "$USE_ALL" = true ]; then
     DATA_DIR="$ALL_CONFIGS_DIRS"
 else
     DATA_DIR="${DATA_DIR:-$DEFAULT_DATA}"
+fi
+
+# --rooted: point at the rooted re-packaged data (training_rooted/) instead of training/.
+if [ -n "$ROOTED" ]; then
+    DATA_DIR="${DATA_DIR//\/training\//\/training_rooted\/}"
 fi
 
 if [ "$USE_GENERAL" = true ]; then

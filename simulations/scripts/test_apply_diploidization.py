@@ -102,17 +102,14 @@ class TestBuildEvents:
             frozenset({"X_3"}),
         }
 
-    def test_nested_autopolyploid_outer_then_inner(self):
+    def test_nested_autopolyploid_outer_and_mirrored_inner(self):
         # two rounds of WGD on X: ((X,X),(X,X)) -> outer event + inner event
+        # mirrored onto BOTH outer blocks (so either surviving block fractionates)
         events = ad.build_events("(((X_1,X_2),(X_3,X_4)),Y);")
-        assert len(events) == 2
-        # ordered outer (taller) first
-        outer, inner = events
-        assert _sides_as_set(outer) == {
-            frozenset({"X_1", "X_2"}),
-            frozenset({"X_3", "X_4"}),
-        }
-        assert _sides_as_set(inner) == {frozenset({"X_1"}), frozenset({"X_2"})}
+        sides = [_sides_as_set(e) for e in events]
+        assert {frozenset({"X_1", "X_2"}), frozenset({"X_3", "X_4"})} in sides  # outer
+        assert {frozenset({"X_1"}), frozenset({"X_2"})} in sides                # inner block A
+        assert {frozenset({"X_3"}), frozenset({"X_4"})} in sides                # inner block B
 
 
 class TestBuildEventsRealNetwork:
@@ -215,6 +212,19 @@ class TestPlanRemovals:
             survivors = present - removed
             x_survivors = {l for l in survivors if ad.split_copy(l)[0] == "X"}
             assert len(x_survivors) >= 1
+
+    def test_nested_inner_applies_to_whichever_outer_block_survives(self):
+        # #6 fix: outer keeps BOTH blocks (q=1), inner fully fractionates (q=0).
+        # Each surviving block must collapse to a single copy -> X ends with 2.
+        # groups: 0 = outer (2-copy blocks), 1 = inner (singleton blocks)
+        events = ad.build_events(NESTED_TREE)
+        present = _present(NESTED_TREE)
+        q_by_group = [1.0, 0.0]  # keep both outer blocks; drop one inside each
+        for seed in range(30):
+            removed = ad.plan_removals(events, q_by_group, present,
+                                       np.random.default_rng(seed))
+            x = {l for l in (present - removed) if ad.split_copy(l)[0] == "X"}
+            assert len(x) == 2
 
     def test_unbiased_drop_is_roughly_fifty_fifty(self):
         events = ad.build_events(ALLO_TREE)

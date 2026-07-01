@@ -61,6 +61,19 @@ def split_copy(leaf):
     return leaf, None
 
 
+def _iso_leaf_map(a, b, canonical):
+    """Map uniq leaf names of subtree ``a`` to the corresponding leaves of the
+    isomorphic subtree ``b`` (children paired by canonical form)."""
+    if a.is_leaf():
+        return {a.uniq: b.uniq}
+    a_children = sorted(a.children, key=lambda n: canonical[n])
+    b_children = sorted(b.children, key=lambda n: canonical[n])
+    mapping = {}
+    for ca, cb in zip(a_children, b_children):
+        mapping.update(_iso_leaf_map(ca, cb, canonical))
+    return mapping
+
+
 def build_events(species_tree):
     """Fold a unique-named species tree into its WGD events.
 
@@ -69,14 +82,21 @@ def build_events(species_tree):
     to recover the MUL structure, which is folded with the Holm 2006 grouping
     (mirroring ``ReticulateTree.multree_to_dag``): at each height, top-down,
     subtrees with identical canonical form are an isomorphic group = one WGD
-    event.  After an event the non-leader copies are excluded so nested events
-    inside the surviving copy are still found.
+    event.  After an event the non-leader copies are set aside so nested events
+    inside the surviving (leader) copy are still found.
 
-    Returns a list of events ordered outer (tallest) -> inner, each a dict::
+    Because the non-leader copies are set aside, an inner event is detected only
+    in the leader block; it is then **mirrored** onto the other blocks of its
+    immediately-enclosing event (via the block isomorphism) so that fractionation
+    applies whichever outer block survives.  Mirrored inner events share the
+    ``group`` (hence the drawn retention rate) of their source event.
+
+    Returns a list of events, each a dict::
 
         {"sides":         [frozenset(species-tree leaf names), ...],  # the copies
-         "autopolyploidy": bool,                                      # siblings?
-         "height":         int}
+         "autopolyploidy": bool,
+         "height":         int,
+         "group":          int}   # events sharing a group share one q_e
     """
     t = species_tree if isinstance(species_tree, Tree) else Tree(species_tree, format=1)
     t = t.copy()
@@ -89,6 +109,7 @@ def build_events(species_tree):
 
     removed = set()  # ids of nodes excluded by an earlier (outer) fold
     events = []
+    group = 0
     for h in sorted(height_map.keys(), reverse=True):
         nodes = [n for n in height_map[h] if id(n) not in removed]
         groups = defaultdict(list)
@@ -102,12 +123,38 @@ def build_events(species_tree):
             sides = [frozenset(l.uniq for l in m.iter_leaves()) for m in members]
             parents = [m.up for m in members]
             autopolyploidy = any(parents.count(p) > 1 for p in parents)
-            events.append(
-                {"sides": sides, "autopolyploidy": autopolyploidy, "height": h}
-            )
+            events.append({
+                "sides": sides, "autopolyploidy": autopolyploidy,
+                "height": h, "group": group, "_nodes": members,
+            })
+            group += 1
             for iso in members[1:]:
                 removed.update(id(d) for d in iso.traverse())
 
+    # Mirror each inner event onto the other blocks of its immediate enclosing event.
+    for inner in list(events):
+        inner_leaves = frozenset().union(*inner["sides"])
+        enclosing = [
+            e for e in events
+            if e is not inner and e["height"] > inner["height"]
+            and inner_leaves <= e["sides"][0]  # inside e's leader block
+        ]
+        if not enclosing:
+            continue
+        outer = min(enclosing, key=lambda e: len(e["sides"][0]))  # immediate parent
+        leader_node = outer["_nodes"][0]
+        for other_node in outer["_nodes"][1:]:
+            imap = _iso_leaf_map(leader_node, other_node, canonical)
+            if not all(l in imap for side in inner["sides"] for l in side):
+                continue
+            events.append({
+                "sides": [frozenset(imap[l] for l in side) for side in inner["sides"]],
+                "autopolyploidy": inner["autopolyploidy"],
+                "height": inner["height"], "group": inner["group"], "_nodes": None,
+            })
+
+    for e in events:
+        e.pop("_nodes", None)
     return events
 
 
@@ -144,7 +191,7 @@ def draw_retention_rates(n_events, dist="beta", rng=None, **params):
     raise ValueError(f"unknown distribution: {dist!r}")
 
 
-def plan_removals(events, q_by_event, present_leaves, rng):
+def plan_removals(events, q_by_group, present_leaves, rng):
     """Decide which species-tree leaves to fractionate out of one gene.
 
     For each event (outer -> inner) and each species, the species' copies are its
@@ -152,13 +199,14 @@ def plan_removals(events, q_by_event, present_leaves, rng):
     outer event of a nested polyploid).  Among the blocks still present, one is
     kept and each of the others is dropped with probability ``1 - q_e``.  The kept
     block is chosen uniformly at random (unbiased fractionation), so a species
-    always retains at least one copy per gene.
+    always retains at least one copy per gene.  ``q_by_group`` is indexed by each
+    event's ``group`` (mirrored nested events share their source's group/rate).
 
     Returns the set of species-tree leaf names to remove from this gene.
     """
     removed = set()
-    for ei, event in enumerate(events):
-        q = q_by_event[ei]
+    for event in events:
+        q = q_by_group[event["group"]]
         per_species = defaultdict(list)  # species -> [block per side]
         for side in event["sides"]:
             by_species = defaultdict(set)
@@ -253,8 +301,9 @@ def diploidize_replicate(species_tree_path, in_dir, out_dir, *,
     """
     in_dir, out_dir = Path(in_dir), Path(out_dir)
     events = build_events(read_species_tree(species_tree_path))
+    n_groups = 1 + max((e["group"] for e in events), default=-1)
     rng = np.random.default_rng(seed)
-    q_by_event = draw_retention_rates(len(events), dist=dist, rng=rng, **dist_params)
+    q_by_group = draw_retention_rates(n_groups, dist=dist, rng=rng, **dist_params)
 
     (out_dir / "alignments").mkdir(parents=True, exist_ok=True)
     copy_numbers = defaultdict(lambda: defaultdict(int))  # species -> {count: n_genes}
@@ -271,7 +320,7 @@ def diploidize_replicate(species_tree_path, in_dir, out_dir, *,
 
         newick = gene_path.read_text().strip()
         present = {species_tree_leaf(l.name) for l in Tree(newick, format=1).iter_leaves()}
-        removed = plan_removals(events, q_by_event, present, rng)
+        removed = plan_removals(events, q_by_group, present, rng)
 
         (out_dir / gene_path.name).write_text(prune_gene_tree(newick, removed) + "\n")
         (out_dir / "alignments" / aln_path.name).write_text(
@@ -290,20 +339,23 @@ def diploidize_replicate(species_tree_path, in_dir, out_dir, *,
         print(f"WARNING: no g_trees*.trees processed in {in_dir} "
               f"(multi-batch layouts are not supported)")
 
+    # One summary row per event group (mirrored nested events share a group).
+    event_rows = []
+    for group_id in sorted({e["group"] for e in events}):
+        e = next(e for e in events if e["group"] == group_id)
+        event_rows.append({
+            "species": sorted({split_copy(l)[0] for side in e["sides"] for l in side}),
+            "n_copies": len(e["sides"]),
+            "autopolyploidy": e["autopolyploidy"],
+            "q": q_by_group[group_id],
+        })
+
     summary = {
         "dist": dist,
         "dist_params": dist_params,
         "seed": seed,
         "n_genes": n_genes,
-        "events": [
-            {
-                "species": sorted({split_copy(l)[0] for side in e["sides"] for l in side}),
-                "n_copies": len(e["sides"]),
-                "autopolyploidy": e["autopolyploidy"],
-                "q": q_by_event[i],
-            }
-            for i, e in enumerate(events)
-        ],
+        "events": event_rows,
         "copy_numbers": {
             sp: {str(c): n for c, n in sorted(counts.items())}
             for sp, counts in sorted(copy_numbers.items())
