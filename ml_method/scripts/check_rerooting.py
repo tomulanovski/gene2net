@@ -17,6 +17,8 @@ import os
 
 from ete3 import Tree
 
+from gene2net_gnn.data.rooting import robust_set_outgroup
+
 
 def load_astral(path):
     return Tree(open(path).read().strip(), format=1)
@@ -31,21 +33,14 @@ def load_nexus(path):
 
 
 def reroot_to_match(astral_tree, true_tree):
-    """Copy of reconstruct_mul_tree.reroot_to_match (inlined to avoid torch import)."""
+    """Re-root ASTRAL to the true root using the shared robust_set_outgroup."""
     kids = true_tree.children
     if len(kids) < 2:
         return astral_tree, "true_no_root"
     sides = [set(c.get_leaf_names()) for c in kids]
     outgroup = min(sides, key=len)
-    try:
-        og = list(outgroup)
-        if len(og) == 1:
-            astral_tree.set_outgroup(og[0])
-        else:
-            astral_tree.set_outgroup(astral_tree.get_common_ancestor(og))
-        return astral_tree, "ok"
-    except Exception:
-        return astral_tree, "fallback"
+    ok = robust_set_outgroup(astral_tree, outgroup)
+    return astral_tree, ("ok" if ok else "fallback")
 
 
 def norm_rf(t1, t2, unrooted):

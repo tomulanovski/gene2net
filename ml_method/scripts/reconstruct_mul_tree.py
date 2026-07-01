@@ -78,14 +78,10 @@ def reroot_to_match(astral_tree, true_tree):
         return astral_tree
     sides = [set(c.get_leaf_names()) for c in kids]
     outgroup = min(sides, key=len)
-    try:
-        og = list(outgroup)
-        if len(og) == 1:
-            astral_tree.set_outgroup(og[0])
-        else:
-            astral_tree.set_outgroup(astral_tree.get_common_ancestor(og))
-    except Exception:
-        pass  # outgroup not monophyletic in ASTRAL -> leave as-is
+    # robust_set_outgroup handles the case where the outgroup spans ASTRAL's
+    # arbitrary root (the old inline version silently fell back ~42% of the time).
+    from gene2net_gnn.data.rooting import robust_set_outgroup
+    robust_set_outgroup(astral_tree, outgroup)
     return astral_tree
 
 
