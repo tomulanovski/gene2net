@@ -57,6 +57,31 @@ def robust_set_outgroup(tree: Tree, outgroup_leaves) -> bool:
         return False
 
 
+def root_at_reference(tree: Tree, reference_tree: Tree, name_map=None) -> bool:
+    """Root `tree` at the KNOWN root, given a rooted `reference_tree`.
+
+    For real data the root is known (researchers use an outgroup), so instead of
+    inferring it with hybrid_root we root `tree` to match the reference's basal
+    split. The outgroup is the species exclusive to the smaller side of the
+    reference root (exclusive so a polyploid straddling the root doesn't confuse
+    it). `name_map` maps reference leaf names -> tree leaf names (the benchmark
+    renames taxa). Returns True if rooted, False if the outgroup can't be applied
+    (then `tree` is unchanged and the caller should fall back).
+    """
+    kids = reference_tree.children
+    if len(kids) < 2:
+        return False
+    sides = sorted((set(c.get_leaf_names()) for c in kids), key=len)
+    small, large = sides[0], set().union(*sides[1:])
+    outgroup = small - large  # species exclusive to the smaller side
+    if name_map:
+        outgroup = {name_map.get(s, s) for s in outgroup}
+    outgroup &= set(tree.get_leaf_names())
+    if not outgroup:
+        return False
+    return robust_set_outgroup(tree, outgroup)
+
+
 def _root_smaller_side(tree: Tree):
     """Species set on the smaller side of a rooted tree's basal split."""
     kids = tree.children

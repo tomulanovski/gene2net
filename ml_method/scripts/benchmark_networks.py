@@ -130,6 +130,11 @@ def main():
     parser.add_argument("--root-species-tree", action="store_true",
                         help="Re-root the ASTRAL species tree (hybrid gene-tree+midpoint) "
                              "before features/build. Use with a model trained on rooted data.")
+    parser.add_argument("--root-mode", choices=["none", "hybrid", "true"], default="none",
+                        help="none: keep ASTRAL's arbitrary root. hybrid: infer the root "
+                             "(gene-tree consensus+midpoint, ~80%%). true: root at the KNOWN "
+                             "root from the ground-truth network (as real studies do with an "
+                             "outgroup); falls back to hybrid if it can't be applied.")
     parser.add_argument("--out-base", default=None,
                         help="output base (default: <model-dir>/benchmark/<config>); "
                              "each strategy writes to <out-base>/<strategy>/<network>/")
@@ -142,6 +147,11 @@ def main():
     device = "cpu"
     strategies = [s.strip() for s in args.strategies.split(",")]
     out_base = args.out_base or os.path.join(args.model_dir, "benchmark", args.config)
+    # Backward-compat: --root-species-tree is the old name for hybrid rooting.
+    root_mode = args.root_mode
+    if args.root_species_tree and root_mode == "none":
+        root_mode = "hybrid"
+    print(f"Root mode: {root_mode}")
 
     model = load_model(args.model_dir, model_config, device)
 
@@ -163,12 +173,30 @@ def main():
         astral_tree = Tree(open(astral_path).read().strip(), format=1)
         species_list = sorted(set(astral_tree.get_leaf_names()))
 
+        inv_map = load_inverse_taxa_map(os.path.join(rep_dir, "taxa_map.txt"))
+
         # Root the species tree ONCE here so the sample features, the clades, and the
         # parent-edge map all derive from the same (rooted) tree. from_trees then
         # gets root=False since the tree is already rooted.
-        if args.root_species_tree:
+        if root_mode == "hybrid":
             from gene2net_gnn.data.rooting import hybrid_root
             astral_tree = hybrid_root(astral_tree, gene_trees)
+        elif root_mode == "true":
+            # Root at the KNOWN root taken from the ground-truth network (the true
+            # root researchers get from an outgroup). inv_map is replacement->original;
+            # the ground-truth uses original names, so map original->replacement.
+            from gene2net_gnn.data.rooting import root_at_reference, hybrid_root
+            forward = {orig: repl for repl, orig in inv_map.items()}
+            rooted = False
+            if os.path.exists(gt_path):
+                try:
+                    gt_tree = Tree(open(gt_path).read().strip(), format=1)
+                    rooted = root_at_reference(astral_tree, gt_tree, name_map=forward)
+                except Exception:
+                    rooted = False
+            if not rooted:
+                print(f"  [{net}] true-root unavailable; falling back to hybrid rooting")
+                astral_tree = hybrid_root(astral_tree, gene_trees)
 
         sample = Gene2NetSample.from_trees(
             species_tree=astral_tree, gene_trees=gene_trees, species_list=species_list,
@@ -176,7 +204,6 @@ def main():
         clades = preorder_edge_clades(astral_tree)
         parent_edge = build_parent_edge_map(astral_tree)
         copy_bound = infer_copy_bound(gene_trees)
-        inv_map = load_inverse_taxa_map(os.path.join(rep_dir, "taxa_map.txt"))
 
         # One inference pass for the network.
         with torch.no_grad():
