@@ -9,6 +9,7 @@
 #SBATCH --partition=itaym-pool
 #SBATCH --account=itaym-users_v2
 #SBATCH --qos=owner
+#SBATCH --constraint=localscratch
 
 # ============================================================================
 # RUN_POLYPHEST_REAL.SH
@@ -189,6 +190,17 @@ echo ""
 echo "Starting Polyphest..."
 echo "============================================================================"
 echo ""
+
+# Send PuLP/CBC's multi-GB <uuid>-pulp.mps solver temp files to node-local
+# scratch instead of /tmp, and delete them when the job ends (even if killed).
+# Does not affect the Polyphest run itself (output goes to --output_dir below).
+if [ -d /localscratch ]; then
+    export TMPDIR="$(mktemp -d -p /localscratch polyphest.XXXXXX)"
+else
+    export TMPDIR="$(mktemp -d)"
+fi
+trap 'rm -rf "$TMPDIR"' EXIT
+echo "Solver temp dir (TMPDIR): $TMPDIR"
 
 start_time=$(date +%s)
 
