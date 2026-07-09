@@ -86,18 +86,23 @@ def main():
             print(f"{cfg:<26}  (missing {d})")
             continue
         ds = Gene2NetDataset(d, clade_labels=True)
-        samples = []
-        for i in range(min(len(ds), args.max_samples)):
-            try:
-                s = ds[i]
+        n = min(len(ds), args.max_samples)
+
+        def stream():
+            # yield one sample at a time so we never hold the whole config in memory
+            for i in range(n):
+                try:
+                    s = ds[i]
+                except Exception:
+                    continue
                 if s.labels is not None:
-                    samples.append(s)
-            except Exception:
-                pass
-        if not samples:
+                    yield s
+
+        with torch.no_grad():
+            m = trainer.evaluate(stream())
+        if m.get("allo_total", 0) + m.get("auto_total", 0) == 0:
             print(f"{cfg:<26}  (no labelled samples)")
             continue
-        m = trainer.evaluate(samples)
         print(f"{cfg:<26}{m['f1']:>7.3f}{m['precision']:>7.3f}{m['recall']:>7.3f}"
               f"{m['allo_acc']:>7.3f}{m['auto_acc']:>7.3f}{m['allo_total']:>8}")
 
