@@ -15,6 +15,7 @@ Usage (final_project env, needs torch):
 import argparse
 import os
 import sys
+from collections import Counter
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -87,9 +88,13 @@ def load_gene_trees(path, max_trees=500):
 
 
 def build_for_strategy(model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
-                       strategy, threshold, parent_edge, copy_bound):
+                       strategy, threshold, parent_edge, copy_bound, polyploid_species=None):
     """Select events for a strategy, resolve partners, build the MUL-tree."""
     event_edges = select_event_edges(strategy, wgd_list, threshold, parent_edge, clades, copy_bound)
+    if polyploid_species is not None:
+        # Known-ploidy prior: keep only WGD edges whose clade is entirely polyploid
+        # species (drops false positives fired on diploid clades).
+        event_edges = [i for i in event_edges if set(clades[i]) <= polyploid_species]
     events = []
     n_auto = n_allo = 0
     if event_edges:
@@ -130,6 +135,9 @@ def main():
     parser.add_argument("--root-species-tree", action="store_true",
                         help="Re-root the ASTRAL species tree (hybrid gene-tree+midpoint) "
                              "before features/build. Use with a model trained on rooted data.")
+    parser.add_argument("--ploidy-oracle", action="store_true",
+                        help="Known-ploidy prior: mask WGD calls to species that are polyploid "
+                             "in the ground truth (measures the ceiling of a known-ploidy input).")
     parser.add_argument("--root-mode", choices=["none", "hybrid", "true"], default="none",
                         help="none: keep ASTRAL's arbitrary root. hybrid: infer the root "
                              "(gene-tree consensus+midpoint, ~80%%). true: root at the KNOWN "
@@ -213,12 +221,24 @@ def main():
             pairwise_feat = build_pairwise_feat(sample)
         wgd_list = wgd_prob.tolist()
 
+        # Known-ploidy prior (optional): species that are polyploid in the ground truth,
+        # mapped into the ASTRAL/replacement namespace, to mask WGD calls on diploids.
+        polyploid_species = None
+        if args.ploidy_oracle and os.path.exists(gt_path):
+            try:
+                gt_leaves = Tree(open(gt_path).read().strip(), format=1).get_leaf_names()
+                poly_orig = {n for n, c in Counter(gt_leaves).items() if c > 1}
+                forward = {orig: repl for repl, orig in inv_map.items()}
+                polyploid_species = {forward.get(o, o) for o in poly_orig}
+            except Exception:
+                polyploid_species = None
+
         # Build + write one MUL-tree per strategy.
         counts = []
         for strat in strategies:
             mul_tree, n_auto, n_allo, n_dropped = build_for_strategy(
                 model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
-                strat, args.threshold, parent_edge, copy_bound,
+                strat, args.threshold, parent_edge, copy_bound, polyploid_species,
             )
             rename_leaves(mul_tree, inv_map)
             case_dir = os.path.join(out_base, strat, net)
