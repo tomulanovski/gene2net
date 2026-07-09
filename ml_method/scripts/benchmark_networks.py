@@ -221,24 +221,28 @@ def main():
             pairwise_feat = build_pairwise_feat(sample)
         wgd_list = wgd_prob.tolist()
 
-        # Known-ploidy prior (optional): species that are polyploid in the ground truth,
-        # mapped into the ASTRAL/replacement namespace, to mask WGD calls on diploids.
-        polyploid_species = None
+        # Known-ploidy prior (optional): replace the copy-count-INFERRED bound (which
+        # dup/loss inflates -> too many events -> over-prediction, Polyphest's failure
+        # mode) with the TRUE ploidy from the ground truth. This is the per-species
+        # bound the 'cap' strategy uses to limit events.
         if args.ploidy_oracle and os.path.exists(gt_path):
             try:
-                gt_leaves = Tree(open(gt_path).read().strip(), format=1).get_leaf_names()
-                poly_orig = {n for n, c in Counter(gt_leaves).items() if c > 1}
-                forward = {orig: repl for repl, orig in inv_map.items()}
-                polyploid_species = {forward.get(o, o) for o in poly_orig}
-            except Exception:
-                polyploid_species = None
+                gt_counts = Counter(Tree(open(gt_path).read().strip(), format=1).get_leaf_names())
+                true_bound = {s: gt_counts.get(inv_map.get(s, s), 1) for s in copy_bound}
+                n_diff = sum(1 for s in copy_bound if true_bound[s] != copy_bound[s])
+                n_inflated = sum(1 for s in copy_bound if copy_bound[s] > true_bound[s])
+                print(f"  [{net}] ploidy prior: {n_diff} species corrected "
+                      f"({n_inflated} were over-estimated)")
+                copy_bound = true_bound
+            except Exception as e:
+                print(f"  [{net}] ploidy prior failed: {e!r}")
 
         # Build + write one MUL-tree per strategy.
         counts = []
         for strat in strategies:
             mul_tree, n_auto, n_allo, n_dropped = build_for_strategy(
                 model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
-                strat, args.threshold, parent_edge, copy_bound, polyploid_species,
+                strat, args.threshold, parent_edge, copy_bound,
             )
             rename_leaves(mul_tree, inv_map)
             case_dir = os.path.join(out_base, strat, net)
