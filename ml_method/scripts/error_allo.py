@@ -74,6 +74,7 @@ def home_clade(x_clade, clades):
 
 def analyze_config(model, ds, device, max_samples):
     n_allo = n_correct = n_home = n_other = n_home_but_correct = 0
+    n_correct_masked = 0   # partner accuracy when the home edge is excluded from candidates
     for i in range(min(len(ds), max_samples)):
         try:
             sample = ds[i]
@@ -117,7 +118,17 @@ def analyze_config(model, ds, device, max_samples):
                 n_home += 1
             else:
                 n_other += 1
-    return n_allo, n_correct, n_home, n_other, n_home_but_correct
+
+            # Smart tweak: re-predict the partner with only the HOME edge excluded.
+            # Keep self (edge q) as a candidate — self-partner is how AUTOpolyploidy is
+            # predicted, so masking it would break auto. We only remove the home (sibling).
+            home_idx = next((i for i, c in cmap.items() if h is not None and c == h), None)
+            row = scores[k].clone()
+            if home_idx is not None and home_idx != q:
+                row[home_idx] = float("-inf")
+            if int(row.argmax()) == t:
+                n_correct_masked += 1
+    return n_allo, n_correct, n_home, n_other, n_home_but_correct, n_correct_masked
 
 
 def main():
@@ -139,7 +150,8 @@ def main():
             print(f"{cfg}: missing {d}")
             continue
         ds = Gene2NetDataset(d, clade_labels=True)
-        n_allo, n_ok, n_home, n_other, n_hbc = analyze_config(model, ds, device, args.max_samples)
+        n_allo, n_ok, n_home, n_other, n_hbc, n_ok_masked = analyze_config(
+            model, ds, device, args.max_samples)
         print(f"\n=== {cfg} — {n_allo} allo events ===")
         if not n_allo:
             continue
@@ -149,8 +161,9 @@ def main():
         print(f"  WRONG -> predicted OTHER:        {n_other}/{n_allo} ({100*n_other/n_allo:.1f}%)")
         if wrong:
             print(f"  of the wrong ones, home-collision: {100*n_home/wrong:.1f}%")
-        print("\n  Reading: if 'predicted the HOME' dominates the errors -> the model finds the two")
-        print("  parents but can't tell which is the labelled partner (symmetry) -> two-parent fixes it.")
+        print(f"\n  SMART TWEAK (exclude the home from partner candidates, no retrain):")
+        print(f"  correct with home masked:        {n_ok_masked}/{n_allo} ({100*n_ok_masked/n_allo:.1f}%)"
+              f"   (was {100*n_ok/n_allo:.1f}%)")
 
 
 if __name__ == "__main__":
