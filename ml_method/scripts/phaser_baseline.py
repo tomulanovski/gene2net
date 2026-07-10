@@ -57,7 +57,7 @@ def main():
         s = f"{idx:04d}"
         gt_path = os.path.join(args.mul_trees_dir, "simphy", args.config, s,
                                f"replicate_{args.replicate}", "gene_trees.tre")
-        md_path = os.path.join(args.mul_trees_dir, f"metadata_{idx}.json")
+        md_path = os.path.join(args.mul_trees_dir, f"metadata_{s}.json")
         if not (os.path.exists(gt_path) and os.path.exists(md_path)):
             skipped += 1
             continue
