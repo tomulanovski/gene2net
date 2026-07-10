@@ -111,6 +111,19 @@ def relabel_events_partner_as_away(events, true_tree, edge_bipartitions):
     Auto (partner==target) and clade-level (|target|>1) events are left unchanged.
     """
     clades = [c for _, c in edge_bipartitions]
+    leaf_map = {leaf.name: leaf for leaf in true_tree.get_leaves()}  # one traversal, not per-event
+
+    def sibling(sp):
+        x = leaf_map.get(sp)
+        if x is None or x.up is None:
+            return None
+        sib = set()
+        for ch in x.up.get_children():
+            if ch is not x:
+                sib |= set(ch.get_leaf_names())
+        sib.discard(sp)
+        return frozenset(sib)
+
     out = []
     for ev in events:
         tgt, B = ev.wgd_edge_clade, ev.partner_edge_clade
@@ -118,7 +131,7 @@ def relabel_events_partner_as_away(events, true_tree, edge_bipartitions):
             out.append(ev)
             continue
         X = next(iter(tgt))
-        A = _sibling_clade(true_tree, X)   # the other (true-home) parent
+        A = sibling(X)                     # the other (true-home) parent
         H = _astral_home(X, clades)        # where ASTRAL placed X
         if A is None or H is None:
             out.append(ev)

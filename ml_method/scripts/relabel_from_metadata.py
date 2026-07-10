@@ -21,12 +21,27 @@ from ete3 import Tree
 from gene2net_gnn.data.metadata_labels import labels_from_metadata_for_sample
 
 
+_TREE_CACHE = {}
+
+
 def load_nexus_tree(path):
-    for line in open(path).read().splitlines():
+    # Cache by file content: the ~21 networks repeat across the 2k samples, so this
+    # turns thousands of (slow) ete3 parses into ~21. The tree is only read, never
+    # mutated, so sharing the object across samples is safe.
+    content = open(path).read()
+    cached = _TREE_CACHE.get(content)
+    if cached is not None:
+        return cached
+    tree = None
+    for line in content.splitlines():
         s = line.strip()
         if s.lower().startswith("tree") and "=" in s:
-            return Tree(s.split("=", 1)[1].strip(), format=1)
-    return Tree(open(path).read().strip(), format=1)
+            tree = Tree(s.split("=", 1)[1].strip(), format=1)
+            break
+    if tree is None:
+        tree = Tree(content.strip(), format=1)
+    _TREE_CACHE[content] = tree
+    return tree
 
 
 def _sample_polyploids_from_copies(sample_dict, min_mode=2):
