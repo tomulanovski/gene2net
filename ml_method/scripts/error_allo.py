@@ -75,6 +75,7 @@ def home_clade(x_clade, clades):
 def analyze_config(model, ds, device, max_samples):
     n_allo = n_correct = n_home = n_other = n_home_but_correct = 0
     n_correct_masked = 0   # partner accuracy when the home edge is excluded from candidates
+    n_partner_is_home = 0  # how often the LABELLED partner == the home (the labelling bug)
     for i in range(min(len(ds), max_samples)):
         try:
             sample = ds[i]
@@ -108,6 +109,9 @@ def analyze_config(model, ds, device, max_samples):
             n_allo += 1
             xc = cmap.get(q)
             h = home_clade(xc, clade_values) if xc is not None else None
+            tc = cmap.get(t)
+            if h is not None and tc is not None and bool(tc & h):
+                n_partner_is_home += 1   # ASTRAL placed X next to its labelled partner
             pc = cmap.get(p)
             pred_is_home = h is not None and pc is not None and bool(pc & h)
             if p == t:
@@ -128,7 +132,8 @@ def analyze_config(model, ds, device, max_samples):
                 row[home_idx] = float("-inf")
             if int(row.argmax()) == t:
                 n_correct_masked += 1
-    return n_allo, n_correct, n_home, n_other, n_home_but_correct, n_correct_masked
+    return (n_allo, n_correct, n_home, n_other, n_home_but_correct,
+            n_correct_masked, n_partner_is_home)
 
 
 def main():
@@ -150,8 +155,8 @@ def main():
             print(f"{cfg}: missing {d}")
             continue
         ds = Gene2NetDataset(d, clade_labels=True)
-        n_allo, n_ok, n_home, n_other, n_hbc, n_ok_masked = analyze_config(
-            model, ds, device, args.max_samples)
+        (n_allo, n_ok, n_home, n_other, n_hbc,
+         n_ok_masked, n_partner_home) = analyze_config(model, ds, device, args.max_samples)
         print(f"\n=== {cfg} — {n_allo} allo events ===")
         if not n_allo:
             continue
@@ -161,7 +166,10 @@ def main():
         print(f"  WRONG -> predicted OTHER:        {n_other}/{n_allo} ({100*n_other/n_allo:.1f}%)")
         if wrong:
             print(f"  of the wrong ones, home-collision: {100*n_home/wrong:.1f}%")
-        print(f"\n  SMART TWEAK (exclude the home from partner candidates, no retrain):")
+        print(f"\n  *** LABELLING BUG CHECK ***")
+        print(f"  labelled partner == the home:    {n_partner_home}/{n_allo} ({100*n_partner_home/n_allo:.1f}%)")
+        print(f"    (if ~30-40%, the target is the home a third of the time -> relabel partner = away parent)")
+        print(f"\n  SMART TWEAK (exclude the home; hurts because partner==home so often):")
         print(f"  correct with home masked:        {n_ok_masked}/{n_allo} ({100*n_ok_masked/n_allo:.1f}%)"
               f"   (was {100*n_ok/n_allo:.1f}%)")
 
