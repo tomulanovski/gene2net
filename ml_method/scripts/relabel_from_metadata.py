@@ -16,7 +16,17 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from ete3 import Tree
+
 from gene2net_gnn.data.metadata_labels import labels_from_metadata_for_sample
+
+
+def load_nexus_tree(path):
+    for line in open(path).read().splitlines():
+        s = line.strip()
+        if s.lower().startswith("tree") and "=" in s:
+            return Tree(s.split("=", 1)[1].strip(), format=1)
+    return Tree(open(path).read().strip(), format=1)
 
 
 def _sample_polyploids_from_copies(sample_dict, min_mode=2):
@@ -36,7 +46,7 @@ def _sample_polyploids_from_copies(sample_dict, min_mode=2):
     return out
 
 
-def relabel_one_sample(sample_dir, metadata, *, dry_run=False):
+def relabel_one_sample(sample_dir, metadata, *, dry_run=False, true_tree=None):
     with open(os.path.join(sample_dir, "sample.pkl"), "rb") as f:
         sample_dict = pickle.load(f)
 
@@ -63,7 +73,7 @@ def relabel_one_sample(sample_dir, metadata, *, dry_run=False):
             "(wrong metadata index?)"
         )
 
-    labels = labels_from_metadata_for_sample(metadata["events"], sample_dict)
+    labels = labels_from_metadata_for_sample(metadata["events"], sample_dict, true_tree=true_tree)
 
     # Dimension guard: label edge-count must equal the feature rows.
     n_feat_edges = sample_dict["species_tree_edge_features"].shape[0]
@@ -83,6 +93,10 @@ def main():
     ap.add_argument("--data-root", default="data/mul_trees_2k")
     ap.add_argument("--training-subdir", required=True, help="e.g. training/ils_low")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--away-parent", action="store_true",
+                    help="Retarget each allo partner to the true parent NOT at X's ASTRAL "
+                         "home (fixes the ~55%% partner==home labelling bug). Needs "
+                         "species_tree_<idx>.nex.")
     args = ap.parse_args()
 
     train_dir = os.path.join(args.data_root, args.training_subdir)
@@ -100,8 +114,15 @@ def main():
             raise FileNotFoundError(f"missing metadata for {name}: {md_path}")
         with open(md_path) as f:
             metadata = json.load(f)
+        true_tree = None
+        if args.away_parent:
+            tt_path = os.path.join(args.data_root, f"species_tree_{idx}.nex")
+            if not os.path.exists(tt_path):
+                raise FileNotFoundError(f"--away-parent needs the true tree: {tt_path}")
+            true_tree = load_nexus_tree(tt_path)
         try:
-            labels = relabel_one_sample(os.path.join(train_dir, name), metadata, dry_run=args.dry_run)
+            labels = relabel_one_sample(os.path.join(train_dir, name), metadata,
+                                        dry_run=args.dry_run, true_tree=true_tree)
         except ValueError as e:
             errors.append(str(e))
             continue

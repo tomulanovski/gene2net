@@ -77,7 +77,62 @@ def map_events_to_edges(events, edge_bipartitions, jaccard_threshold: float = 0.
     )
 
 
-def labels_from_metadata_for_sample(metadata_events, sample_dict, jaccard_threshold: float = 0.5) -> TrainingLabels:
+def _sibling_clade(true_tree, sp):
+    """Leaf-name set of sp's sibling(s) in the true species tree (sp's OTHER parent)."""
+    nodes = true_tree.search_nodes(name=sp)
+    if not nodes or nodes[0].up is None:
+        return None
+    x = nodes[0]
+    sib = set()
+    for ch in x.up.get_children():
+        if ch is not x:
+            sib |= set(ch.get_leaf_names())
+    sib.discard(sp)
+    return frozenset(sib)
+
+
+def _astral_home(sp, clades):
+    """sp's sibling clade in the ASTRAL tree: smallest edge-clade strictly containing sp, minus sp."""
+    x = frozenset({sp})
+    supersets = [c for c in clades if x < c]
+    if not supersets:
+        return None
+    return frozenset(min(supersets, key=len) - x)
+
+
+def relabel_events_partner_as_away(events, true_tree, edge_bipartitions):
+    """For each single-species ALLO event, set partner = the true parent that is NOT X's
+    ASTRAL home.
+
+    Fixes the ~55% of allo labels whose partner is the home (verified by label_audit):
+    when ASTRAL placed X next to its labelled partner B, the old target == home, which
+    gives the model a contradictory objective and makes the build graft a copy where X
+    already sits (the sp39 collapse). Here we retarget those to the OTHER true parent A.
+    Auto (partner==target) and clade-level (|target|>1) events are left unchanged.
+    """
+    clades = [c for _, c in edge_bipartitions]
+    out = []
+    for ev in events:
+        tgt, B = ev.wgd_edge_clade, ev.partner_edge_clade
+        if B == tgt or len(tgt) != 1:
+            out.append(ev)
+            continue
+        X = next(iter(tgt))
+        A = _sibling_clade(true_tree, X)   # the other (true-home) parent
+        H = _astral_home(X, clades)        # where ASTRAL placed X
+        if A is None or H is None:
+            out.append(ev)
+            continue
+        new_partner = A if (H & B) else B   # home == labelled partner -> retarget to A
+        out.append(WGDEvent(wgd_edge_clade=tgt, partner_edge_clade=new_partner,
+                            confidence=ev.confidence))
+    return out
+
+
+def labels_from_metadata_for_sample(metadata_events, sample_dict, jaccard_threshold: float = 0.5,
+                                    true_tree=None) -> TrainingLabels:
     events = events_from_metadata(metadata_events)
     bip = sample_edge_bipartitions(sample_dict)
+    if true_tree is not None:
+        events = relabel_events_partner_as_away(events, true_tree, bip)
     return map_events_to_edges(events, bip, jaccard_threshold=jaccard_threshold)
