@@ -38,6 +38,7 @@ from gene2net_gnn.inference.mul_tree_builder import (
 )
 from gene2net_gnn.data.label_extractor import _get_edge_bipartitions, _jaccard
 from gene2net_gnn.data.features import compute_clustering_profile
+from gene2net_gnn.data.rooting import hybrid_root
 
 
 def load_nexus_tree(path):
@@ -152,6 +153,9 @@ def main():
     ap.add_argument("--replicate", type=int, default=1)
     ap.add_argument("--backbone", choices=["astral", "true"], default="astral")
     ap.add_argument("--parents", choices=["true", "coclust"], default="true")
+    ap.add_argument("--root-backbone", choices=["none", "hybrid"], default="none",
+                    help="hybrid: root the ASTRAL backbone with hybrid_root (matches the real "
+                         "pipeline). Ignored for --backbone true (already correctly rooted).")
     ap.add_argument("--max-gene-trees", type=int, default=500)
     ap.add_argument("--out-dir", required=True)
     args = ap.parse_args()
@@ -159,6 +163,10 @@ def main():
     if args.parents == "coclust" and args.backbone != "astral":
         print("NOTE: coclust parents model the real pipeline; forcing --backbone astral.")
         args.backbone = "astral"
+
+    # Gene trees are needed for co-cluster parents and/or hybrid rooting.
+    need_gene_trees = (args.parents == "coclust"
+                       or (args.root_backbone == "hybrid" and args.backbone == "astral"))
 
     os.makedirs(args.out_dir, exist_ok=True)
     all_scores = []
@@ -185,7 +193,7 @@ def main():
             backbone = Tree(open(astral_path).read().strip(), format=1)
 
         gene_trees = all_species = None
-        if args.parents == "coclust":
+        if need_gene_trees:
             if not os.path.exists(gt_path):
                 skipped += 1
                 continue
@@ -193,6 +201,10 @@ def main():
             all_species = set()
             for t in gene_trees:
                 all_species.update(t.get_leaf_names())
+
+        # Root the ASTRAL backbone to match the real pipeline (rooting-sensitive metric).
+        if args.root_backbone == "hybrid" and args.backbone == "astral":
+            backbone = hybrid_root(backbone, gene_trees, args.max_gene_trees)
 
         with open(md_path) as f:
             md_events = json.load(f).get("events", [])

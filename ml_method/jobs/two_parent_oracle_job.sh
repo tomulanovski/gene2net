@@ -35,13 +35,14 @@ N="${N:-200}"
 CONFIGS=(ils_low ils_medium ils_high dup_loss_low_ne1M dup_loss_medium_ne1M dup_loss_high_ne1M)
 CONFIG=${CONFIGS[$SLURM_ARRAY_TASK_ID]}
 
-run () {  # $1=backbone $2=parents-mode $3=out-suffix
-    OUT="output/two_parent_oracle/${CONFIG}_$3"
-    echo ">>> [$CONFIG] backbone=$1 parents=$2 -> $OUT"
+run () {  # $1=backbone $2=parents-mode $3=root(none|hybrid) $4=out-suffix
+    OUT="output/two_parent_oracle/${CONFIG}_$4"
+    echo ">>> [$CONFIG] backbone=$1 parents=$2 root=$3 -> $OUT"
     python scripts/two_parent_oracle.py --mul-trees-dir "$MUL_TREES_DIR" \
-        --config "$CONFIG" --backbone "$1" --parents "$2" --n "$N" --out-dir "$OUT"
+        --config "$CONFIG" --backbone "$1" --parents "$2" --root-backbone "$3" \
+        --n "$N" --out-dir "$OUT"
     python scripts/score_reconstructions.py --recon-dir "$OUT" --timeout 120
-    echo "=================== SUMMARY [$CONFIG $3] ==================="
+    echo "=================== SUMMARY [$CONFIG $4] ==================="
     python scripts/summarize_oracle.py --scores "$OUT/reconstruction_scores.csv" \
         --mapping "$OUT/mapping_scores.csv"
 }
@@ -50,8 +51,14 @@ echo "============================================================"
 echo "Two-parent oracle | config=$CONFIG n=$N"
 echo "============================================================"
 
-run true   true    true_bb          # faithfulness: expect edit ~0
-run astral true    astral_ceiling   # construction ceiling with perfect parents
-run astral coclust astral_coclust   # realistic: two-parent build on today's signal
+run true   true    none   true_bb                 # faithfulness: expect edit ~0
+run astral true    none   astral_ceiling          # ceiling, UNROOTED astral (has rooting confound)
+run astral true    hybrid astral_ceiling_rooted   # ceiling on the ROOTED backbone (pipeline-fair)
+run astral coclust hybrid astral_coclust_rooted   # realistic + rooted = closest to a real pipeline
 
-echo "Done. Read: astral_ceiling vs astral_coclust vs current(0.68) vs Polyphest."
+echo "=================== FAITHFULNESS LOCALIZATION [$CONFIG] ==================="
+python scripts/localize_faithfulness.py \
+    --scores "output/two_parent_oracle/${CONFIG}_true_bb/reconstruction_scores.csv" \
+    --mul-trees-dir "$MUL_TREES_DIR"
+
+echo "Done. Read: astral_ceiling_rooted vs astral_coclust_rooted vs current(0.68) vs Polyphest."
