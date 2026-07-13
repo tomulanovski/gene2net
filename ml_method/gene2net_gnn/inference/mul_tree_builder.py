@@ -142,14 +142,58 @@ def _apply_two_parent_event(tree: Tree, event: TwoParentEvent) -> bool:
     return True
 
 
+def _apply_two_parent_grafted(tree: Tree, event: TwoParentEvent) -> bool:
+    """Place a two-parent allopolyploid WITHOUT detaching the target.
+
+    The target stays at its current position (its 'home' parent) and a copy is
+    grafted at the OTHER parent (the one it is not already next to). This matches
+    how the ground-truth MUL-tree is written (home copy kept, partner copy added),
+    so nested events compose: an inner event never tears leaves out of an outer
+    event's target clade. It still fixes the sp39 collapse, because the copy goes
+    to the away parent, not on top of the home.
+    """
+    target, a_clade, b_clade = event.target_clade, event.parent_a_clade, event.parent_b_clade
+
+    if a_clade == b_clade == target:
+        return _apply_wgd_event(tree, WGDEvent(target, target, event.confidence))
+
+    x_node = _find_node_by_leaf_set(tree, target)
+    if x_node is None or x_node.up is None:
+        return False
+
+    # Current home = the leaves X currently sits next to.
+    home = set()
+    for ch in x_node.up.get_children():
+        if ch is not x_node:
+            home |= set(ch.get_leaf_names())
+
+    # Graft at the parent LESS overlapping with the home (the 'away' parent);
+    # keep X on the home side.
+    away = b_clade if len(home & a_clade) >= len(home & b_clade) else a_clade
+    away_node = _find_node_by_leaf_set(tree, away)
+    if away_node is None or away_node.up is None or away_node is x_node:
+        return False
+
+    _graft_copy_at(away_node, x_node.copy("deepcopy"))
+    return True
+
+
 def build_mul_tree_two_parent(species_tree: Tree, events: List["TwoParentEvent"],
-                              return_dropped: bool = False):
-    """Build a MUL-tree by applying two-parent events bottom-up (smallest target first)."""
+                              return_dropped: bool = False, mode: str = "graft"):
+    """Build a MUL-tree by applying two-parent events bottom-up (smallest target first).
+
+    mode='graft' (default): keep the target at its home, add a copy at the away
+        parent. Composes for nested events; reproduces the ground-truth convention.
+    mode='detach': detach the target and graft a copy at BOTH parents. Cleaner for
+        a single isolated event but DROPS outer events whose target clade an inner
+        event has already torn apart (see _apply_two_parent_grafted docstring).
+    """
+    apply = _apply_two_parent_grafted if mode == "graft" else _apply_two_parent_event
     mul_tree = species_tree.copy("deepcopy")
     sorted_events = sorted(events, key=lambda e: len(e.target_clade))
     dropped = 0
     for event in sorted_events:
-        if not _apply_two_parent_event(mul_tree, event):
+        if not apply(mul_tree, event):
             dropped += 1
     if return_dropped:
         return mul_tree, dropped

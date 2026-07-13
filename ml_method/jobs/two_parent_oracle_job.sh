@@ -35,14 +35,14 @@ N="${N:-200}"
 CONFIGS=(ils_low ils_medium ils_high dup_loss_low_ne1M dup_loss_medium_ne1M dup_loss_high_ne1M)
 CONFIG=${CONFIGS[$SLURM_ARRAY_TASK_ID]}
 
-run () {  # $1=backbone $2=parents-mode $3=root(none|hybrid) $4=out-suffix
-    OUT="output/two_parent_oracle/${CONFIG}_$4"
-    echo ">>> [$CONFIG] backbone=$1 parents=$2 root=$3 -> $OUT"
+run () {  # $1=backbone $2=parents $3=root(none|hybrid) $4=build(graft|detach) $5=out-suffix
+    OUT="output/two_parent_oracle/${CONFIG}_$5"
+    echo ">>> [$CONFIG] backbone=$1 parents=$2 root=$3 build=$4 -> $OUT"
     python scripts/two_parent_oracle.py --mul-trees-dir "$MUL_TREES_DIR" \
         --config "$CONFIG" --backbone "$1" --parents "$2" --root-backbone "$3" \
-        --n "$N" --out-dir "$OUT"
+        --build "$4" --n "$N" --out-dir "$OUT"
     python scripts/score_reconstructions.py --recon-dir "$OUT" --timeout 120
-    echo "=================== SUMMARY [$CONFIG $4] ==================="
+    echo "=================== SUMMARY [$CONFIG $5] ==================="
     python scripts/summarize_oracle.py --scores "$OUT/reconstruction_scores.csv" \
         --mapping "$OUT/mapping_scores.csv"
 }
@@ -51,14 +51,15 @@ echo "============================================================"
 echo "Two-parent oracle | config=$CONFIG n=$N"
 echo "============================================================"
 
-run true   true    none   true_bb                 # faithfulness: expect edit ~0
-run astral true    none   astral_ceiling          # ceiling, UNROOTED astral (has rooting confound)
-run astral true    hybrid astral_ceiling_rooted   # ceiling on the ROOTED backbone (pipeline-fair)
-run astral coclust hybrid astral_coclust_rooted   # realistic + rooted = closest to a real pipeline
+# graft = the nested-safe build (default); detach = old build, kept to show the fix.
+run true   true    none   detach true_bb_detach          # old floor (~0.159)
+run true   true    none   graft  true_bb_graft           # NEW floor: expect << 0.159
+run astral true    hybrid graft  astral_ceiling_rooted   # ceiling, rooted + nested-safe build
+run astral coclust hybrid graft  astral_coclust_rooted   # realistic: rooted + coclust + nested-safe
 
-echo "=================== FAITHFULNESS LOCALIZATION [$CONFIG] ==================="
+echo "=================== FAITHFULNESS LOCALIZATION [$CONFIG] (graft) ==================="
 python scripts/localize_faithfulness.py \
-    --scores "output/two_parent_oracle/${CONFIG}_true_bb/reconstruction_scores.csv" \
+    --scores "output/two_parent_oracle/${CONFIG}_true_bb_graft/reconstruction_scores.csv" \
     --mul-trees-dir "$MUL_TREES_DIR"
 
-echo "Done. Read: astral_ceiling_rooted vs astral_coclust_rooted vs current(0.68) vs Polyphest."
+echo "Done. Read: true_bb_graft vs true_bb_detach(0.159); astral_ceiling_rooted vs Polyphest."

@@ -156,6 +156,9 @@ def main():
     ap.add_argument("--root-backbone", choices=["none", "hybrid"], default="none",
                     help="hybrid: root the ASTRAL backbone with hybrid_root (matches the real "
                          "pipeline). Ignored for --backbone true (already correctly rooted).")
+    ap.add_argument("--build", choices=["graft", "detach"], default="graft",
+                    help="graft (default): keep target at home, add copy at away parent "
+                         "(composes for nested events). detach: old detach-both build.")
     ap.add_argument("--max-gene-trees", type=int, default=500)
     ap.add_argument("--out-dir", required=True)
     args = ap.parse_args()
@@ -212,7 +215,7 @@ def main():
             events, scores = two_parent_events(md_events, true_tree, backbone,
                                                mode=args.parents,
                                                gene_trees=gene_trees, all_species=all_species)
-            oracle = build_mul_tree_two_parent(backbone, events)
+            oracle = build_mul_tree_two_parent(backbone, events, mode=args.build)
         except Exception as e:
             print(f"  SKIP [{s}]: {type(e).__name__}: {e}")
             skipped += 1
