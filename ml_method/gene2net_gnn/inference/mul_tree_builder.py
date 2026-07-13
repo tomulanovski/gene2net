@@ -80,6 +80,82 @@ def _apply_wgd_event(tree: Tree, event: WGDEvent) -> bool:
     return True
 
 
+@dataclass
+class TwoParentEvent:
+    target_clade: FrozenSet[str]      # the polyploid clade to place
+    parent_a_clade: FrozenSet[str]    # first true parent (leaf set below its edge)
+    parent_b_clade: FrozenSet[str]    # second true parent
+    confidence: float
+
+
+def _graft_copy_at(node: TreeNode, subtree_copy: TreeNode) -> None:
+    """Insert a new internal node in place of `node` holding both `node` and the copy."""
+    parent = node.up
+    dist = node.dist
+    node.detach()
+    new_internal = parent.add_child(dist=dist)
+    new_internal.add_child(node, dist=0)
+    new_internal.add_child(subtree_copy, dist=0)
+
+
+def _apply_two_parent_event(tree: Tree, event: TwoParentEvent) -> bool:
+    """Detach the target clade and graft a copy at BOTH true parents.
+
+    Auto (parent_a == parent_b == target) delegates to the existing sibling-
+    duplication path. Returns False (drop) if any clade is not found, is the
+    root, or a parent overlaps the target. When both parents resolve to the same
+    backbone node, both copies land near that lineage (the honest "signal could
+    not separate the two parents" collapse; ploidy is still 2).
+    """
+    target, a_clade, b_clade = event.target_clade, event.parent_a_clade, event.parent_b_clade
+
+    if a_clade == b_clade == target:
+        return _apply_wgd_event(tree, WGDEvent(target, target, event.confidence))
+
+    x_node = _find_node_by_leaf_set(tree, target)
+    if x_node is None or x_node.up is None:
+        return False
+    a_node = _find_node_by_leaf_set(tree, a_clade)
+    b_node = _find_node_by_leaf_set(tree, b_clade)
+    if a_node is None or b_node is None or a_node.up is None or b_node.up is None:
+        return False
+    if a_node is x_node or b_node is x_node:
+        return False
+
+    copy_a = x_node.copy("deepcopy")
+    copy_b = x_node.copy("deepcopy")
+
+    # Detach the target from its backbone position and collapse the unary parent.
+    parent = x_node.up
+    x_node.detach()
+    if parent is not tree and len(parent.children) == 1:
+        parent.delete(preserve_branch_length=True)
+
+    # Re-find parents (leaf sets unchanged, but the tree object moved).
+    a_node = _find_node_by_leaf_set(tree, a_clade)
+    b_node = _find_node_by_leaf_set(tree, b_clade)
+    if a_node is None or b_node is None or a_node.up is None or b_node.up is None:
+        return False
+
+    _graft_copy_at(a_node, copy_a)
+    _graft_copy_at(b_node, copy_b)
+    return True
+
+
+def build_mul_tree_two_parent(species_tree: Tree, events: List["TwoParentEvent"],
+                              return_dropped: bool = False):
+    """Build a MUL-tree by applying two-parent events bottom-up (smallest target first)."""
+    mul_tree = species_tree.copy("deepcopy")
+    sorted_events = sorted(events, key=lambda e: len(e.target_clade))
+    dropped = 0
+    for event in sorted_events:
+        if not _apply_two_parent_event(mul_tree, event):
+            dropped += 1
+    if return_dropped:
+        return mul_tree, dropped
+    return mul_tree
+
+
 def build_mul_tree(species_tree: Tree, events: List[WGDEvent], return_dropped: bool = False):
     """Build MUL-tree by applying WGD events to species tree.
 
