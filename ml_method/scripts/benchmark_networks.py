@@ -24,7 +24,9 @@ import yaml
 from ete3 import Tree
 
 from gene2net_gnn.data.dataset import Gene2NetSample
-from gene2net_gnn.inference.mul_tree_builder import build_mul_tree, WGDEvent
+from gene2net_gnn.inference.mul_tree_builder import (
+    build_mul_tree, WGDEvent, build_mul_tree_two_parent, TwoParentEvent,
+)
 from gene2net_gnn.inference.build_strategies import (
     select_event_edges, build_parent_edge_map, infer_copy_bound,
 )
@@ -118,6 +120,40 @@ def build_for_strategy(model, astral_tree, clades, wgd_list, edge_emb, pairwise_
     return mul_tree, n_auto, n_allo, n_dropped
 
 
+def build_for_strategy_two_parent(model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
+                                  strategy, threshold, parent_edge, copy_bound, polyploid_species=None):
+    """Two-parent variant: predict BOTH parent edges per WGD edge and build with the
+    nested-safe graft build. Auto = both slots pick the WGD edge itself."""
+    event_edges = select_event_edges(strategy, wgd_list, threshold, parent_edge, clades, copy_bound)
+    if polyploid_species is not None:
+        event_edges = [i for i in event_edges if set(clades[i]) <= polyploid_species]
+    events = []
+    n_auto = n_allo = 0
+    if event_edges:
+        query = torch.tensor(event_edges, dtype=torch.long)
+        rows = model.compute_partner_scores_rows(edge_emb, query, pairwise_feat)  # [Q, E, 2]
+        n_edges = len(clades)
+        for q, i in enumerate(event_edges):
+            pa = int(rows[q, :n_edges, 0].argmax())
+            pb = int(rows[q, :n_edges, 1].argmax())
+            # A predicted parent that overlaps the target clade is invalid -> self on that slot.
+            if pa != i and (clades[pa] & clades[i]):
+                pa = i
+            if pb != i and (clades[pb] & clades[i]):
+                pb = i
+            if pa == i and pb == i:
+                n_auto += 1
+            else:
+                n_allo += 1
+            events.append(TwoParentEvent(
+                target_clade=clades[i], parent_a_clade=clades[pa], parent_b_clade=clades[pb],
+                confidence=float(wgd_list[i]),
+            ))
+    mul_tree, n_dropped = build_mul_tree_two_parent(astral_tree, events, mode="graft",
+                                                    return_dropped=True)
+    return mul_tree, n_auto, n_allo, n_dropped
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-dir", required=True)
@@ -162,6 +198,9 @@ def main():
     print(f"Root mode: {root_mode}")
 
     model = load_model(args.model_dir, model_config, device)
+    two_parent = getattr(model, "n_parents", 1) >= 2
+    print(f"Decode: {'two-parent graft' if two_parent else 'one-partner'} "
+          f"(model n_parents={getattr(model, 'n_parents', 1)})")
 
     done = skipped = 0
     total_dropped = {}
@@ -240,7 +279,8 @@ def main():
         # Build + write one MUL-tree per strategy.
         counts = []
         for strat in strategies:
-            mul_tree, n_auto, n_allo, n_dropped = build_for_strategy(
+            build_fn = build_for_strategy_two_parent if two_parent else build_for_strategy
+            mul_tree, n_auto, n_allo, n_dropped = build_fn(
                 model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
                 strat, args.threshold, parent_edge, copy_bound,
             )

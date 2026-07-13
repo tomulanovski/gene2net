@@ -16,6 +16,7 @@ class TrainingLabels:
     mask: List[bool] = field(default_factory=list)            # True = mappable
     n_unmappable: int = 0
     n_edges: int = 0                                          # total edges in ASTRAL tree
+    home_edges: List[int] = field(default_factory=list)      # second (home) parent edge per event
 
 
 def extract_backbone(mul_tree: Tree) -> Tree:

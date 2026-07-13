@@ -97,6 +97,7 @@ def main():
         n_gat_heads=int(model_config.get("n_gat_heads", 4)),
         dropout=float(model_config.get("dropout", 0.2)),
         partner_pair_feat_dim=int(model_config.get("partner_pair_feat_dim", 2)),
+        n_parents=int(model_config.get("n_parents", 2)),   # two-parent phaser head
     )
     if args.init_from and os.path.exists(args.init_from):
         # Warm-start shared weights from a prior model. Shape-incompatible layers

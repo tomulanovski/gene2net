@@ -102,6 +102,7 @@ class SpeciesTreeGNNv2(nn.Module):
         n_gat_heads: int = 4,
         dropout: float = 0.2,
         partner_pair_feat_dim: int = 0,
+        n_parents: int = 2,
     ):
         super().__init__()
         self.node_feat_dim = node_feat_dim
@@ -147,11 +148,12 @@ class SpeciesTreeGNNv2(nn.Module):
         # pairwise feature (e.g. species co-clustering between clade i and j,
         # the allopolyploidy signal). The diagonal (j==i) is autopolyploidy.
         self.partner_pair_feat_dim = partner_pair_feat_dim
+        self.n_parents = n_parents
         self.partner_head = nn.Sequential(
             nn.Linear(2 * hidden_dim + partner_pair_feat_dim, hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, 1),
+            nn.Linear(hidden_dim, n_parents),   # n_parents slots (2 = unordered parent pair)
         )
 
     def compute_partner_scores(self, edge_emb, pairwise_feat=None):
@@ -179,7 +181,7 @@ class SpeciesTreeGNNv2(nn.Module):
             # (e.g. the 4-dim feature fed to a 2-dim checkpoint) still works.
             parts.append(pairwise_feat[..., :self.partner_pair_feat_dim])
         pair = torch.cat(parts, dim=-1)               # [E, E, 2H + pair_dim]
-        return self.partner_head(pair).squeeze(-1)    # [E, E]
+        return self.partner_head(pair)                # [E, E, n_parents]
 
     def compute_partner_scores_rows(self, edge_emb, query_idx, pairwise_feat=None):
         """Partner scores for a subset of rows (the WGD edges) against all edges.
@@ -210,7 +212,7 @@ class SpeciesTreeGNNv2(nn.Module):
                 pf = pairwise_feat[query_idx][..., :self.partner_pair_feat_dim]  # [Q, E, pair_dim]
             parts.append(pf)
         pair = torch.cat(parts, dim=-1)                          # [Q, E, 2H + pair_dim]
-        return self.partner_head(pair).squeeze(-1)               # [Q, E]
+        return self.partner_head(pair)                           # [Q, E, n_parents]
 
     def propagate_features_to_internal(self, node_features, edge_index, is_leaf):
         """Fill internal node features by averaging descendant leaves.

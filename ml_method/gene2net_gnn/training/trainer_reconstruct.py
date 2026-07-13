@@ -73,6 +73,49 @@ def filter_compatible_state_dict(state: dict, model_state: dict) -> dict:
     }
 
 
+def two_parent_loss(scores2, targets_a, targets_b):
+    """Permutation-invariant CE over an unordered parent pair.
+
+    scores2: [Q, E, 2] logits (two parent slots). targets_a/b: [Q] edge indices.
+    The two parents are symmetric, so the loss is the cheaper of the two
+    slot->parent assignments, meaned over queries.
+    """
+    log1 = torch.log_softmax(scores2[..., 0], dim=-1)   # [Q, E]
+    log2 = torch.log_softmax(scores2[..., 1], dim=-1)   # [Q, E]
+    a = targets_a.unsqueeze(1); b = targets_b.unsqueeze(1)
+    la1 = log1.gather(1, a).squeeze(1); lb1 = log1.gather(1, b).squeeze(1)
+    la2 = log2.gather(1, a).squeeze(1); lb2 = log2.gather(1, b).squeeze(1)
+    assign_ab = -(la1 + lb2)   # slot0=A, slot1=B
+    assign_ba = -(lb1 + la2)   # slot0=B, slot1=A
+    return torch.minimum(assign_ab, assign_ba).mean()
+
+
+def build_two_parent_targets(sample: Gene2NetSample, n_edges: int, device: torch.device):
+    """(query_idx, targets_a, targets_b) over mappable WGD edges.
+
+    targets_a = home parent (labels.home_edges), targets_b = partner (labels.partner_edges).
+    Auto events have home == partner == wgd edge; the permutation-invariant loss handles that.
+    Falls back to self (auto-like) when a home edge is missing.
+    """
+    labels = sample.labels
+    q, ta, tb = [], [], []
+    if labels is None or not labels.wgd_edges:
+        empty = torch.empty(0, dtype=torch.long, device=device)
+        return empty, empty, empty
+    mask = labels.mask or []
+    home = getattr(labels, "home_edges", None) or []   # tolerate old (one-partner) label pickles
+    for k in range(len(labels.wgd_edges)):
+        if k < len(mask) and not mask[k]:
+            continue
+        w = labels.wgd_edges[k]
+        b = labels.partner_edges[k] if k < len(labels.partner_edges) else w
+        a = home[k] if k < len(home) and home[k] >= 0 else w
+        if 0 <= w < n_edges and 0 <= a < n_edges and 0 <= b < n_edges:
+            q.append(w); ta.append(a); tb.append(b)
+    t = lambda xs: torch.tensor(xs, dtype=torch.long, device=device)
+    return t(q), t(ta), t(tb)
+
+
 def build_partner_targets(sample: Gene2NetSample, n_edges: int, device: torch.device):
     """Per-WGD-edge partner index target (-1 = no target / ignore).
 
@@ -141,13 +184,12 @@ class ReconstructTrainer:
             class_weights=self.class_weights,
         )
 
-        partner_targets = build_partner_targets(sample, n_edges, self.device)
-        query_idx = (partner_targets >= 0).nonzero(as_tuple=True)[0]
+        q_idx, tgt_a, tgt_b = build_two_parent_targets(sample, n_edges, self.device)
         partner_loss = None
-        if query_idx.numel() > 0:
+        if q_idx.numel() > 0:
             pairwise_feat = build_pairwise_feat(sample).to(self.device)
-            scores = self.model.compute_partner_scores_rows(edge_emb, query_idx, pairwise_feat)  # [Q, E]
-            partner_loss = F.cross_entropy(scores, partner_targets[query_idx])
+            scores2 = self.model.compute_partner_scores_rows(edge_emb, q_idx, pairwise_feat)  # [Q,E,2]
+            partner_loss = two_parent_loss(scores2, tgt_a, tgt_b)
 
         return det_loss, partner_loss, wgd_logits, mask, wgd_targets
 
@@ -212,22 +254,23 @@ class ReconstructTrainer:
             fp += int((preds & ~true.bool()).sum())
             fn += int((~preds.bool() & true.bool()).sum())
 
-            # Partner accuracy on edges with a partner label
-            partner_targets = build_partner_targets(sample, n_edges, self.device)
-            query_idx = (partner_targets >= 0).nonzero(as_tuple=True)[0]
-            if query_idx.numel() > 0:
+            # Two-parent SET accuracy on edges with a parent-pair label
+            q_idx, tgt_a, tgt_b = build_two_parent_targets(sample, n_edges, self.device)
+            if q_idx.numel() > 0:
                 pairwise_feat = build_pairwise_feat(sample).to(self.device)
-                scores = self.model.compute_partner_scores_rows(edge_emb, query_idx, pairwise_feat)
-                pred_partner = scores.argmax(dim=-1)
-                tgt = partner_targets[query_idx]
-                partner_correct += int((pred_partner == tgt).sum())
-                partner_total += int(query_idx.numel())
-                # auto = target points to self; allo = target points elsewhere
-                is_auto = (tgt == query_idx)
+                scores2 = self.model.compute_partner_scores_rows(edge_emb, q_idx, pairwise_feat)
+                p1 = scores2[..., 0].argmax(dim=-1); p2 = scores2[..., 1].argmax(dim=-1)
+                # unordered comparison: sort both predicted and target pairs
+                pred = torch.stack([torch.minimum(p1, p2), torch.maximum(p1, p2)], dim=-1)
+                tgt = torch.stack([torch.minimum(tgt_a, tgt_b), torch.maximum(tgt_a, tgt_b)], dim=-1)
+                correct = (pred == tgt).all(dim=-1)
+                is_auto = (tgt_a == tgt_b)
+                partner_correct += int(correct.sum())
+                partner_total += int(q_idx.numel())
                 auto_total += int(is_auto.sum())
                 allo_total += int((~is_auto).sum())
-                auto_correct += int(((pred_partner == tgt) & is_auto).sum())
-                allo_correct += int(((pred_partner == tgt) & ~is_auto).sum())
+                auto_correct += int((correct & is_auto).sum())
+                allo_correct += int((correct & ~is_auto).sum())
 
         precision = tp / max(tp + fp, 1)
         recall = tp / max(tp + fn, 1)

@@ -149,3 +149,47 @@ def labels_from_metadata_for_sample(metadata_events, sample_dict, jaccard_thresh
     if true_tree is not None:
         events = relabel_events_partner_as_away(events, true_tree, bip)
     return map_events_to_edges(events, bip, jaccard_threshold=jaccard_threshold)
+
+
+def home_edge_for_event(target_clade, event_type, true_tree):
+    """The 'home' parent clade of an event.
+
+    allo: the target's sibling clade in the TRUE species tree (the other parent).
+    auto: the target itself (both parents identical).
+    Returns None if the target clade is not found / has no sibling.
+    """
+    target = frozenset(target_clade)
+    if event_type == "auto":
+        return target
+    node = None
+    for n in true_tree.traverse("postorder"):
+        if frozenset(n.get_leaf_names()) == target:
+            node = n
+            break
+    if node is None or node.up is None:
+        return None
+    sib = set()
+    for ch in node.up.get_children():
+        if ch is not node:
+            sib |= set(ch.get_leaf_names())
+    sib -= set(target)
+    return frozenset(sib) if sib else None
+
+
+def two_parent_labels_from_metadata(metadata_events, sample_dict, true_tree,
+                                    jaccard_threshold: float = 0.5) -> TrainingLabels:
+    """TrainingLabels carrying BOTH parents: partner_edges (B = metadata partner)
+    and home_edges (A = target's true-tree sibling; == wgd edge for auto)."""
+    bip = sample_edge_bipartitions(sample_dict)
+    events = events_from_metadata(metadata_events)          # target + partner (B)
+    labels = map_events_to_edges(events, bip, jaccard_threshold=jaccard_threshold)
+    home_edges: List[int] = []
+    for ev, md in zip(events, metadata_events):
+        hc = home_edge_for_event(ev.wgd_edge_clade, md.get("event_type"), true_tree)
+        if hc is None:
+            home_edges.append(-1)
+            continue
+        h_idx, h_score = _best_matching_edge(hc, bip)
+        home_edges.append(h_idx if h_score >= jaccard_threshold else -1)
+    labels.home_edges = home_edges
+    return labels

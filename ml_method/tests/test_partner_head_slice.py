@@ -21,7 +21,7 @@ def test_partner_head_ignores_extra_pairwise_dims():
 
     out_wide = m.compute_partner_scores_rows(emb, q, wide)
     out_sliced = m.compute_partner_scores_rows(emb, q, wide[..., :2])
-    assert out_wide.shape == (E, E)
+    assert out_wide.shape == (E, E, m.n_parents)
     assert torch.allclose(out_wide, out_sliced)
 
     full_wide = m.compute_partner_scores(emb, wide)

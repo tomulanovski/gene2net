@@ -135,6 +135,7 @@ def load_model(model_dir, model_config, device):
         n_gat_heads=int(model_config.get("n_gat_heads", 4)),
         dropout=float(model_config.get("dropout", 0.2)),
         partner_pair_feat_dim=int(model_config.get("partner_pair_feat_dim", 2)),
+        n_parents=int(model_config.get("n_parents", 1)),   # 1 = one-partner (old); 2 = two-parent
     )
     loaded = False
     for name in ["best_model.pt", "best_partner_model.pt"]:

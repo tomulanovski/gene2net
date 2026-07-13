@@ -6,7 +6,29 @@ from ete3 import Tree
 from gene2net_gnn.data.tree_io import load_gene_trees_from_file, get_species_set, tree_to_edge_index
 from gene2net_gnn.data.dataset import Gene2NetSample
 from gene2net_gnn.model.gene2net_model import Gene2NetModel
-from gene2net_gnn.inference.mul_tree_builder import build_mul_tree, WGDEvent
+from gene2net_gnn.inference.mul_tree_builder import build_mul_tree, WGDEvent, TwoParentEvent
+
+
+def events_from_two_parent_scores(scores2, wgd_edge_idxs, edge_clades):
+    """Build TwoParentEvents from a two-slot partner score tensor.
+
+    scores2: [E, E, 2] logits; slot 0 and slot 1 are the two parent distributions
+        for each WGD edge i (over candidate edges j).
+    wgd_edge_idxs: iterable of edge indices selected as WGD.
+    edge_clades: sequence/dict mapping edge index -> leaf-set (frozenset).
+    Returns a list of TwoParentEvent (auto falls out when both slots pick edge i).
+    """
+    events = []
+    for i in wgd_edge_idxs:
+        pa = int(scores2[i, :, 0].argmax())
+        pb = int(scores2[i, :, 1].argmax())
+        events.append(TwoParentEvent(
+            target_clade=frozenset(edge_clades[i]),
+            parent_a_clade=frozenset(edge_clades[pa]),
+            parent_b_clade=frozenset(edge_clades[pb]),
+            confidence=1.0,
+        ))
+    return events
 
 
 def predict_mul_tree(
