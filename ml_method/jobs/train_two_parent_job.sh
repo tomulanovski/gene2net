@@ -1,7 +1,13 @@
 #!/bin/bash
+#SBATCH --job-name=gene2net_2parent
+#SBATCH --output=/groups/itay_mayrose/tomulanovski/gene2net/ml_method/logs/2parent_train_%j.out
+#SBATCH --error=/groups/itay_mayrose/tomulanovski/gene2net/ml_method/logs/2parent_train_%j.err
 #SBATCH --time=1-00:00:00
-#SBATCH --mem=96G
+#SBATCH --mem=128G
 #SBATCH --cpus-per-task=4
+#SBATCH --partition=gpu-rotemhsh-pool
+#SBATCH --account=itaym-users_v2
+#SBATCH --qos=owner
 #SBATCH --gres=gpu:1
 
 # Two-parent graft phaser training: WGD detection + unordered two-parent placement.
