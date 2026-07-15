@@ -127,28 +127,41 @@ def model_inputs_for(sample, device):
 
 
 def load_model(model_dir, model_config, device):
-    model = SpeciesTreeGNNv2(
-        node_feat_dim=int(model_config.get("node_feat_dim", 13)),
-        edge_feat_dim=int(model_config.get("edge_feat_dim", 9)),
-        hidden_dim=int(model_config.get("hidden_dim", 64)),
-        n_gat_layers=int(model_config.get("n_gat_layers", 3)),
-        n_gat_heads=int(model_config.get("n_gat_heads", 4)),
-        dropout=float(model_config.get("dropout", 0.2)),
-        partner_pair_feat_dim=int(model_config.get("partner_pair_feat_dim", 2)),
-        n_parents=int(model_config.get("n_parents", 1)),   # 1 = one-partner (old); 2 = two-parent
-    )
-    loaded = False
+    ckpt_path = None
     for name in ["best_model.pt", "best_partner_model.pt"]:
         p = os.path.join(model_dir, name)
         if os.path.exists(p):
-            model.load_state_dict(torch.load(p, map_location=device, weights_only=True))
-            loaded = True
+            ckpt_path = p
             break
-    if not loaded:
+    if ckpt_path is None:
         raise FileNotFoundError(
             f"No checkpoint (best_model.pt or best_partner_model.pt) found in {model_dir!r}. "
             "Refusing to evaluate a randomly initialized model."
         )
+    state = torch.load(ckpt_path, map_location=device, weights_only=True)
+
+    hidden_dim = int(model_config.get("hidden_dim", 64))
+    # Infer the partner-head shape FROM THE CHECKPOINT so a trained model loads
+    # regardless of config drift: n_parents = final-layer out-features (1=one-partner,
+    # 2=two-parent); pair_dim = first-layer in-features minus the two edge embeddings.
+    n_parents = int(model_config.get("n_parents", 1))
+    pair_dim = int(model_config.get("partner_pair_feat_dim", 2))
+    if "partner_head.3.weight" in state:
+        n_parents = int(state["partner_head.3.weight"].shape[0])
+    if "partner_head.0.weight" in state:
+        pair_dim = int(state["partner_head.0.weight"].shape[1]) - 2 * hidden_dim
+
+    model = SpeciesTreeGNNv2(
+        node_feat_dim=int(model_config.get("node_feat_dim", 13)),
+        edge_feat_dim=int(model_config.get("edge_feat_dim", 9)),
+        hidden_dim=hidden_dim,
+        n_gat_layers=int(model_config.get("n_gat_layers", 3)),
+        n_gat_heads=int(model_config.get("n_gat_heads", 4)),
+        dropout=float(model_config.get("dropout", 0.2)),
+        partner_pair_feat_dim=pair_dim,
+        n_parents=n_parents,
+    )
+    model.load_state_dict(state)
     return model.to(device).eval()
 
 
