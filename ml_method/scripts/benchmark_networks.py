@@ -33,6 +33,7 @@ from gene2net_gnn.inference.build_strategies import (
 from scripts.reconstruct_mul_tree import (
     load_model, model_inputs_for, preorder_edge_clades, build_pairwise_feat,
 )
+from scripts.two_parent_oracle import predicted_parents_coclust
 
 NETWORKS = [
     "Bendiksby_2011", "Koenen_2020", "Brysting_2007", "Lawrence_2016",
@@ -154,6 +155,36 @@ def build_for_strategy_two_parent(model, astral_tree, clades, wgd_list, edge_emb
     return mul_tree, n_auto, n_allo, n_dropped
 
 
+def build_for_strategy_coclust(model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
+                               strategy, threshold, parent_edge, copy_bound,
+                               gene_trees, all_species, polyploid_species=None):
+    """Isolating test: place two parents from gene-tree co-clustering, NO learned
+    placement + the graft build. Single-species allo targets use co-cluster top-2;
+    clade-level targets fall back to AUTO (self). Uses no partner head, so it runs
+    with any model (the model supplies only detection). model/edge_emb/pairwise_feat
+    are accepted for a uniform call signature but unused here."""
+    event_edges = select_event_edges(strategy, wgd_list, threshold, parent_edge, clades, copy_bound)
+    if polyploid_species is not None:
+        event_edges = [i for i in event_edges if set(clades[i]) <= polyploid_species]
+    events = []
+    n_auto = n_allo = 0
+    for i in event_edges:
+        clade = clades[i]
+        pa_clade = pb_clade = clade                       # default: auto (self)
+        if len(clade) == 1:
+            ranked = predicted_parents_coclust(gene_trees, all_species, next(iter(clade)))
+            if len(ranked) >= 2:
+                pa_clade, pb_clade = frozenset({ranked[0]}), frozenset({ranked[1]})
+        if pa_clade == clade and pb_clade == clade:
+            n_auto += 1
+        else:
+            n_allo += 1
+        events.append(TwoParentEvent(clade, pa_clade, pb_clade, float(wgd_list[i])))
+    mul_tree, n_dropped = build_mul_tree_two_parent(astral_tree, events, mode="graft",
+                                                    return_dropped=True)
+    return mul_tree, n_auto, n_allo, n_dropped
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-dir", required=True)
@@ -162,6 +193,9 @@ def main():
     parser.add_argument("--threshold", type=float, default=0.9)
     parser.add_argument("--strategies", default="raw,collapse,collapse_cap,bound_driven",
                         help="comma-separated build strategies to generate")
+    parser.add_argument("--parents", choices=["head", "coclust"], default="head",
+                        help="head: model's partner head. coclust: place two parents from gene-tree "
+                             "co-clustering (isolating test, no learned placement; graft build).")
     parser.add_argument("--model-config", default=None)
     parser.add_argument("--sim-base",
                         default="/groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations")
@@ -219,6 +253,9 @@ def main():
         gene_trees = load_gene_trees(gene_trees_path, args.max_gene_trees)
         astral_tree = Tree(open(astral_path).read().strip(), format=1)
         species_list = sorted(set(astral_tree.get_leaf_names()))
+        all_species = set()
+        for gt in gene_trees:
+            all_species.update(gt.get_leaf_names())
 
         inv_map = load_inverse_taxa_map(os.path.join(rep_dir, "taxa_map.txt"))
 
@@ -279,11 +316,17 @@ def main():
         # Build + write one MUL-tree per strategy.
         counts = []
         for strat in strategies:
-            build_fn = build_for_strategy_two_parent if two_parent else build_for_strategy
-            mul_tree, n_auto, n_allo, n_dropped = build_fn(
-                model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
-                strat, args.threshold, parent_edge, copy_bound,
-            )
+            if args.parents == "coclust":
+                mul_tree, n_auto, n_allo, n_dropped = build_for_strategy_coclust(
+                    model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
+                    strat, args.threshold, parent_edge, copy_bound, gene_trees, all_species,
+                )
+            else:
+                build_fn = build_for_strategy_two_parent if two_parent else build_for_strategy
+                mul_tree, n_auto, n_allo, n_dropped = build_fn(
+                    model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
+                    strat, args.threshold, parent_edge, copy_bound,
+                )
             rename_leaves(mul_tree, inv_map)
             case_dir = os.path.join(out_base, strat, net)
             os.makedirs(case_dir, exist_ok=True)
