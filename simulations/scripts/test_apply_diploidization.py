@@ -337,6 +337,32 @@ class TestDiploidizeReplicate:
                                 dist="fixed", dist_params={"value": 1.0}, seed=0)
         assert not (out_dir / "g_trees0001.trees.log").exists()
 
+    def test_batched_layout_prunes_all_batches_trees_only(self, tmp_path):
+        # replicate_N/batch_*/1/g_treesK.trees, numbering repeats per batch,
+        # no alignments colocated with the gene trees
+        sp = tmp_path / "tree_10_mil.nex"
+        sp.write_text(SPECIES_NEXUS)  # A is an autopolyploid with 2 copies
+        rep = tmp_path / "replicate_1"
+        for b in (1, 2):
+            d = rep / f"batch_{b}" / "1"
+            d.mkdir(parents=True)
+            (d / "g_trees1.trees").write_text("((A_1_0_0:1,A_2_0_0:1):1,B_0_0:2);\n")
+            (d / "g_trees1.trees.log").write_text("log\n")
+        out = tmp_path / "out"
+
+        summary = ad.diploidize_replicate(sp, rep, out,
+                                          dist="fixed", dist_params={"value": 0.0}, seed=0)
+
+        assert summary["n_genes"] == 2  # both batches processed
+        for b in (1, 2):
+            f = out / f"batch_{b}" / "1" / "g_trees1.trees"
+            assert f.exists()
+            tips = {l.name for l in Tree(f.read_text(), format=1).iter_leaves()}
+            a_copies = {t for t in tips if ad.species_tree_leaf(t).startswith("A_")}
+            assert len(a_copies) == 1  # collapsed even without alignments present
+        # no alignment folder invented where none existed
+        assert not (out / "batch_1" / "1" / "alignments").exists()
+
     def test_summary_records_event_rates_and_copy_numbers(self, tmp_path):
         sp, in_dir = _make_replicate(tmp_path)
         out_dir = tmp_path / "out"
@@ -380,11 +406,12 @@ class TestDiploidizeConfig:
             networks=["Bendiksby_2011"], replicates=[1],
             dist="fixed", dist_params={"value": 0.0}, seed=42,
         )
-        out = (tmp_path / "Bendiksby_2011" / "data" / "conf_ils_low_10M_dip050"
-               / "replicate_1" / "1")
+        rep_out = (tmp_path / "Bendiksby_2011" / "data" / "conf_ils_low_10M_dip050"
+                   / "replicate_1")
+        out = rep_out / "1"
         assert (out / "g_trees0001.trees").exists()
         assert (out / "alignments" / "alignment_0001.phy").exists()
-        assert (out / "diploidization_summary.json").exists()
+        assert (rep_out / "diploidization_summary.json").exists()
 
 
 class TestRealizedRetention:

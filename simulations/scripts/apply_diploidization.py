@@ -293,11 +293,13 @@ def diploidize_replicate(species_tree_path, in_dir, out_dir, *,
                          dist, dist_params, seed):
     """Diploidize every gene of one replicate.
 
-    Reads the species tree, identifies WGD events, draws one retention rate per
-    event, then fractionates each ``g_trees{NNNN}.trees`` gene tree and its
-    matched ``alignments/alignment_{NNNN}.phy`` consistently, writing pruned
-    copies under ``out_dir`` (same layout).  Returns a summary dict (also useful
-    for the on-disk ``diploidization_summary.json``).
+    ``in_dir`` is the replicate directory.  Gene trees are found recursively, so
+    both the single-batch layout ``in_dir/1/g_trees*.trees`` and the multi-batch
+    layout ``in_dir/batch_*/1/g_trees*.trees`` are handled, and each pruned tree
+    is written to the mirrored path under ``out_dir``.  If a gene tree has an
+    alignment sitting beside it at ``<gene dir>/alignments/alignment_<num>.phy``
+    that alignment is pruned consistently too; central or absent alignments are
+    left untouched.  A ``diploidization_summary.json`` is written at ``out_dir``.
     """
     in_dir, out_dir = Path(in_dir), Path(out_dir)
     events = build_events(read_species_tree(species_tree_path))
@@ -305,27 +307,27 @@ def diploidize_replicate(species_tree_path, in_dir, out_dir, *,
     rng = np.random.default_rng(seed)
     q_by_group = draw_retention_rates(n_groups, dist=dist, rng=rng, **dist_params)
 
-    (out_dir / "alignments").mkdir(parents=True, exist_ok=True)
     copy_numbers = defaultdict(lambda: defaultdict(int))  # species -> {count: n_genes}
     n_genes = 0
 
-    for gene_path in sorted(in_dir.glob("g_trees*.trees")):
-        if gene_path.suffix != ".trees":  # skip g_trees*.trees.log
-            continue
-        gene_num = gene_path.stem.replace("g_trees", "")
-        aln_path = in_dir / "alignments" / f"alignment_{gene_num}.phy"
-        if not aln_path.exists():
-            print(f"WARNING: no alignment for {gene_path.name}, skipping")
-            continue
-
+    gene_paths = sorted(p for p in in_dir.rglob("g_trees*.trees") if p.suffix == ".trees")
+    for gene_path in gene_paths:
+        rel = gene_path.relative_to(in_dir)
         newick = gene_path.read_text().strip()
         present = {species_tree_leaf(l.name) for l in Tree(newick, format=1).iter_leaves()}
         removed = plan_removals(events, q_by_group, present, rng)
 
-        (out_dir / gene_path.name).write_text(prune_gene_tree(newick, removed) + "\n")
-        (out_dir / "alignments" / aln_path.name).write_text(
-            prune_alignment(aln_path.read_text(), removed)
-        )
+        out_gene = out_dir / rel
+        out_gene.parent.mkdir(parents=True, exist_ok=True)
+        out_gene.write_text(prune_gene_tree(newick, removed) + "\n")
+
+        # Prune an alignment only when it sits beside this gene tree.
+        gene_num = gene_path.stem.replace("g_trees", "")
+        aln_path = gene_path.parent / "alignments" / f"alignment_{gene_num}.phy"
+        if aln_path.exists():
+            out_aln = out_dir / aln_path.relative_to(in_dir)
+            out_aln.parent.mkdir(parents=True, exist_ok=True)
+            out_aln.write_text(prune_alignment(aln_path.read_text(), removed))
 
         kept = present - removed
         per_species = defaultdict(int)
@@ -335,9 +337,9 @@ def diploidize_replicate(species_tree_path, in_dir, out_dir, *,
             copy_numbers[species][count] += 1
         n_genes += 1
 
+    out_dir.mkdir(parents=True, exist_ok=True)
     if n_genes == 0:
-        print(f"WARNING: no g_trees*.trees processed in {in_dir} "
-              f"(multi-batch layouts are not supported)")
+        print(f"WARNING: no g_trees*.trees found under {in_dir}")
 
     # One summary row per event group (mirrored nested events share a group).
     event_rows = []
@@ -405,11 +407,11 @@ def diploidize_config(base_dir, config, out_config, networks, replicates,
             print(f"WARNING: missing species tree {species_tree}, skipping {network}")
             continue
         for r in replicates:
-            in_dir = base_dir / network / "data" / config / f"replicate_{r}" / "1"
+            in_dir = base_dir / network / "data" / config / f"replicate_{r}"
             if not in_dir.is_dir():
                 print(f"WARNING: missing {in_dir}, skipping {network} replicate {r}")
                 continue
-            out_dir = base_dir / network / "data" / out_config / f"replicate_{r}" / "1"
+            out_dir = base_dir / network / "data" / out_config / f"replicate_{r}"
             print(f"Diploidizing {network} replicate {r} -> {out_config}")
             results[network][r] = diploidize_replicate(
                 species_tree, in_dir, out_dir,
