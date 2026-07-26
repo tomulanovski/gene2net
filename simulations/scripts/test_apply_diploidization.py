@@ -260,6 +260,14 @@ class TestPruneGeneTree:
         out = ad.prune_gene_tree(GENE_TREE, {"A_1"})
         assert all(l.dist > 0 for l in Tree(out, format=1).iter_leaves())
 
+    def test_handles_duplicate_leaf_names(self):
+        # SimPhy duplication can produce two tips with the identical label;
+        # pruning must not choke on the repeated name (regression: Morales-Briones)
+        g = "((A_1_0_0:1,A_2_0_0:1):1,(B_0_0:1,B_0_0:1):1);"
+        out = ad.prune_gene_tree(g, {"A_1"})
+        tips = sorted(l.name for l in Tree(out, format=1).iter_leaves())
+        assert tips == ["A_2_0_0", "B_0_0", "B_0_0"]
+
 
 class TestPhylip:
     def test_read_phylip_preserves_order_and_seqs(self):

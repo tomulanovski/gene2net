@@ -237,8 +237,10 @@ def prune_gene_tree(newick, removed_leaves):
     have their lengths merged into the kept child).
     """
     t = Tree(newick, format=1)
+    # Keep by node object, not name: SimPhy duplication can yield repeated tip
+    # labels, and ete3's name-based prune rejects ambiguous names.
     keep = [
-        l.name for l in t.iter_leaves()
+        l for l in t.iter_leaves()
         if species_tree_leaf(l.name) not in removed_leaves
     ]
     t.prune(keep, preserve_branch_length=True)
