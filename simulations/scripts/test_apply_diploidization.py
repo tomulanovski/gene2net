@@ -389,6 +389,20 @@ class TestDiploidizeReplicate:
         # after full fractionation A has exactly one copy in the single gene
         assert summary["copy_numbers"]["A"] == {"1": 1}
 
+    def test_removal_stats_isolate_diploidization(self, tmp_path):
+        sp, in_dir = _make_replicate(tmp_path)  # A has 2 copies in the one gene
+        out_dir = tmp_path / "out"
+        s0 = ad.diploidize_replicate(sp, in_dir, out_dir,
+                                     dist="fixed", dist_params={"value": 0.0}, seed=0)
+        assert s0["removal"]["A"] == {
+            "eligible": 1, "reduced": 1, "copies_removed": 1, "realized_retention": 0.0,
+        }
+        s1 = ad.diploidize_replicate(sp, in_dir, tmp_path / "out1",
+                                     dist="fixed", dist_params={"value": 1.0}, seed=0)
+        assert s1["removal"]["A"] == {
+            "eligible": 1, "reduced": 0, "copies_removed": 0, "realized_retention": 1.0,
+        }
+
 
 class TestStableSeed:
     def test_deterministic(self):

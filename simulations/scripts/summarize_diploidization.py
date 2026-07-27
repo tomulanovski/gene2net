@@ -37,6 +37,8 @@ def aggregate(records):
     net_replicates = Counter()
     net_polyploids = defaultdict(set)
     net_qs = defaultdict(list)
+    net_elig = Counter()                # network -> eligible genes (diploidization-only)
+    net_reduced = Counter()             # network -> genes where a copy was dropped
 
     for rec in records:
         net, summary = rec["network"], rec["summary"]
@@ -47,6 +49,9 @@ def aggregate(records):
         for sp in polys:
             for copies, n in summary.get("copy_numbers", {}).get(sp, {}).items():
                 net_counts[net][int(copies)] += n
+        for r in summary.get("removal", {}).values():
+            net_elig[net] += r.get("eligible", 0)
+            net_reduced[net] += r.get("reduced", 0)
 
     def metrics(counter):
         n_obs = sum(counter.values())
@@ -54,9 +59,13 @@ def aggregate(records):
         single = counter.get(1, 0) / n_obs if n_obs else 0.0
         return n_obs, mean, single
 
+    def realized(elig, reduced):
+        return round(1 - reduced / elig, 4) if elig else None
+
     per_network = {}
     overall_counter = Counter()
     overall_qs = []
+    overall_elig = overall_reduced = 0
     for net in sorted(net_counts):
         n_obs, mean, single = metrics(net_counts[net])
         qs = net_qs[net]
@@ -67,9 +76,12 @@ def aggregate(records):
             "n_obs": n_obs,
             "mean_copies": mean,
             "single_copy_frac": single,
+            "realized_retention": realized(net_elig[net], net_reduced[net]),
         }
         overall_counter += net_counts[net]
         overall_qs.extend(qs)
+        overall_elig += net_elig[net]
+        overall_reduced += net_reduced[net]
 
     n_obs, mean, single = metrics(overall_counter)
     overall = {
@@ -78,6 +90,7 @@ def aggregate(records):
         "n_obs": n_obs,
         "mean_copies": mean,
         "single_copy_frac": single,
+        "realized_retention": realized(overall_elig, overall_reduced),
     }
     return {"per_network": per_network, "overall": overall}
 
@@ -93,19 +106,24 @@ def collect_summaries(base_dir, config):
     return records
 
 
+def _fmt(x, width, dec=3):
+    return f"{'NA':>{width}s}" if x is None else f"{x:>{width}.{dec}f}"
+
+
 def _print_table(agg):
     header = f"{'network':30s} {'q':>5s} {'reps':>4s} {'polyp':>5s} " \
-             f"{'mean_copies':>11s} {'single_frac':>11s}"
+             f"{'mean_copies':>11s} {'single_frac':>11s} {'realized_q':>10s}"
     print(header)
     print("-" * len(header))
     for net, m in agg["per_network"].items():
-        print(f"{net:30s} {m['q']:>5.2f} {m['n_replicates']:>4d} "
-              f"{m['n_polyploids']:>5d} {m['mean_copies']:>11.3f} "
-              f"{m['single_copy_frac']:>11.3f}")
+        print(f"{net:30s} {_fmt(m['q'],5,2)} {m['n_replicates']:>4d} "
+              f"{m['n_polyploids']:>5d} {_fmt(m['mean_copies'],11)} "
+              f"{_fmt(m['single_copy_frac'],11)} {_fmt(m['realized_retention'],10)}")
     o = agg["overall"]
     print("-" * len(header))
-    print(f"{'OVERALL ('+str(o['n_networks'])+' networks)':30s} {o['q']:>5.2f} "
-          f"{'':>4s} {'':>5s} {o['mean_copies']:>11.3f} {o['single_copy_frac']:>11.3f}")
+    print(f"{'OVERALL ('+str(o['n_networks'])+' networks)':30s} {_fmt(o['q'],5,2)} "
+          f"{'':>4s} {'':>5s} {_fmt(o['mean_copies'],11)} "
+          f"{_fmt(o['single_copy_frac'],11)} {_fmt(o['realized_retention'],10)}")
 
 
 def _write_csv(agg, path):
@@ -113,14 +131,15 @@ def _write_csv(agg, path):
     with open(path, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["network", "q", "n_replicates", "n_polyploids",
-                    "n_obs", "mean_copies", "single_copy_frac"])
+                    "n_obs", "mean_copies", "single_copy_frac", "realized_retention"])
         for net, m in agg["per_network"].items():
             w.writerow([net, m["q"], m["n_replicates"], m["n_polyploids"],
                         m["n_obs"], f"{m['mean_copies']:.4f}",
-                        f"{m['single_copy_frac']:.4f}"])
+                        f"{m['single_copy_frac']:.4f}", m["realized_retention"]])
         o = agg["overall"]
         w.writerow(["OVERALL", o["q"], "", "", o["n_obs"],
-                    f"{o['mean_copies']:.4f}", f"{o['single_copy_frac']:.4f}"])
+                    f"{o['mean_copies']:.4f}", f"{o['single_copy_frac']:.4f}",
+                    o["realized_retention"]])
     print(f"\nWrote {path}")
 
 

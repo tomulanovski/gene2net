@@ -323,6 +323,7 @@ def diploidize_replicate(species_tree_path, in_dir, out_dir, *,
     q_by_group = draw_retention_rates(n_groups, dist=dist, rng=rng, **dist_params)
 
     copy_numbers = defaultdict(lambda: defaultdict(int))  # species -> {count: n_genes}
+    removal = defaultdict(lambda: defaultdict(int))       # species -> removal stats
     n_genes = 0
 
     gene_paths = sorted(p for p in in_dir.rglob("g_trees*.trees") if p.suffix == ".trees")
@@ -344,12 +345,20 @@ def diploidize_replicate(species_tree_path, in_dir, out_dir, *,
             out_aln.parent.mkdir(parents=True, exist_ok=True)
             out_aln.write_text(prune_alignment(aln_path.read_text(), removed))
 
-        kept = present - removed
-        per_species = defaultdict(int)
-        for leaf in kept:
-            per_species[split_copy(leaf)[0]] += 1
-        for species, count in per_species.items():
-            copy_numbers[species][count] += 1
+        # Final copy numbers (combined state) and diploidization-only removal stats.
+        present_by_sp = defaultdict(int)
+        for leaf in present:
+            present_by_sp[split_copy(leaf)[0]] += 1
+        removed_by_sp = defaultdict(int)
+        for leaf in removed:
+            removed_by_sp[split_copy(leaf)[0]] += 1
+        for sp, n_present in present_by_sp.items():
+            copy_numbers[sp][n_present - removed_by_sp.get(sp, 0)] += 1
+            if n_present >= 2:  # eligible: diploidization could act this gene
+                removal[sp]["eligible"] += 1
+                if removed_by_sp.get(sp, 0):
+                    removal[sp]["reduced"] += 1
+                removal[sp]["copies_removed"] += removed_by_sp.get(sp, 0)
         n_genes += 1
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -376,6 +385,19 @@ def diploidize_replicate(species_tree_path, in_dir, out_dir, *,
         "copy_numbers": {
             sp: {str(c): n for c, n in sorted(counts.items())}
             for sp, counts in sorted(copy_numbers.items())
+        },
+        # Diploidization-only effect (relative to the post-SimPhy state):
+        # eligible = genes with >=2 copies before our step, reduced = genes where
+        # we dropped a copy, realized_retention = 1 - reduced/eligible (~ q).
+        "removal": {
+            sp: {
+                "eligible": r["eligible"],
+                "reduced": r["reduced"],
+                "copies_removed": r["copies_removed"],
+                "realized_retention": (1 - r["reduced"] / r["eligible"]
+                                       if r["eligible"] else None),
+            }
+            for sp, r in sorted(removal.items())
         },
     }
     with open(out_dir / "diploidization_summary.json", "w") as fh:

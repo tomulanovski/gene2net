@@ -12,6 +12,9 @@ import summarize_diploidization as sd
 S1 = {
     "events": [{"species": ["A"], "q": 0.6}],
     "copy_numbers": {"A": {"1": 40, "2": 60}, "C": {"1": 100}},
+    # of 100 eligible genes, 40 had a copy dropped -> realized retention 0.6
+    "removal": {"A": {"eligible": 100, "reduced": 40, "copies_removed": 40,
+                      "realized_retention": 0.6}},
 }
 
 
@@ -29,6 +32,8 @@ class TestAggregate:
         assert net["single_copy_frac"] == 0.4  # 80 / 200
         assert abs(net["mean_copies"] - 1.6) < 1e-9  # (80*1 + 120*2)/200
         assert net["q"] == 0.6
+        # diploidization-only: 2 reps * 40 reduced / (2 reps * 100 eligible)
+        assert net["realized_retention"] == 0.6
 
     def test_diploids_excluded(self):
         agg = sd.aggregate([{"network": "n", "summary": S1}])
