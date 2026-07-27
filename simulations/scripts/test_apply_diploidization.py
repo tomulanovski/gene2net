@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from collections import Counter, defaultdict as _dd
 
 import numpy as np
+import pytest
 from ete3 import Tree
 
 import apply_diploidization as ad
@@ -74,6 +75,12 @@ class TestBuildEvents:
     def test_diploid_only_no_events(self):
         events = ad.build_events("((A,X),(B,Y));")
         assert events == []
+
+    def test_rejects_duplicate_leaf_labels(self):
+        # bare repeated names (no _N copy suffix) make subgenomes indistinguishable;
+        # must fail loudly rather than silently corrupt (regression: Morales-Briones)
+        with pytest.raises(ValueError):
+            ad.build_events("((Alchemillakiwuensis,Alchemillakiwuensis),Y);")
 
     def test_autopolyploid_duplicated_clade(self):
         # clade (A,B) duplicated as identical siblings -> one autopolyploidy event

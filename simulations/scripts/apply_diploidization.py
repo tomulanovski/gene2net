@@ -100,6 +100,19 @@ def build_events(species_tree):
     """
     t = species_tree if isinstance(species_tree, Tree) else Tree(species_tree, format=1)
     t = t.copy()
+
+    # Polyploid copies must be uniquely labeled (e.g. X_1/X_2). If the species
+    # tree has bare duplicate labels, subgenomes are indistinguishable and any
+    # removal would drop a whole species rather than one homeolog, so refuse.
+    leaf_names = [l.name for l in t.iter_leaves()]
+    if len(leaf_names) != len(set(leaf_names)):
+        dupes = sorted({n for n in leaf_names if leaf_names.count(n) > 1})
+        raise ValueError(
+            "species tree has duplicate leaf labels, so polyploid copies cannot "
+            "be told apart; copies must be uniquely suffixed (e.g. X_1, X_2). "
+            f"Offending labels: {dupes[:5]}"
+        )
+
     for leaf in t.iter_leaves():
         leaf.add_feature("uniq", leaf.name)
         leaf.name = split_copy(leaf.name)[0]
@@ -415,11 +428,14 @@ def diploidize_config(base_dir, config, out_config, networks, replicates,
                 continue
             out_dir = base_dir / network / "data" / out_config / f"replicate_{r}"
             print(f"Diploidizing {network} replicate {r} -> {out_config}")
-            results[network][r] = diploidize_replicate(
-                species_tree, in_dir, out_dir,
-                dist=dist, dist_params=dist_params,
-                seed=stable_seed(seed, network, r),
-            )
+            try:
+                results[network][r] = diploidize_replicate(
+                    species_tree, in_dir, out_dir,
+                    dist=dist, dist_params=dist_params,
+                    seed=stable_seed(seed, network, r),
+                )
+            except ValueError as exc:
+                print(f"ERROR: skipping {network} replicate {r}: {exc}")
     return results
 
 
