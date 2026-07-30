@@ -12,11 +12,30 @@ class WGDEvent:
 
 
 def _find_node_by_leaf_set(tree: Tree, leaf_set: FrozenSet[str]) -> Optional[TreeNode]:
-    """Find the node whose descendant leaf set exactly matches the given set."""
+    """Find the node for a clade, tolerating copies grafted in by earlier events.
+
+    An exact leaf-set match is preferred, which preserves the original behavior
+    whenever the clade is still intact. But when an earlier (nested) event has
+    grafted a copy of another species INTO this clade, the clade's exact leaf set
+    no longer equals the recorded target, and an exact-only match silently drops
+    the event (measured: clade-level allo events lost -> the ~0.11 oracle floor).
+
+    The fallback returns the SMALLEST node whose leaf set contains every target
+    species, i.e. the minimal clade still spanning the target. This recovers the
+    outer clade after an inner graft added a foreign leaf inside it.
+    """
+    target = frozenset(leaf_set)
+    smallest_superset = None
+    smallest_size = None
     for node in tree.traverse("postorder"):
-        if frozenset(node.get_leaf_names()) == leaf_set:
-            return node
-    return None
+        names = frozenset(node.get_leaf_names())
+        if names == target:
+            return node  # exact match — best, and preserves prior behavior
+        if target <= names:
+            if smallest_size is None or len(names) < smallest_size:
+                smallest_superset = node
+                smallest_size = len(names)
+    return smallest_superset
 
 
 def _apply_wgd_event(tree: Tree, event: WGDEvent) -> bool:
