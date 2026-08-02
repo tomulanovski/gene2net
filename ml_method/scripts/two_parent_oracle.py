@@ -167,6 +167,27 @@ def build_diploid_skeleton_backbone(astral_tree, true_tree, polyploids, diploids
     return skel
 
 
+def root_backbone_to_true(backbone, true_tree):
+    """Root `backbone` at the TRUE tree's root, so the rooting-sensitive edit metric
+    is not penalised for a mis-rooted repaired backbone. Outgroup = the smaller side
+    of the true root, restricted to species present in the backbone. This isolates
+    the topology quality of the repaired backbone from the (separate) rooting problem."""
+    bb = set(backbone.get_leaf_names())
+    if len(true_tree.children) != 2:
+        return backbone
+    sides = [set(c.get_leaf_names()) & bb for c in true_tree.children]
+    cands = [s for s in sides if 0 < len(s) < len(bb)]
+    if not cands:
+        return backbone
+    og = min(cands, key=len)
+    try:
+        backbone.set_outgroup(next(iter(og)) if len(og) == 1
+                              else backbone.get_common_ancestor(list(og)))
+    except Exception:
+        pass
+    return backbone
+
+
 def snap_to_backbone(clade, backbone):
     """Best-Jaccard node leaf set on the backbone. Guarantees the clade is findable."""
     best_set, best_score = frozenset(), -1.0
@@ -246,7 +267,7 @@ def main():
                          "polyploids placed at their TRUE homes (does a realistic skeleton "
                          "reach the floor?).")
     ap.add_argument("--parents", choices=["true", "coclust"], default="true")
-    ap.add_argument("--root-backbone", choices=["none", "hybrid"], default="none",
+    ap.add_argument("--root-backbone", choices=["none", "hybrid", "true"], default="none",
                     help="hybrid: root the ASTRAL backbone with hybrid_root (matches the real "
                          "pipeline). Ignored for --backbone true (already correctly rooted).")
     ap.add_argument("--build", choices=["graft", "detach"], default="graft",
@@ -313,8 +334,11 @@ def main():
                 all_species.update(t.get_leaf_names())
 
         # Root the ASTRAL-derived backbone (astral or diploid) to match the pipeline.
-        if args.root_backbone == "hybrid" and args.backbone in ("astral", "diploid"):
-            backbone = hybrid_root(backbone, gene_trees, args.max_gene_trees)
+        if args.backbone in ("astral", "diploid"):
+            if args.root_backbone == "hybrid":
+                backbone = hybrid_root(backbone, gene_trees, args.max_gene_trees)
+            elif args.root_backbone == "true":
+                backbone = root_backbone_to_true(backbone, true_tree)
         try:
             events, scores = two_parent_events(md_events, true_tree, backbone,
                                                mode=args.parents,
