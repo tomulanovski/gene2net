@@ -39,8 +39,14 @@ def load_tree_any(path):
     return Tree(txt.strip(), format=1)
 
 
-def sibling_species_sets(tree, x):
-    """Species-name set in the sibling subtree of every leaf named x (self-copies removed)."""
+def sibling_species_sets(tree, x, exclude=frozenset()):
+    """Diploid species set in the sibling subtree of every leaf named x.
+
+    `exclude` (the polyploid species) is removed so the match is to the DIPLOID
+    context, the well-defined reference, rather than to other (also-displaced)
+    polyploids. A leaf whose sibling subtree has no diploid left after exclusion
+    contributes no set and is skipped downstream.
+    """
     out = []
     for leaf in tree.get_leaves():
         if leaf.name == x and leaf.up is not None:
@@ -49,6 +55,7 @@ def sibling_species_sets(tree, x):
                 if child is leaf:
                     continue
                 sibs |= set(child.get_leaf_names())
+            sibs -= set(exclude)
             sibs.discard(x)
             if sibs:
                 out.append(sibs)
@@ -88,14 +95,14 @@ def main():
         if not polys:
             continue
         n_samples += 1
+        poly_set = set(polys)
         for x in polys:
-            true_sets = sibling_species_sets(mul, x)      # two (or more) true neighbors
-            astral_sets = sibling_species_sets(astral, x)  # one (ASTRAL is single-copy)
+            # strip ALL polyploids so the match is to the diploid context (see docstring)
+            true_sets = sibling_species_sets(mul, x, poly_set)      # true diploid neighbors (2+ copies)
+            astral_sets = sibling_species_sets(astral, x, poly_set)  # one (ASTRAL is single-copy)
             if not true_sets or not astral_sets:
                 continue
             na = astral_sets[0]
-            # strip the polyploids themselves from comparison so the match is to
-            # the diploid context, not to other (also-displaced) polyploids
             best = max(jaccard(na, ts) for ts in true_sets)
             best_jaccards.append(best)
             if best >= args.threshold:
