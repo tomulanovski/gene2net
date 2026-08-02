@@ -216,7 +216,8 @@ def build_mul_tree_two_parent(species_tree: Tree, events: List["TwoParentEvent"]
     apply = _apply_two_parent_grafted if mode == "graft" else _apply_two_parent_event
     mul_tree = species_tree.copy("deepcopy")
     if order == "confidence":
-        sorted_events = sorted(events, key=lambda e: -e.confidence)
+        # strongest prediction first; ties broken by smallest clade (nesting-safe)
+        sorted_events = sorted(events, key=lambda e: (-e.confidence, len(e.target_clade)))
     else:
         sorted_events = sorted(events, key=lambda e: len(e.target_clade))
     dropped = 0
@@ -248,7 +249,8 @@ def build_mul_tree(species_tree: Tree, events: List[WGDEvent], return_dropped: b
     mul_tree = species_tree.copy("deepcopy")
 
     if order == "confidence":
-        sorted_events = sorted(events, key=lambda e: -e.confidence)
+        # strongest prediction first; ties broken by smallest clade (nesting-safe)
+        sorted_events = sorted(events, key=lambda e: (-e.confidence, len(e.wgd_edge_clade)))
     else:
         sorted_events = sorted(events, key=lambda e: len(e.wgd_edge_clade))
 

@@ -78,6 +78,58 @@ def sibling_of_clade(true_tree, clade):
     return frozenset(sib) if sib else None
 
 
+def _diploid_anchor(true_tree, X, diploids):
+    """Diploid species defining polyploid X's home neighbourhood in the TRUE tree:
+    walk up from X until the enclosing clade contains at least one diploid."""
+    node = next((l for l in true_tree.get_leaves() if l.name == X), None)
+    if node is None:
+        return set()
+    while node.up is not None:
+        node = node.up
+        dips = set(node.get_leaf_names()) & diploids
+        if dips:
+            return dips
+    return set()
+
+
+def build_diploid_skeleton_backbone(astral_tree, true_tree, polyploids, diploids):
+    """Single-copy 'repaired' backbone for the bounded-repair oracle.
+
+    = ASTRAL pruned to the diploid species only (the ~86%-exact skeleton), with each
+    polyploid grafted back at its TRUE home position relative to the diploids (its
+    smallest diploid-containing clade in the true tree). This keeps ASTRAL's
+    imperfect diploid relationships but fixes every polyploid placement, so the
+    oracle isolates whether a realistic diploid skeleton is a good enough scaffold
+    to approach the true-backbone floor. Clade-level polyploids are grafted per
+    species at their diploid anchor (an approximation of the clade's home).
+    Returns None if too few diploids survive to define a skeleton.
+    """
+    skel = astral_tree.copy()
+    keep = [l for l in skel.get_leaf_names() if l in diploids]
+    if len(keep) < 3:
+        return None
+    skel.prune(keep, preserve_branch_length=True)
+    skel_names = set(skel.get_leaf_names())
+    for X in sorted(polyploids):
+        anchor = [d for d in _diploid_anchor(true_tree, X, diploids) if d in skel_names]
+        if not anchor:
+            continue
+        if len(anchor) == 1:
+            anchor_node = next((l for l in skel.get_leaves() if l.name == anchor[0]), None)
+        else:
+            anchor_node = skel.get_common_ancestor(anchor)
+        if anchor_node is None or anchor_node.up is None:
+            skel.add_child(name=X, dist=0)   # anchor spans the skeleton -> attach at root
+            continue
+        parent = anchor_node.up
+        dist = anchor_node.dist
+        anchor_node.detach()
+        newint = parent.add_child(dist=dist)
+        newint.add_child(anchor_node, dist=0)
+        newint.add_child(name=X, dist=0)
+    return skel
+
+
 def snap_to_backbone(clade, backbone):
     """Best-Jaccard node leaf set on the backbone. Guarantees the clade is findable."""
     best_set, best_score = frozenset(), -1.0
@@ -151,7 +203,11 @@ def main():
     ap.add_argument("--start", type=int, default=0)
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--replicate", type=int, default=1)
-    ap.add_argument("--backbone", choices=["astral", "true"], default="astral")
+    ap.add_argument("--backbone", choices=["astral", "true", "diploid"], default="astral",
+                    help="astral: real pipeline backbone. true: faithfulness check. "
+                         "diploid: bounded-repair oracle = ASTRAL's diploid skeleton + "
+                         "polyploids placed at their TRUE homes (does a realistic skeleton "
+                         "reach the floor?).")
     ap.add_argument("--parents", choices=["true", "coclust"], default="true")
     ap.add_argument("--root-backbone", choices=["none", "hybrid"], default="none",
                     help="hybrid: root the ASTRAL backbone with hybrid_root (matches the real "
@@ -169,7 +225,7 @@ def main():
 
     # Gene trees are needed for co-cluster parents and/or hybrid rooting.
     need_gene_trees = (args.parents == "coclust"
-                       or (args.root_backbone == "hybrid" and args.backbone == "astral"))
+                       or (args.root_backbone == "hybrid" and args.backbone in ("astral", "diploid")))
 
     os.makedirs(args.out_dir, exist_ok=True)
     all_scores = []
@@ -187,13 +243,27 @@ def main():
             skipped += 1
             continue
         true_tree = load_nexus_tree(true_path)
+        with open(md_path) as f:
+            md_events = json.load(f).get("events", [])
+
         if args.backbone == "true":
             backbone = true_tree.copy()
         else:
             if not os.path.exists(astral_path):
                 skipped += 1
                 continue
-            backbone = Tree(open(astral_path).read().strip(), format=1)
+            astral = Tree(open(astral_path).read().strip(), format=1)
+            if args.backbone == "diploid":
+                polyploids = set()
+                for ev in md_events:
+                    polyploids |= set(ev.get("target_clade") or [])
+                diploids = set(true_tree.get_leaf_names()) - polyploids
+                backbone = build_diploid_skeleton_backbone(astral, true_tree, polyploids, diploids)
+                if backbone is None:
+                    skipped += 1
+                    continue
+            else:
+                backbone = astral
 
         gene_trees = all_species = None
         if need_gene_trees:
@@ -205,12 +275,9 @@ def main():
             for t in gene_trees:
                 all_species.update(t.get_leaf_names())
 
-        # Root the ASTRAL backbone to match the real pipeline (rooting-sensitive metric).
-        if args.root_backbone == "hybrid" and args.backbone == "astral":
+        # Root the ASTRAL-derived backbone (astral or diploid) to match the pipeline.
+        if args.root_backbone == "hybrid" and args.backbone in ("astral", "diploid"):
             backbone = hybrid_root(backbone, gene_trees, args.max_gene_trees)
-
-        with open(md_path) as f:
-            md_events = json.load(f).get("events", [])
         try:
             events, scores = two_parent_events(md_events, true_tree, backbone,
                                                mode=args.parents,
