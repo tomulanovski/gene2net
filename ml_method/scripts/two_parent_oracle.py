@@ -92,17 +92,40 @@ def _diploid_anchor(true_tree, X, diploids):
     return set()
 
 
+def _clade_diploid_anchor(true_tree, clade_names, diploids):
+    """Nearest diploid context of a whole clade in the TRUE tree: from the clade's
+    MRCA, walk up until the enclosing clade contains at least one diploid."""
+    if len(clade_names) == 1:
+        node = next((l for l in true_tree.get_leaves() if l.name in clade_names), None)
+    else:
+        try:
+            node = true_tree.get_common_ancestor(list(clade_names))
+        except Exception:
+            node = None
+    if node is None:
+        return set()
+    while node.up is not None:
+        node = node.up
+        dips = set(node.get_leaf_names()) & diploids
+        if dips:
+            return dips
+    return set()
+
+
 def build_diploid_skeleton_backbone(astral_tree, true_tree, polyploids, diploids):
     """Single-copy 'repaired' backbone for the bounded-repair oracle.
 
-    = ASTRAL pruned to the diploid species only (the ~86%-exact skeleton), with each
-    polyploid grafted back at its TRUE home position relative to the diploids (its
-    smallest diploid-containing clade in the true tree). This keeps ASTRAL's
-    imperfect diploid relationships but fixes every polyploid placement, so the
-    oracle isolates whether a realistic diploid skeleton is a good enough scaffold
-    to approach the true-backbone floor. Clade-level polyploids are grafted per
-    species at their diploid anchor (an approximation of the clade's home).
-    Returns None if too few diploids survive to define a skeleton.
+    = ASTRAL pruned to the diploid species only (the ~86%-exact skeleton), with the
+    polyploids grafted back at their TRUE home relative to the diploids. This keeps
+    ASTRAL's imperfect diploid relationships but fixes every polyploid placement, so
+    the oracle isolates whether a realistic diploid skeleton is a good enough scaffold
+    to approach the true-backbone floor.
+
+    v2 — CLADE-PRESERVING: a set of polyploids that forms a clade in the true tree is
+    grafted as one whole subtree (copied from the true tree), not species-by-species.
+    The earlier per-species graft flattened those clades into bushes and inflated edit;
+    this preserves their true internal topology. Returns None if too few diploids
+    survive to define a skeleton.
     """
     skel = astral_tree.copy()
     keep = [l for l in skel.get_leaf_names() if l in diploids]
@@ -110,23 +133,37 @@ def build_diploid_skeleton_backbone(astral_tree, true_tree, polyploids, diploids
         return None
     skel.prune(keep, preserve_branch_length=True)
     skel_names = set(skel.get_leaf_names())
-    for X in sorted(polyploids):
-        anchor = [d for d in _diploid_anchor(true_tree, X, diploids) if d in skel_names]
+    poly = set(polyploids)
+
+    # Maximal all-polyploid clades in the true tree (preorder + covered => maximal),
+    # so each polyploid clade is grafted once as a unit with its true structure.
+    groups = []            # (subtree_copy, clade_names)
+    covered = set()
+    for node in true_tree.traverse("preorder"):
+        names = set(node.get_leaf_names())
+        if names and names <= poly and not (names & covered):
+            groups.append((node.copy(), names))
+            covered |= names
+    for X in poly - covered:   # safety: any polyploid not captured above -> singleton
+        leaf = next((l for l in true_tree.get_leaves() if l.name == X), None)
+        if leaf is not None:
+            groups.append((leaf.copy(), {X}))
+
+    for subtree, names in groups:
+        anchor = [d for d in _clade_diploid_anchor(true_tree, names, diploids) if d in skel_names]
         if not anchor:
             continue
-        if len(anchor) == 1:
-            anchor_node = next((l for l in skel.get_leaves() if l.name == anchor[0]), None)
-        else:
-            anchor_node = skel.get_common_ancestor(anchor)
+        anchor_node = (next((l for l in skel.get_leaves() if l.name == anchor[0]), None)
+                       if len(anchor) == 1 else skel.get_common_ancestor(anchor))
         if anchor_node is None or anchor_node.up is None:
-            skel.add_child(name=X, dist=0)   # anchor spans the skeleton -> attach at root
+            skel.add_child(subtree.copy(), dist=0)   # anchor spans the skeleton -> attach at root
             continue
         parent = anchor_node.up
         dist = anchor_node.dist
         anchor_node.detach()
         newint = parent.add_child(dist=dist)
         newint.add_child(anchor_node, dist=0)
-        newint.add_child(name=X, dist=0)
+        newint.add_child(subtree.copy(), dist=0)
     return skel
 
 

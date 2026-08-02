@@ -39,13 +39,15 @@ def load_tree_any(path):
     return Tree(txt.strip(), format=1)
 
 
-def sibling_species_sets(tree, x, exclude=frozenset()):
-    """Diploid species set in the sibling subtree of every leaf named x.
+def sibling_species_sets(tree, x):
+    """Immediate sibling-subtree species set of every leaf named x (x removed).
 
-    `exclude` (the polyploid species) is removed so the match is to the DIPLOID
-    context, the well-defined reference, rather than to other (also-displaced)
-    polyploids. A leaf whose sibling subtree has no diploid left after exclusion
-    contributes no set and is skipped downstream.
+    LENIENT and known-imperfect: it uses only the direct sibling and includes any
+    other polyploids sitting next to x, so it over-counts "hits" when ASTRAL
+    clusters polyploids. Stripping polyploids instead skips ~90% of cases, so that
+    is not the fix. The correct diploid-context placement metric is the anchor-walk
+    in backbone_displacement.py (walk up to the nearest diploid, count every
+    polyploid); use that as primary. This script is kept only as a lenient cross-check.
     """
     out = []
     for leaf in tree.get_leaves():
@@ -55,7 +57,6 @@ def sibling_species_sets(tree, x, exclude=frozenset()):
                 if child is leaf:
                     continue
                 sibs |= set(child.get_leaf_names())
-            sibs -= set(exclude)
             sibs.discard(x)
             if sibs:
                 out.append(sibs)
@@ -95,11 +96,9 @@ def main():
         if not polys:
             continue
         n_samples += 1
-        poly_set = set(polys)
         for x in polys:
-            # strip ALL polyploids so the match is to the diploid context (see docstring)
-            true_sets = sibling_species_sets(mul, x, poly_set)      # true diploid neighbors (2+ copies)
-            astral_sets = sibling_species_sets(astral, x, poly_set)  # one (ASTRAL is single-copy)
+            true_sets = sibling_species_sets(mul, x)       # two (or more) true neighbors
+            astral_sets = sibling_species_sets(astral, x)  # one (ASTRAL is single-copy)
             if not true_sets or not astral_sets:
                 continue
             na = astral_sets[0]
