@@ -91,7 +91,8 @@ def load_gene_trees(path, max_trees=500):
 
 
 def build_for_strategy(model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
-                       strategy, threshold, parent_edge, copy_bound, polyploid_species=None):
+                       strategy, threshold, parent_edge, copy_bound, polyploid_species=None,
+                       build_order="size"):
     """Select events for a strategy, resolve partners, build the MUL-tree."""
     event_edges = select_event_edges(strategy, wgd_list, threshold, parent_edge, clades, copy_bound)
     if polyploid_species is not None:
@@ -117,12 +118,13 @@ def build_for_strategy(model, astral_tree, clades, wgd_list, edge_emb, pairwise_
                 wgd_edge_clade=clades[i], partner_edge_clade=clades[j],
                 confidence=float(wgd_list[i]),
             ))
-    mul_tree, n_dropped = build_mul_tree(astral_tree, events, return_dropped=True)
+    mul_tree, n_dropped = build_mul_tree(astral_tree, events, return_dropped=True, order=build_order)
     return mul_tree, n_auto, n_allo, n_dropped
 
 
 def build_for_strategy_two_parent(model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
-                                  strategy, threshold, parent_edge, copy_bound, polyploid_species=None):
+                                  strategy, threshold, parent_edge, copy_bound, polyploid_species=None,
+                                  build_order="size"):
     """Two-parent variant: predict BOTH parent edges per WGD edge and build with the
     nested-safe graft build. Auto = both slots pick the WGD edge itself."""
     event_edges = select_event_edges(strategy, wgd_list, threshold, parent_edge, clades, copy_bound)
@@ -151,13 +153,14 @@ def build_for_strategy_two_parent(model, astral_tree, clades, wgd_list, edge_emb
                 confidence=float(wgd_list[i]),
             ))
     mul_tree, n_dropped = build_mul_tree_two_parent(astral_tree, events, mode="graft",
-                                                    return_dropped=True)
+                                                    return_dropped=True, order=build_order)
     return mul_tree, n_auto, n_allo, n_dropped
 
 
 def build_for_strategy_coclust(model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
                                strategy, threshold, parent_edge, copy_bound,
-                               gene_trees, all_species, polyploid_species=None):
+                               gene_trees, all_species, polyploid_species=None,
+                               build_order="size"):
     """Isolating test: place two parents from gene-tree co-clustering, NO learned
     placement + the graft build. Single-species allo targets use co-cluster top-2;
     clade-level targets fall back to AUTO (self). Uses no partner head, so it runs
@@ -181,7 +184,7 @@ def build_for_strategy_coclust(model, astral_tree, clades, wgd_list, edge_emb, p
             n_allo += 1
         events.append(TwoParentEvent(clade, pa_clade, pb_clade, float(wgd_list[i])))
     mul_tree, n_dropped = build_mul_tree_two_parent(astral_tree, events, mode="graft",
-                                                    return_dropped=True)
+                                                    return_dropped=True, order=build_order)
     return mul_tree, n_auto, n_allo, n_dropped
 
 
@@ -191,6 +194,11 @@ def main():
     parser.add_argument("--config", required=True, help="e.g. conf_ils_low_10M")
     parser.add_argument("--replicate", type=int, default=1)
     parser.add_argument("--threshold", type=float, default=0.9)
+    parser.add_argument("--build-order", choices=["size", "confidence"], default="size",
+                        help="order events are stamped onto the backbone. size: smallest "
+                             "clade first (nested-safe, default). confidence: strongest "
+                             "prediction first, so conflicts resolve by evidence (cf. Polyphest "
+                             "inserting clades by support).")
     parser.add_argument("--strategies", default="raw,collapse,collapse_cap,bound_driven",
                         help="comma-separated build strategies to generate")
     parser.add_argument("--parents", choices=["head", "coclust"], default="head",
@@ -320,12 +328,14 @@ def main():
                 mul_tree, n_auto, n_allo, n_dropped = build_for_strategy_coclust(
                     model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
                     strat, args.threshold, parent_edge, copy_bound, gene_trees, all_species,
+                    build_order=args.build_order,
                 )
             else:
                 build_fn = build_for_strategy_two_parent if two_parent else build_for_strategy
                 mul_tree, n_auto, n_allo, n_dropped = build_fn(
                     model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
                     strat, args.threshold, parent_edge, copy_bound,
+                    build_order=args.build_order,
                 )
             rename_leaves(mul_tree, inv_map)
             case_dir = os.path.join(out_base, strat, net)

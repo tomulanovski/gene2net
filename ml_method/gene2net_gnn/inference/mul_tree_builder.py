@@ -198,18 +198,27 @@ def _apply_two_parent_grafted(tree: Tree, event: TwoParentEvent) -> bool:
 
 
 def build_mul_tree_two_parent(species_tree: Tree, events: List["TwoParentEvent"],
-                              return_dropped: bool = False, mode: str = "graft"):
-    """Build a MUL-tree by applying two-parent events bottom-up (smallest target first).
+                              return_dropped: bool = False, mode: str = "graft",
+                              order: str = "size"):
+    """Build a MUL-tree by applying two-parent events.
 
     mode='graft' (default): keep the target at its home, add a copy at the away
         parent. Composes for nested events; reproduces the ground-truth convention.
     mode='detach': detach the target and graft a copy at BOTH parents. Cleaner for
         a single isolated event but DROPS outer events whose target clade an inner
         event has already torn apart (see _apply_two_parent_grafted docstring).
+
+    order='size' (default): smallest target clade first (nested-safe).
+    order='confidence': highest detection confidence first, so conflicts resolve in
+        favor of the stronger prediction (evidence-ordered insertion, cf. Polyphest
+        inserting by support).
     """
     apply = _apply_two_parent_grafted if mode == "graft" else _apply_two_parent_event
     mul_tree = species_tree.copy("deepcopy")
-    sorted_events = sorted(events, key=lambda e: len(e.target_clade))
+    if order == "confidence":
+        sorted_events = sorted(events, key=lambda e: -e.confidence)
+    else:
+        sorted_events = sorted(events, key=lambda e: len(e.target_clade))
     dropped = 0
     for event in sorted_events:
         if not apply(mul_tree, event):
@@ -219,11 +228,16 @@ def build_mul_tree_two_parent(species_tree: Tree, events: List["TwoParentEvent"]
     return mul_tree
 
 
-def build_mul_tree(species_tree: Tree, events: List[WGDEvent], return_dropped: bool = False):
+def build_mul_tree(species_tree: Tree, events: List[WGDEvent], return_dropped: bool = False,
+                   order: str = "size"):
     """Build MUL-tree by applying WGD events to species tree.
 
-    Events are sorted bottom-up (smallest clades first) so nested events
-    are applied before outer events that may duplicate them.
+    order="size" (default): events applied smallest clade first, so nested events
+    are applied before the outer events that may duplicate them.
+    order="confidence": events applied highest detection confidence first, so when
+    two events conflict the stronger prediction is placed first and the weaker one
+    gives way (evidence-ordered insertion, cf. Polyphest inserting clades by
+    support, rather than resolving conflicts by the arbitrary clade size).
 
     An event whose target/partner clade cannot be found in the current tree is
     dropped (this happens when an earlier allo graft added foreign leaves into
@@ -233,8 +247,10 @@ def build_mul_tree(species_tree: Tree, events: List[WGDEvent], return_dropped: b
     """
     mul_tree = species_tree.copy("deepcopy")
 
-    # Sort by clade size ascending (deepest events first)
-    sorted_events = sorted(events, key=lambda e: len(e.wgd_edge_clade))
+    if order == "confidence":
+        sorted_events = sorted(events, key=lambda e: -e.confidence)
+    else:
+        sorted_events = sorted(events, key=lambda e: len(e.wgd_edge_clade))
 
     dropped = 0
     for event in sorted_events:
