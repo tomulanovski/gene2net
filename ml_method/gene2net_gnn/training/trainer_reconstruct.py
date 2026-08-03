@@ -25,9 +25,24 @@ from gene2net_gnn.data.features import (
     edge_clades_species,
     pairwise_partner_features,
     copy_aware_cluster_support,
+    n_eff_per_species,
 )
 from gene2net_gnn.model.species_gnn_v2 import SpeciesTreeGNNv2
 from gene2net_gnn.training.trainer_phase1 import prepare_sample, focal_loss
+
+
+# Module-level feature toggles set once from config (by ReconstructTrainer, and by
+# the inference entry points via set_feature_opts) so the many build_pairwise_feat /
+# model_inputs_for call sites need not thread a flag. Defaults reproduce the shipped
+# behavior.
+_FEATURE_OPTS = {"coclust_condition_on_dup": False, "use_n_eff": False}
+
+
+def set_feature_opts(coclust_condition_on_dup=False, use_n_eff=False):
+    """Set the on-the-fly feature options. Call once at startup, from the same
+    model config used to build/load the model, so training and inference agree."""
+    _FEATURE_OPTS["coclust_condition_on_dup"] = bool(coclust_condition_on_dup)
+    _FEATURE_OPTS["use_n_eff"] = bool(use_n_eff)
 
 
 def build_pairwise_feat(sample):
@@ -39,14 +54,18 @@ def build_pairwise_feat(sample):
     Both are computed from the stored gene-tree tensors so no repackaging is
     needed. Uses the preorder edge ordering (sample._edge_index_pre, set by
     prepare_sample) so it aligns with the model's edge embeddings.
+
+    The co-clustering matrix is duplication-conditioned when
+    _FEATURE_OPTS["coclust_condition_on_dup"] is set (ablation B).
     """
+    cond = _FEATURE_OPTS["coclust_condition_on_dup"]
     cached = getattr(sample, "_pairwise_feat", None)
-    if cached is not None:
+    if cached is not None and getattr(sample, "_pairwise_feat_key", None) == cond:
         return cached
     n_species = len(sample.species_list)
     C = species_coclustering_matrix(
         sample.gene_tree_edge_indices, sample.gene_tree_species_ids,
-        sample.gene_tree_leaf_masks, n_species,
+        sample.gene_tree_leaf_masks, n_species, condition_on_dup=cond,
     )
     sp_to_idx = {sp: i for i, sp in enumerate(sample.species_list)}
     node_species = [sp_to_idx.get(name, -1) for name in sample.species_tree_node_names]
@@ -58,7 +77,36 @@ def build_pairwise_feat(sample):
     )
     feat = torch.cat([coclust_feat, cluster_feat], dim=-1)
     sample._pairwise_feat = feat
+    sample._pairwise_feat_key = cond
     return feat
+
+
+def augment_node_features_neff(sample):
+    """Append an n_eff column to sample.species_tree_node_features, in place, once
+    (ablation D). n_eff (per species; 0 for internal nodes) is the effective number
+    of co-clustering partners from the UNconditioned co-clustering row. Must run
+    BEFORE prepare_sample builds the propagation cache so the cache picks up the
+    wider (14-dim) feature. Idempotent via the _n_eff_added guard. Requires the
+    model to be built with node_feat_dim = 14.
+    """
+    if getattr(sample, "_n_eff_added", False):
+        return
+    n_species = len(sample.species_list)
+    C = species_coclustering_matrix(
+        sample.gene_tree_edge_indices, sample.gene_tree_species_ids,
+        sample.gene_tree_leaf_masks, n_species,
+    )
+    neff = n_eff_per_species(C)
+    sp_to_idx = {sp: i for i, sp in enumerate(sample.species_list)}
+    N = sample.species_tree_node_features.shape[0]
+    col = torch.zeros(N, 1)
+    for i, name in enumerate(sample.species_tree_node_names):
+        si = sp_to_idx.get(name, -1)
+        if si >= 0:
+            col[i, 0] = neff[si]
+    sample.species_tree_node_features = torch.cat(
+        [sample.species_tree_node_features, col], dim=1)
+    sample._n_eff_added = True
 
 
 def filter_compatible_state_dict(state: dict, model_state: dict) -> dict:
@@ -149,6 +197,13 @@ class ReconstructTrainer:
         self.device = torch.device(device)
         self.config = config
 
+        # On-the-fly feature ablations (default off = shipped behavior).
+        self.use_n_eff = bool(config.get("use_n_eff", False))
+        set_feature_opts(
+            coclust_condition_on_dup=config.get("coclust_condition_on_dup", False),
+            use_n_eff=self.use_n_eff,
+        )
+
         pos_weight = float(config.get("pos_class_weight", 12.0))
         self.class_weights = torch.tensor([1.0, pos_weight], dtype=torch.float, device=self.device)
         self.focal_alpha = float(config.get("focal_alpha", 0.25))
@@ -168,6 +223,8 @@ class ReconstructTrainer:
 
     def _losses_for_sample(self, sample):
         """Return (det_loss, partner_loss_or_None, n_edges) for one sample."""
+        if self.use_n_eff:
+            augment_node_features_neff(sample)
         prepared = prepare_sample(sample, self.device)
         if prepared is None:
             return None
@@ -231,6 +288,8 @@ class ReconstructTrainer:
         auto_correct = allo_correct = auto_total = allo_total = 0
 
         for sample in val_samples:
+            if self.use_n_eff:
+                augment_node_features_neff(sample)
             prepared = prepare_sample(sample, self.device)
             if prepared is None:
                 continue

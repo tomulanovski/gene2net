@@ -475,23 +475,67 @@ def compute_species_tree_edge_detection_features(
 
 
 def species_coclustering_matrix(gene_tree_edge_indices, gene_tree_species_ids,
-                                gene_tree_leaf_masks, n_species):
+                                gene_tree_leaf_masks, n_species,
+                                condition_on_dup=False):
     """[n_species, n_species]: fraction of gene trees where two species appear
-    as direct sibling leaves (same parent, both leaves)."""
+    as direct sibling leaves (same parent, both leaves).
+
+    If ``condition_on_dup`` is True the matrix becomes DIRECTIONAL and is
+    conditioned on the ROW species being duplicated in that gene tree:
+        C[a, b] = (# trees where a has >= 2 copies AND some copy of a is a direct
+                   sister of b) / (# trees where a has >= 2 copies).
+    A single-copy gene tree carries no partner signal for a, so counting it only
+    dilutes a's row; conditioning removes that dilution and sharpens the two
+    parent peaks in a polyploid's row. Rows of never-duplicated species are 0
+    (they still appear as COLUMNS, so diploid parents are still found). The
+    default (False) is exactly the symmetric all-tree matrix as before.
+    """
     import torch
     C = torch.zeros(n_species, n_species)
     n_trees = len(gene_tree_edge_indices)
     if n_trees == 0:
         return C
 
-    # Collect all co-sister species pairs across trees, then accumulate in one
-    # scatter instead of per-pair scalar increments. Tensors -> lists once to
-    # avoid per-element tensor access in the loop.
-    rows, cols = [], []
+    if not condition_on_dup:
+        # Collect all co-sister species pairs across trees, then accumulate in one
+        # scatter instead of per-pair scalar increments. Tensors -> lists once to
+        # avoid per-element tensor access in the loop.
+        rows, cols = [], []
+        for ei, sp, lm in zip(gene_tree_edge_indices, gene_tree_species_ids, gene_tree_leaf_masks):
+            src, dst = ei.tolist()
+            spl, lml = sp.tolist(), lm.tolist()
+            # Group leaf-children species by parent (even-indexed parent->child edges).
+            parent_leaf_species = {}
+            for k in range(0, len(src), 2):
+                p = src[k]; c = dst[k]
+                if lml[c] and spl[c] >= 0:
+                    parent_leaf_species.setdefault(p, set()).add(spl[c])
+            seen = set()
+            for specs in parent_leaf_species.values():
+                specs = sorted(specs)
+                for a_i in range(len(specs)):
+                    for b_i in range(a_i + 1, len(specs)):
+                        seen.add((specs[a_i], specs[b_i]))
+            for a, b in seen:
+                rows.append(a); cols.append(b)
+                rows.append(b); cols.append(a)
+
+        if rows:
+            C.index_put_((torch.tensor(rows), torch.tensor(cols)),
+                         torch.ones(len(rows)), accumulate=True)
+
+        return C / n_trees
+
+    # Duplication-conditioned, directional variant.
+    num = torch.zeros(n_species, n_species)      # co-sister count, credited to the duplicated row
+    dup_trees = torch.zeros(n_species)           # trees in which each species is duplicated
     for ei, sp, lm in zip(gene_tree_edge_indices, gene_tree_species_ids, gene_tree_leaf_masks):
         src, dst = ei.tolist()
         spl, lml = sp.tolist(), lm.tolist()
-        # Group leaf-children species by parent (even-indexed parent->child edges).
+        counts = Counter(spl[c] for c in range(len(lml)) if lml[c] and spl[c] >= 0)
+        duplicated = {s for s, ct in counts.items() if ct >= 2 and 0 <= s < n_species}
+        for s in duplicated:
+            dup_trees[s] += 1
         parent_leaf_species = {}
         for k in range(0, len(src), 2):
             p = src[k]; c = dst[k]
@@ -503,15 +547,32 @@ def species_coclustering_matrix(gene_tree_edge_indices, gene_tree_species_ids,
             for a_i in range(len(specs)):
                 for b_i in range(a_i + 1, len(specs)):
                     seen.add((specs[a_i], specs[b_i]))
+        rows, cols = [], []
         for a, b in seen:
-            rows.append(a); cols.append(b)
-            rows.append(b); cols.append(a)
+            if a in duplicated:      # credit a's row only when a is duplicated
+                rows.append(a); cols.append(b)
+            if b in duplicated:
+                rows.append(b); cols.append(a)
+        if rows:
+            num.index_put_((torch.tensor(rows), torch.tensor(cols)),
+                           torch.ones(len(rows)), accumulate=True)
 
-    if rows:
-        C.index_put_((torch.tensor(rows), torch.tensor(cols)),
-                     torch.ones(len(rows)), accumulate=True)
+    return num / dup_trees.clamp(min=1.0).unsqueeze(1)
 
-    return C / n_trees
+
+def n_eff_per_species(coclust):
+    """[n_species]: effective number of co-clustering partners per species, row-wise.
+
+    n_eff[a] = (sum_b C[a,b])^2 / sum_b C[a,b]^2. Low (near 1) -> a's co-clustering
+    is concentrated on a single other species (the allopolyploid-with-one-parent
+    shape); high -> spread over many species (autopolyploidy of a whole clade, or
+    pure ILS). This separates the auto/allo shapes that the scalar clustering
+    summary (mean/std/max/min/median) blurs together. 0 for an all-zero row.
+    """
+    import torch
+    s1 = coclust.sum(dim=1)
+    s2 = (coclust ** 2).sum(dim=1)
+    return torch.where(s2 > 1e-12, s1 * s1 / s2.clamp(min=1e-12), torch.zeros_like(s1))
 
 
 def edge_clades_species(edge_index_pre, is_leaf, node_species):

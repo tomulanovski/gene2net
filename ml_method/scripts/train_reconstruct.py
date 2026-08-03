@@ -43,7 +43,12 @@ def main():
     with open(config_path) as f:
         config = yaml.safe_load(f)
     model_config = config.get("model", {})
-    train_config = config.get("training", {})
+    train_config = dict(config.get("training", {}))
+    # Feature-ablation flags live in the model section (they change node_feat_dim /
+    # the feature definitions, and inference reads them there). Thread them to the
+    # trainer so training and inference use the same on-the-fly features.
+    train_config["use_n_eff"] = model_config.get("use_n_eff", False)
+    train_config["coclust_condition_on_dup"] = model_config.get("coclust_condition_on_dup", False)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     expected_edge_dim = int(model_config.get("edge_feat_dim", 9))

@@ -111,8 +111,11 @@ def map_clades_by_jaccard(src_clades, dst_clades):
 
 
 def model_inputs_for(sample, device):
+    from gene2net_gnn.training.trainer_reconstruct import _FEATURE_OPTS, augment_node_features_neff
     ei = reorder_edge_index_preorder(sample.species_tree_edge_index)
     sample._edge_index_pre = ei  # used by build_pairwise_feat
+    if _FEATURE_OPTS["use_n_eff"]:
+        augment_node_features_neff(sample)  # widen node features to 14 before prop
     prop = propagate_to_internal(
         sample.species_tree_node_features, ei,
         sample.species_tree_is_leaf, sample.species_tree_node_features.shape[1],
@@ -200,6 +203,11 @@ def decode(model, build_tree, clades, wgd_prob, edge_emb, pairwise_feat, thresho
 
 def init_worker(model_dir, model_config, mul_trees_dir, config, replicate,
                 thresholds, out_base, edge_feat_dim, backbone):
+    from gene2net_gnn.training.trainer_reconstruct import set_feature_opts
+    set_feature_opts(
+        coclust_condition_on_dup=model_config.get("coclust_condition_on_dup", False),
+        use_n_eff=model_config.get("use_n_eff", False),
+    )
     _M["model"] = load_model(model_dir, model_config, "cpu")
     _M["mul_trees_dir"] = mul_trees_dir
     _M["config"] = config

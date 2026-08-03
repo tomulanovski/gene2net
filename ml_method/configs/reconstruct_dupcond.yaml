@@ -1,0 +1,26 @@
+# Ablation B: duplication-conditioned co-clustering for the partner head.
+# The co-clustering matrix is conditioned on the row (polyploid) species being
+# duplicated in a gene tree, removing dilution from single-copy trees and
+# sharpening the two parent peaks. Everything else matches reconstruct.yaml.
+
+model:
+  node_feat_dim: 13          # 8 copy count + 5 clustering summary
+  edge_feat_dim: 9           # 4 base + 5 WGD-detection
+  hidden_dim: 64
+  n_gat_layers: 3
+  n_gat_heads: 4
+  dropout: 0.2
+  partner_pair_feat_dim: 4    # 2 clade co-clustering (mean,max) + 2 copy-aware cluster-support
+  coclust_condition_on_dup: true    # ablation B
+
+training:
+  lr: 0.001
+  weight_decay: 0.0001
+  batch_size: 8
+  max_epochs: 200
+  patience: 30
+  pos_class_weight: 12.0
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+  partner_weight: 1.0
+  val_split: 0.2

@@ -1,0 +1,25 @@
+# Ablation D: add the n_eff node feature (effective number of co-clustering
+# partners). Separates auto (spread co-clustering) from allo (concentrated on
+# one parent). node_feat_dim rises 13 -> 14. Everything else matches reconstruct.yaml.
+
+model:
+  node_feat_dim: 14          # 8 copy count + 5 clustering summary + 1 n_eff
+  edge_feat_dim: 9           # 4 base + 5 WGD-detection
+  hidden_dim: 64
+  n_gat_layers: 3
+  n_gat_heads: 4
+  dropout: 0.2
+  partner_pair_feat_dim: 4    # 2 clade co-clustering (mean,max) + 2 copy-aware cluster-support
+  use_n_eff: true             # ablation D
+
+training:
+  lr: 0.001
+  weight_decay: 0.0001
+  batch_size: 8
+  max_epochs: 200
+  patience: 30
+  pos_class_weight: 12.0
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+  partner_weight: 1.0
+  val_split: 0.2

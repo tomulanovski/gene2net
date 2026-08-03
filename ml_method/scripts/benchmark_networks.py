@@ -230,6 +230,12 @@ def main():
     cfg_path = args.model_config or os.path.join(base_dir, "configs", "reconstruct.yaml")
     with open(cfg_path) as f:
         model_config = yaml.safe_load(f).get("model", {})
+    # On-the-fly feature ablations must match how the model was trained.
+    from gene2net_gnn.training.trainer_reconstruct import set_feature_opts
+    set_feature_opts(
+        coclust_condition_on_dup=model_config.get("coclust_condition_on_dup", False),
+        use_n_eff=model_config.get("use_n_eff", False),
+    )
     device = "cpu"
     strategies = [s.strip() for s in args.strategies.split(",")]
     out_base = args.out_base or os.path.join(args.model_dir, "benchmark", args.config)
