@@ -1,9 +1,10 @@
-# Ablations B + D together: duplication-conditioned co-clustering AND the n_eff
-# node feature. The combined partner-improvement candidate to compare against
-# reconstruct.yaml (baseline), reconstruct_dupcond.yaml (B), reconstruct_neff.yaml (D).
+# One-parter baseline (our actual method): WGD detection + single partner-edge
+# prediction (self-partner = auto). Identical to reconstruct.yaml except the
+# partner head is explicitly one slot. This is the correct baseline for the
+# partner-feature ablation (reconstruct_dupcond / _neff / _dupcond_neff).
 
 model:
-  node_feat_dim: 14          # 8 copy count + 5 clustering summary + 1 n_eff
+  node_feat_dim: 13          # 8 copy count + 5 clustering summary
   edge_feat_dim: 9           # 4 base + 5 WGD-detection
   hidden_dim: 64
   n_gat_layers: 3
@@ -11,8 +12,6 @@ model:
   dropout: 0.2
   partner_pair_feat_dim: 4    # 2 clade co-clustering (mean,max) + 2 copy-aware cluster-support
   n_parents: 1                # one-partner head (our method); self-partner = auto
-  coclust_condition_on_dup: true    # ablation B
-  use_n_eff: true                   # ablation D
 
 training:
   lr: 0.001

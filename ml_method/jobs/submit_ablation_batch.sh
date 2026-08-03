@@ -23,11 +23,12 @@ ${BASE_DIR}/data/mul_trees_2k/training_rooted/dup_loss_medium_ne1M \
 ${BASE_DIR}/data/mul_trees_2k/training_rooted/dup_loss_high_ne1M"
 
 # config basename (in configs/, no .yaml)  ->  output dir name (in output/)
+# One-parter (our actual method): baseline + B + D + B+D.
 declare -A RUNS=(
-    [reconstruct]=reconstruct_baseline_scratch
-    [reconstruct_dupcond]=reconstruct_dupcond
-    [reconstruct_neff]=reconstruct_neff
-    [reconstruct_dupcond_neff]=reconstruct_dupcond_neff
+    [reconstruct_oneparter]=reconstruct_op_baseline
+    [reconstruct_dupcond]=reconstruct_op_dupcond
+    [reconstruct_neff]=reconstruct_op_neff
+    [reconstruct_dupcond_neff]=reconstruct_op_dupcond_neff
 )
 
 PARTITION="gpu-rotemhsh-pool"

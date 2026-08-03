@@ -203,6 +203,9 @@ class ReconstructTrainer:
             coclust_condition_on_dup=config.get("coclust_condition_on_dup", False),
             use_n_eff=self.use_n_eff,
         )
+        # Partner head type is read from the model: n_parents >= 2 -> two-parent
+        # (unordered pair) loss/eval; n_parents == 1 -> one-partner (self=auto) CE.
+        self.n_parents = int(getattr(model, "n_parents", 2))
 
         pos_weight = float(config.get("pos_class_weight", 12.0))
         self.class_weights = torch.tensor([1.0, pos_weight], dtype=torch.float, device=self.device)
@@ -241,12 +244,20 @@ class ReconstructTrainer:
             class_weights=self.class_weights,
         )
 
-        q_idx, tgt_a, tgt_b = build_two_parent_targets(sample, n_edges, self.device)
         partner_loss = None
-        if q_idx.numel() > 0:
-            pairwise_feat = build_pairwise_feat(sample).to(self.device)
-            scores2 = self.model.compute_partner_scores_rows(edge_emb, q_idx, pairwise_feat)  # [Q,E,2]
-            partner_loss = two_parent_loss(scores2, tgt_a, tgt_b)
+        if self.n_parents >= 2:
+            q_idx, tgt_a, tgt_b = build_two_parent_targets(sample, n_edges, self.device)
+            if q_idx.numel() > 0:
+                pairwise_feat = build_pairwise_feat(sample).to(self.device)
+                scores2 = self.model.compute_partner_scores_rows(edge_emb, q_idx, pairwise_feat)  # [Q,E,2]
+                partner_loss = two_parent_loss(scores2, tgt_a, tgt_b)
+        else:
+            targets = build_partner_targets(sample, n_edges, self.device)
+            qsel = (targets >= 0).nonzero(as_tuple=True)[0]
+            if qsel.numel() > 0:
+                pairwise_feat = build_pairwise_feat(sample).to(self.device)
+                scores = self.model.compute_partner_scores_rows(edge_emb, qsel, pairwise_feat).squeeze(-1)  # [Q,E]
+                partner_loss = F.cross_entropy(scores, targets[qsel])
 
         return det_loss, partner_loss, wgd_logits, mask, wgd_targets
 
@@ -313,23 +324,41 @@ class ReconstructTrainer:
             fp += int((preds & ~true.bool()).sum())
             fn += int((~preds.bool() & true.bool()).sum())
 
-            # Two-parent SET accuracy on edges with a parent-pair label
-            q_idx, tgt_a, tgt_b = build_two_parent_targets(sample, n_edges, self.device)
-            if q_idx.numel() > 0:
-                pairwise_feat = build_pairwise_feat(sample).to(self.device)
-                scores2 = self.model.compute_partner_scores_rows(edge_emb, q_idx, pairwise_feat)
-                p1 = scores2[..., 0].argmax(dim=-1); p2 = scores2[..., 1].argmax(dim=-1)
-                # unordered comparison: sort both predicted and target pairs
-                pred = torch.stack([torch.minimum(p1, p2), torch.maximum(p1, p2)], dim=-1)
-                tgt = torch.stack([torch.minimum(tgt_a, tgt_b), torch.maximum(tgt_a, tgt_b)], dim=-1)
-                correct = (pred == tgt).all(dim=-1)
-                is_auto = (tgt_a == tgt_b)
-                partner_correct += int(correct.sum())
-                partner_total += int(q_idx.numel())
-                auto_total += int(is_auto.sum())
-                allo_total += int((~is_auto).sum())
-                auto_correct += int((correct & is_auto).sum())
-                allo_correct += int((correct & ~is_auto).sum())
+            if self.n_parents >= 2:
+                # Two-parent SET accuracy on edges with a parent-pair label
+                q_idx, tgt_a, tgt_b = build_two_parent_targets(sample, n_edges, self.device)
+                if q_idx.numel() > 0:
+                    pairwise_feat = build_pairwise_feat(sample).to(self.device)
+                    scores2 = self.model.compute_partner_scores_rows(edge_emb, q_idx, pairwise_feat)
+                    p1 = scores2[..., 0].argmax(dim=-1); p2 = scores2[..., 1].argmax(dim=-1)
+                    # unordered comparison: sort both predicted and target pairs
+                    pred = torch.stack([torch.minimum(p1, p2), torch.maximum(p1, p2)], dim=-1)
+                    tgt = torch.stack([torch.minimum(tgt_a, tgt_b), torch.maximum(tgt_a, tgt_b)], dim=-1)
+                    correct = (pred == tgt).all(dim=-1)
+                    is_auto = (tgt_a == tgt_b)
+                    partner_correct += int(correct.sum())
+                    partner_total += int(q_idx.numel())
+                    auto_total += int(is_auto.sum())
+                    allo_total += int((~is_auto).sum())
+                    auto_correct += int((correct & is_auto).sum())
+                    allo_correct += int((correct & ~is_auto).sum())
+            else:
+                # One-partner accuracy: argmax partner == target (self-partner = auto)
+                targets = build_partner_targets(sample, n_edges, self.device)
+                qsel = (targets >= 0).nonzero(as_tuple=True)[0]
+                if qsel.numel() > 0:
+                    pairwise_feat = build_pairwise_feat(sample).to(self.device)
+                    scores = self.model.compute_partner_scores_rows(edge_emb, qsel, pairwise_feat).squeeze(-1)
+                    pred = scores.argmax(dim=-1)
+                    tgt = targets[qsel]
+                    correct = pred == tgt
+                    is_auto = tgt == qsel      # self-partner = autopolyploidy
+                    partner_correct += int(correct.sum())
+                    partner_total += int(qsel.numel())
+                    auto_total += int(is_auto.sum())
+                    allo_total += int((~is_auto).sum())
+                    auto_correct += int((correct & is_auto).sum())
+                    allo_correct += int((correct & ~is_auto).sum())
 
         precision = tp / max(tp + fp, 1)
         recall = tp / max(tp + fn, 1)

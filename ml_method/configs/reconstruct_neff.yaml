@@ -10,6 +10,7 @@ model:
   n_gat_heads: 4
   dropout: 0.2
   partner_pair_feat_dim: 4    # 2 clade co-clustering (mean,max) + 2 copy-aware cluster-support
+  n_parents: 1                # one-partner head (our method); self-partner = auto
   use_n_eff: true             # ablation D
 
 training:
