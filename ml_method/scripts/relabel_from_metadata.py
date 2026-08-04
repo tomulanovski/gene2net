@@ -63,7 +63,8 @@ def _sample_polyploids_from_copies(sample_dict, min_mode=2):
     return out
 
 
-def relabel_one_sample(sample_dir, metadata, *, dry_run=False, true_tree=None, two_parent=False):
+def relabel_one_sample(sample_dir, metadata, *, dry_run=False, true_tree=None, two_parent=False,
+                       out_name="labels_clade.pkl"):
     with open(os.path.join(sample_dir, "sample.pkl"), "rb") as f:
         sample_dict = pickle.load(f)
 
@@ -105,7 +106,7 @@ def relabel_one_sample(sample_dir, metadata, *, dry_run=False, true_tree=None, t
         )
 
     if not dry_run:
-        with open(os.path.join(sample_dir, "labels_clade.pkl"), "wb") as f:
+        with open(os.path.join(sample_dir, out_name), "wb") as f:
             pickle.dump(labels, f)
     return labels
 
@@ -145,10 +146,13 @@ def main():
             if not os.path.exists(tt_path):
                 raise FileNotFoundError(f"--away-parent/--two-parent needs the true tree: {tt_path}")
             true_tree = load_nexus_tree(tt_path)
+        # Away labels go to a SEPARATE sidecar so the original clade labels
+        # (labels_clade.pkl) are preserved and the two can be compared cleanly.
+        out_name = "labels_away.pkl" if args.away_parent else "labels_clade.pkl"
         try:
             labels = relabel_one_sample(os.path.join(train_dir, name), metadata,
                                         dry_run=args.dry_run, true_tree=true_tree,
-                                        two_parent=args.two_parent)
+                                        two_parent=args.two_parent, out_name=out_name)
         except ValueError as e:
             errors.append(str(e))
             continue

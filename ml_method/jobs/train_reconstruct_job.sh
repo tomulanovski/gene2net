@@ -35,4 +35,5 @@ python "${BASE_DIR}/scripts/train_reconstruct.py" \
     --config "${CONFIG:-${BASE_DIR}/configs/reconstruct.yaml}" \
     --output-dir "${OUTPUT_DIR:-${BASE_DIR}/output/reconstruct}" \
     ${INIT_FROM:+--init-from "$INIT_FROM"} \
-    ${CLADE_LABELS:+--clade-labels}
+    ${CLADE_LABELS:+--clade-labels} \
+    ${AWAY_LABELS:+--away-labels}
