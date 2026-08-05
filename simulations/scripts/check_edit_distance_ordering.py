@@ -234,7 +234,13 @@ def main():
     p.add_argument('--replicates', type=int, help='use only replicates 1..N')
     p.add_argument('--timeout', type=int, default=DEFAULT_TIMEOUT, help='seconds per GED (POSIX only)')
     p.add_argument('--out', default=None, help='output CSV (default: edit_ordering_{config}.csv)')
+    p.add_argument('--analyze', help='re-analyse an existing per-pair CSV, no recomputation')
+    p.add_argument('--reference', help='method whose copies-correct pairs define the matched subset')
     args = p.parse_args()
+
+    if args.analyze:
+        report(pd.read_csv(args.analyze), Path(args.analyze).stem, args.reference)
+        return
 
     if args.inventory:
         inv = pd.read_csv(args.inventory)
@@ -291,7 +297,10 @@ def main():
     df = pd.DataFrame(results)
     df.to_csv(out_path, index=False)
     print(f'\nPer-pair results written to {out_path}\n')
+    report(df, config, args.reference)
 
+
+def report(df, config, reference=None):
     ok = df.dropna(subset=['ed_current', 'ed_canonical'])
     if ok.empty:
         print('No pair produced both values.')
@@ -375,6 +384,62 @@ def main():
         print('\n  Compare this order against the headline ranking above. Where they')
         print('  differ, the headline is partly ranking copy-number inference, not')
         print('  tree reconstruction.')
+
+    if reference:
+        matched_comparison(ok, reference)
+
+
+def matched_comparison(ok, reference):
+    """Compare every method to `reference` on the SAME (network, replicate) pairs.
+
+    A method that only gets copy numbers right on its easy cases will look good in
+    the topology-only column purely from selection. Restricting every method to
+    the reference's copies-correct pairs removes that: same networks, same
+    replicates, so the comparison is like for like.
+    """
+    print('\n' + '=' * 78)
+    print(f'Matched comparison on {reference}\'s copies-correct pairs')
+    print('=' * 78)
+
+    ref = ok[(ok['method'] == reference) & (ok['copies_match'] == True)]  # noqa: E712
+    if ref.empty:
+        print(f'  {reference} has no pairs with correct copy numbers. Nothing to match on.')
+        return
+
+    keys = set(zip(ref['network'], ref['replicate']))
+    print(f'  {len(keys)} (network, replicate) pairs where {reference} got copy numbers right')
+    print(f'  networks: {", ".join(sorted({n for n, _ in keys}))}\n')
+
+    subset = ok[[(n, r) in keys for n, r in zip(ok['network'], ok['replicate'])]]
+
+    rows = []
+    for method, grp in subset.groupby('method'):
+        cop_ok = grp[grp['copies_match'] == True]  # noqa: E712
+        rows.append({
+            'method': method,
+            'n_on_subset': len(grp),
+            'coverage_pct': 100.0 * len(grp) / len(keys),
+            'ed_canonical': grp['ed_canonical'].mean(),
+            'pct_copies_ok': 100.0 * len(cop_ok) / len(grp) if len(grp) else float('nan'),
+        })
+
+    table = pd.DataFrame(rows).set_index('method').sort_values('ed_canonical')
+    print(table.to_string(float_format=lambda v: f'{v:.4f}'))
+    print('=' * 78)
+    print('\n  coverage_pct  how many of those pairs the method also produced a tree for.')
+    print('                Well below 100 means it is still a different sample, so read')
+    print('                its number with the same caution as the headline.')
+
+    if reference in table.index:
+        ref_score = table.loc[reference, 'ed_canonical']
+        better = table[table['ed_canonical'] < ref_score]
+        print(f'\n  {reference} on this subset: {ref_score:.4f}')
+        if better.empty:
+            print(f'  Nothing beats it here. The topology-only advantage survives matching.')
+        else:
+            print(f'  Beaten by: ' + ', '.join(f'{m} ({r.ed_canonical:.4f})'
+                                               for m, r in better.iterrows()))
+            print('  The topology-only advantage does NOT survive matching.')
 
 
 if __name__ == '__main__':
