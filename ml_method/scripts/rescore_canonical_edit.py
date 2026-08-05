@@ -1,4 +1,10 @@
-"""Re-score a benchmark output directory's MUL-tree edit distance BOTH ways:
+"""DEPRECATED / DO NOT TRUST. This standalone re-scorer builds trees OUTSIDE
+ReticulateTree and gave results inconsistent with the pipeline's own scorer, which
+already computes canonical (order-invariant) edit distance via
+ReticulateTree.get_edit_distance_multree(canonical=True). Use score_reconstructions.py
+for edit distance. Kept only as a record of the mistake.
+
+Re-score a benchmark output directory's MUL-tree edit distance BOTH ways:
 current (Newick-child-order-sensitive, as the pipeline does it) and canonical
 (child order removed). Used to test whether an apparent edit-distance improvement
 is a real reconstruction gain or an artifact of the greedy-GED child-order confound.
