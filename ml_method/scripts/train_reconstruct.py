@@ -37,6 +37,10 @@ def main():
     parser.add_argument("--away-labels", action="store_true",
                         help="Train on away-parent labels (labels_away.pkl): each allo partner "
                              "retargeted to the non-home parent. Takes precedence over --clade-labels.")
+    parser.add_argument("--max-train-samples", type=int, default=None,
+                        help="Cap the TRAINING set to this many samples (validation is untouched). "
+                             "Used for the learning curve. The seed-42 shuffle makes the subsets "
+                             "nested, so 250 is a subset of 500 is a subset of 1000, etc.")
     args = parser.parse_args()
 
     base_dir = os.path.join(os.path.dirname(__file__), "..")
@@ -96,7 +100,10 @@ def main():
     n_val = int(len(all_samples) * val_split)
     val_samples = all_samples[:n_val]
     train_samples = all_samples[n_val:]
-    print(f"Train: {len(train_samples)}, Val: {len(val_samples)}")
+    if args.max_train_samples is not None:
+        train_samples = train_samples[:args.max_train_samples]
+    print(f"Train: {len(train_samples)}, Val: {len(val_samples)}"
+          + (f" (train capped at {args.max_train_samples})" if args.max_train_samples else ""))
 
     model = SpeciesTreeGNNv2(
         node_feat_dim=int(model_config.get("node_feat_dim", 13)),

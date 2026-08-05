@@ -36,4 +36,5 @@ python "${BASE_DIR}/scripts/train_reconstruct.py" \
     --output-dir "${OUTPUT_DIR:-${BASE_DIR}/output/reconstruct}" \
     ${INIT_FROM:+--init-from "$INIT_FROM"} \
     ${CLADE_LABELS:+--clade-labels} \
-    ${AWAY_LABELS:+--away-labels}
+    ${AWAY_LABELS:+--away-labels} \
+    ${MAX_TRAIN:+--max-train-samples "$MAX_TRAIN"}

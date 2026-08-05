@@ -154,6 +154,42 @@ def load_tree(path):
         return None
 
 
+def leaf_stats(t_true, t_inf):
+    """Decompose the comparison into copy-number error vs topology error.
+
+    Edit distance cannot distinguish 'right species, wrong copy count' from
+    'wrong topology', but the two mean very different things. If the two trees
+    carry different leaf MULTISETS, no reordering can align them and part of the
+    distance is forced regardless of how good the topology is.
+
+    copy_diff is the total multiset symmetric difference in leaves. Each surplus
+    or missing leaf forces at least one node edit plus one incident edge edit, so
+    2*copy_diff is a conservative lower bound on the raw edit cost. Normalizing it
+    the same way the metric does gives the share of the score that copy-number
+    disagreement alone accounts for.
+    """
+    from collections import Counter
+
+    c_true = Counter(l.name for l in t_true.iter_leaves())
+    c_inf = Counter(l.name for l in t_inf.iter_leaves())
+
+    copy_diff = sum(((c_true - c_inf) + (c_inf - c_true)).values())
+
+    n1 = len(list(t_true.traverse()))
+    n2 = len(list(t_inf.traverse()))
+    normalization = max(n1 + (n1 - 1), n2 + (n2 - 1))
+
+    return {
+        'n_leaves_gt': sum(c_true.values()),
+        'n_leaves_inf': sum(c_inf.values()),
+        'species_gt': len(c_true),
+        'species_inf': len(c_inf),
+        'copy_diff': copy_diff,
+        'copies_match': copy_diff == 0,
+        'ed_floor_copies': (2 * copy_diff / normalization) if normalization else float('nan'),
+    }
+
+
 # ───── inventory ─────
 
 def inventory_from_config(config, config_path, methods_filter, replicates):
@@ -242,6 +278,7 @@ def main():
         results.append({
             'network': row['network'], 'method': row['method'], 'replicate': row['replicate'],
             'n_nodes_gt': len(list(t_true.traverse())), 'n_nodes_inf': len(list(t_inf.traverse())),
+            **leaf_stats(t_true, t_inf),
             'ed_current': cur, 'ed_canonical': can,
             'delta': (can - cur) if (not math.isnan(cur) and not math.isnan(can)) else float('nan'),
             'status': s1 if s1 != 'ok' else s2,
@@ -296,6 +333,48 @@ def main():
     print(f'\nMean absolute change per pair: {shift:.4f}')
     print(f'Pairs where canonical is lower (tighter bound): '
           f'{(ok["delta"] < 0).sum()}/{len(ok)}')
+
+    # ───── copy-number vs topology ─────
+    print('\n' + '=' * 78)
+    print('Copy-number agreement vs topology')
+    print('=' * 78)
+    print('ed_canonical mixes two different errors: producing the wrong number of')
+    print('copies per species, and getting the topology wrong. Split them.\n')
+
+    # rows that failed to parse carry no leaf stats, so the column can be object
+    # dtype; comparing against True keeps the mask boolean either way
+    rows = []
+    for method, grp in ok.groupby('method'):
+        matched = grp[grp['copies_match'] == True]      # noqa: E712
+        mismatched = grp[grp['copies_match'] != True]   # noqa: E712
+        rows.append({
+            'method': method,
+            'n': len(grp),
+            'pct_copies_ok': 100.0 * len(matched) / len(grp),
+            'ed_if_copies_ok': matched['ed_canonical'].mean() if len(matched) else float('nan'),
+            'ed_if_copies_wrong': mismatched['ed_canonical'].mean() if len(mismatched) else float('nan'),
+            'mean_copy_diff': grp['copy_diff'].mean(),
+            'floor_from_copies': grp['ed_floor_copies'].mean(),
+        })
+
+    breakdown = pd.DataFrame(rows).set_index('method').sort_values('ed_if_copies_ok')
+    print(breakdown.to_string(float_format=lambda v: f'{v:.4f}'))
+    print('=' * 78)
+    print('\n  pct_copies_ok      pairs whose leaf multiset matches the ground truth exactly')
+    print('  ed_if_copies_ok    mean distance on those pairs = topology error alone')
+    print('  ed_if_copies_wrong mean distance when copy counts also disagree')
+    print('  floor_from_copies  conservative lower bound on the score forced by copy-number')
+    print('                     disagreement alone, before any topology error')
+
+    clean = breakdown.dropna(subset=['ed_if_copies_ok'])
+    if len(clean) > 1:
+        print(f'\nRanked by topology error alone (pairs with correct copy numbers):')
+        for i, (m, r) in enumerate(clean.iterrows(), 1):
+            print(f'  {i}. {m:<22} {r["ed_if_copies_ok"]:.4f}   '
+                  f'(on {r["pct_copies_ok"]:.0f}% of its pairs)')
+        print('\n  Compare this order against the headline ranking above. Where they')
+        print('  differ, the headline is partly ranking copy-number inference, not')
+        print('  tree reconstruction.')
 
 
 if __name__ == '__main__':

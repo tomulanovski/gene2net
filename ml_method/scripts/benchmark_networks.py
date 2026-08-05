@@ -15,6 +15,7 @@ Usage (final_project env, needs torch):
 import argparse
 import os
 import sys
+import time
 from collections import Counter
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -224,6 +225,9 @@ def main():
     parser.add_argument("--out-base", default=None,
                         help="output base (default: <model-dir>/benchmark/<config>); "
                              "each strategy writes to <out-base>/<strategy>/<network>/")
+    parser.add_argument("--profile", action="store_true",
+                        help="Time the per-network compute stages (features, forward, build) "
+                             "and print a summary. Excludes ASTRAL, which is loaded precomputed.")
     args = parser.parse_args()
 
     base_dir = os.path.join(os.path.dirname(__file__), "..")
@@ -252,6 +256,7 @@ def main():
 
     done = skipped = 0
     total_dropped = {}
+    prof = {"feat": 0.0, "fwd": 0.0, "build": 0.0, "n": 0, "n_gt": 0}
     for net in NETWORKS:
         rep_dir = os.path.join(args.sim_base, net, "processed", args.config,
                                "grampa_input", f"replicate_{args.replicate}")
@@ -296,20 +301,26 @@ def main():
                 print(f"  [{net}] true-root unavailable; falling back to hybrid rooting")
                 astral_tree = hybrid_root(astral_tree, gene_trees)
 
+        _t = time.perf_counter()
         sample = Gene2NetSample.from_trees(
             species_tree=astral_tree, gene_trees=gene_trees, species_list=species_list,
         )
         clades = preorder_edge_clades(astral_tree)
         parent_edge = build_parent_edge_map(astral_tree)
         copy_bound = infer_copy_bound(gene_trees)
+        prof["feat"] += time.perf_counter() - _t
 
         # One inference pass for the network.
+        _t = time.perf_counter()
         with torch.no_grad():
             inputs = model_inputs_for(sample, device)
             wgd_logits, edge_emb = model(**inputs)
             wgd_prob = torch.softmax(wgd_logits, dim=-1)[:, 1]
             pairwise_feat = build_pairwise_feat(sample)
         wgd_list = wgd_prob.tolist()
+        prof["fwd"] += time.perf_counter() - _t
+        prof["n"] += 1
+        prof["n_gt"] += len(gene_trees)
 
         # Known-ploidy prior (optional): replace the copy-count-INFERRED bound (which
         # dup/loss inflates -> too many events -> over-prediction, Polyphest's failure
@@ -329,6 +340,7 @@ def main():
 
         # Build + write one MUL-tree per strategy.
         counts = []
+        _t = time.perf_counter()
         for strat in strategies:
             if args.parents == "coclust":
                 mul_tree, n_auto, n_allo, n_dropped = build_for_strategy_coclust(
@@ -355,8 +367,23 @@ def main():
             total_dropped[strat] = total_dropped.get(strat, 0) + n_dropped
             counts.append(f"{strat}={n_auto + n_allo}" + (f" (dropped {n_dropped})" if n_dropped else ""))
 
+        prof["build"] += time.perf_counter() - _t
         print(f"[{net}] events per strategy: {', '.join(counts)}")
         done += 1
+
+    if args.profile and prof["n"]:
+        n = prof["n"]
+        per = lambda k: prof[k] / n
+        print("\n" + "=" * 60)
+        print(f"RUNTIME PROFILE  ({n} networks, mean {prof['n_gt']/n:.0f} gene trees each)")
+        print(f"  features (from_trees + clades + copy bound): {per('feat'):.3f} s/net")
+        print(f"  forward  (model inputs + GNN + pairwise)   : {per('fwd'):.3f} s/net")
+        print(f"  build    (decode + MUL-tree per strategy)  : {per('build'):.3f} s/net")
+        print(f"  our compute total (excludes ASTRAL)        : "
+              f"{per('feat')+per('fwd')+per('build'):.3f} s/net")
+        print("  NOTE: ASTRAL is loaded precomputed here. For an end-to-end comparison to")
+        print("  Polyphest/GRAMPA, add ASTRAL inference time and use their wall times from logs.")
+        print("=" * 60)
 
     print(f"\nDone: {done} networks x {len(strategies)} strategies, {skipped} skipped.")
     if any(total_dropped.values()):
