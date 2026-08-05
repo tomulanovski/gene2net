@@ -980,9 +980,12 @@ class ReticulateTree:
             print(f"  Skipping MUL-tree GED: trees too large ({n1}, {n2} nodes > {MAX_NODES_FOR_GED} limit)")
             return float('nan')
 
-        # Compute edit distance with timeout
-        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-        signal.alarm(timeout)
+        # Compute edit distance with timeout. SIGALRM is POSIX-only, so on Windows
+        # we run without one (fine for the small trees used off-cluster).
+        use_alarm = bool(timeout) and hasattr(signal, 'SIGALRM')
+        if use_alarm:
+            old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+            signal.alarm(timeout)
         try:
             distance = next(nx.optimize_graph_edit_distance(
                 graph1, graph2,
@@ -994,8 +997,9 @@ class ReticulateTree:
                   f"(tree sizes: {n1}, {n2} nodes). Returning NaN.")
             return float('nan')
         finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old_handler)
+            if use_alarm:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
 
         if normalize:
             normalization = max(

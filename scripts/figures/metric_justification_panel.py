@@ -37,42 +37,17 @@ from compare_reticulations import (
 )
 
 
-def _tree_to_simple_graph(tree_obj: ReticulateTree) -> nx.DiGraph:
-    """Convert the ete3 tree inside a ReticulateTree to a labelled DiGraph.
-
-    Mirrors `ReticulateTree.get_edit_distance_multree`'s inner helper but is
-    extracted here so we can compute GED without the signal-based timeout
-    (which is POSIX-only and breaks the script on Windows). Safe for tiny
-    toy trees.
-    """
-    G = nx.DiGraph()
-    for node in tree_obj.tree.traverse():
-        nid = id(node)
-        G.add_node(nid, label=node.name if node.is_leaf() else None)
-        if not node.is_root():
-            G.add_edge(id(node.up), nid)
-    return G
-
-
 def safe_edit_distance_multree(t1: ReticulateTree, t2: ReticulateTree,
                                 normalize: bool = True) -> float:
-    """Cross-platform graph edit distance on the underlying MUL-trees.
+    """Graph edit distance on the underlying MUL-trees.
 
-    Calls `networkx.optimize_graph_edit_distance` directly; no SIGALRM.
-    Intended for use only on the toy trees defined in this module.
+    Delegates to `ReticulateTree.get_edit_distance_multree`, so this figure
+    reports exactly the metric the benchmark does, canonical child ordering
+    included. This module used to carry its own copy to dodge the POSIX-only
+    SIGALRM timeout; that is now guarded inside the method, so the duplicate
+    is gone and the two cannot drift apart again.
     """
-    g1 = _tree_to_simple_graph(t1)
-    g2 = _tree_to_simple_graph(t2)
-    distance = next(nx.optimize_graph_edit_distance(
-        g1, g2,
-        node_match=lambda u, v: u.get('label') == v.get('label'),
-    ))
-    if normalize:
-        norm = max(len(g1.nodes) + len(g1.edges),
-                   len(g2.nodes) + len(g2.edges))
-        if norm > 0:
-            distance /= norm
-    return distance
+    return t1.get_edit_distance_multree(t2, normalize=normalize)
 
 
 # ───────────────────────────────────────────────────────────────────────────
