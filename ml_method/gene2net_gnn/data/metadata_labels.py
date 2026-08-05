@@ -91,52 +91,69 @@ def _sibling_clade(true_tree, sp):
     return frozenset(sib)
 
 
-def _astral_home(sp, clades):
-    """sp's sibling clade in the ASTRAL tree: smallest edge-clade strictly containing sp, minus sp."""
-    x = frozenset({sp})
+def _astral_home_set(x, clades):
+    """Smallest ASTRAL edge-clade strictly containing species set x, minus x (x's ASTRAL
+    home). Generalizes _astral_home from a single species to a clade."""
+    x = frozenset(x)
     supersets = [c for c in clades if x < c]
     if not supersets:
         return None
     return frozenset(min(supersets, key=len) - x)
 
 
+def _astral_home(sp, clades):
+    """sp's sibling clade in the ASTRAL tree: smallest edge-clade strictly containing sp, minus sp."""
+    return _astral_home_set({sp}, clades)
+
+
 def relabel_events_partner_as_away(events, true_tree, edge_bipartitions):
-    """For each single-species ALLO event, set partner = the true parent that is NOT X's
-    ASTRAL home.
+    """For each ALLO event, set partner = the true parent that is NOT the target's ASTRAL
+    home.
 
     Fixes the ~55% of allo labels whose partner is the home (verified by label_audit):
-    when ASTRAL placed X next to its labelled partner B, the old target == home, which
-    gives the model a contradictory objective and makes the build graft a copy where X
-    already sits (the sp39 collapse). Here we retarget those to the OTHER true parent A.
-    Auto (partner==target) and clade-level (|target|>1) events are left unchanged.
+    when ASTRAL placed the target next to its labelled partner B, the old target == home,
+    which gives the model a contradictory objective and makes the build graft a copy where
+    the target already sits (the sp39 collapse). Here we retarget those to the OTHER true
+    parent A. Auto events (partner==target) are left unchanged. Single-species targets are
+    always handled. Clade-level targets are handled only when the clade is monophyletic in
+    ASTRAL, so its home is a single well-defined sibling; otherwise the event is left
+    unchanged rather than risk a fuzzy retarget.
     """
     clades = [c for _, c in edge_bipartitions]
+    clade_set = set(clades)                                 # for the ASTRAL-monophyly guard
     leaf_map = {leaf.name: leaf for leaf in true_tree.get_leaves()}  # one traversal, not per-event
 
-    def sibling(sp):
-        x = leaf_map.get(sp)
-        if x is None or x.up is None:
+    def true_sibling(C):
+        """Sibling leaf set of C's MRCA in the true tree (the other parent A). Monophyly-
+        guarded: returns None unless C is exactly the leaf set of a true-tree node. For a
+        single species this reduces to that leaf's sibling (identical to the old behavior)."""
+        leaves = [leaf_map[s] for s in C if s in leaf_map]
+        if len(leaves) < len(C):
+            return None
+        mrca = leaves[0] if len(leaves) == 1 else true_tree.get_common_ancestor(leaves)
+        if set(mrca.get_leaf_names()) != set(C) or mrca.up is None:
             return None
         sib = set()
-        for ch in x.up.get_children():
-            if ch is not x:
+        for ch in mrca.up.get_children():
+            if ch is not mrca:
                 sib |= set(ch.get_leaf_names())
-        sib.discard(sp)
-        return frozenset(sib)
+        return frozenset(sib - set(C))
 
     out = []
     for ev in events:
         tgt, B = ev.wgd_edge_clade, ev.partner_edge_clade
-        if B == tgt or len(tgt) != 1:
+        if B == tgt:                                        # auto: leave unchanged
             out.append(ev)
             continue
-        X = next(iter(tgt))
-        A = sibling(X)                     # the other (true-home) parent
-        H = _astral_home(X, clades)        # where ASTRAL placed X
+        if len(tgt) > 1 and frozenset(tgt) not in clade_set:  # clade not monophyletic in ASTRAL
+            out.append(ev)
+            continue
+        A = true_sibling(tgt)                   # the other (true-home) parent
+        H = _astral_home_set(tgt, clades)       # where ASTRAL placed the target
         if A is None or H is None:
             out.append(ev)
             continue
-        new_partner = A if (H & B) else B   # home == labelled partner -> retarget to A
+        new_partner = A if (H & B) else B       # home == labelled partner -> retarget to A
         out.append(WGDEvent(wgd_edge_clade=tgt, partner_edge_clade=new_partner,
                             confidence=ev.confidence))
     return out
