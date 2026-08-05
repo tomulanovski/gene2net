@@ -882,7 +882,8 @@ class ReticulateTree:
             distance /= normalization
         return distance
     
-    def get_edit_distance_multree(self, other: 'ReticulateTree', normalize=True, timeout=300) -> float:
+    def get_edit_distance_multree(self, other: 'ReticulateTree', normalize=True, timeout=300,
+                                  canonical=True) -> float:
         '''
         Compute graph edit distance on MUL-trees (before folding to networks).
         This compares the tree structures directly without network folding.
@@ -893,6 +894,9 @@ class ReticulateTree:
             timeout: Max seconds per comparison (default 300s = 5 min).
                      Returns NaN if exceeded. GED is NP-hard so large trees
                      that don't finish in 5 min won't finish in 24 hours either.
+            canonical: If True (default), children are visited in canonical order so the
+                     result cannot depend on the child ordering of the input Newick.
+                     Only set False to reproduce pre-2026-08-05 numbers.
 
         Returns:
             Edit distance between the two MUL-trees, or NaN if timed out
@@ -904,24 +908,65 @@ class ReticulateTree:
 
         # Convert trees to graphs (without folding - just tree structure)
         def tree_to_simple_graph(tree_obj):
-            """Convert ete3 tree to NetworkX graph preserving tree structure"""
+            """Convert ete3 tree to NetworkX graph preserving tree structure.
+
+            optimize_graph_edit_distance below returns the FIRST complete edit path its
+            greedy search finds, not the minimum, and that search enumerates candidates
+            in node INSERTION order. So without canonical ordering the score depends on
+            the child order of the input Newick, which is phylogenetically meaningless
+            and differs between the programs that wrote each tree: two identical trees
+            can score up to ~0.6 instead of 0.
+
+            Same idea as _compute_canonical_forms above and _iso_leaf_map in
+            apply_diploidization.py, order both sides canonically so they align.
+            Does not modify the tree.
+            """
             G = nx.DiGraph()
 
-            # Add all nodes with their labels
-            for node in tree_obj.tree.traverse():
-                node_id = id(node)
-                # Leaf nodes get their species name as label
+            if not canonical:
+                # Kept verbatim so canonical=False reproduces pre-fix numbers exactly
+                # (traverse() defaults to levelorder, not the preorder walk below)
+                for node in tree_obj.tree.traverse():
+                    node_id = id(node)
+                    # Leaf nodes get their species name as label
+                    if node.is_leaf():
+                        G.add_node(node_id, label=node.name)
+                    else:
+                        # Internal nodes don't get labels (or get None)
+                        G.add_node(node_id, label=None)
+
+                    # Add edge from parent to this node
+                    if not node.is_root():
+                        parent_id = id(node.up)
+                        G.add_edge(parent_id, node_id)
+
+                return G
+
+            canon = {}
+
+            def canonical_form(node):
                 if node.is_leaf():
-                    G.add_node(node_id, label=node.name)
+                    form = node.name
                 else:
-                    # Internal nodes don't get labels (or get None)
-                    G.add_node(node_id, label=None)
+                    form = '(' + ','.join(sorted(canonical_form(c) for c in node.children)) + ')'
+                canon[node] = form
+                return form
 
-                # Add edge from parent to this node
+            canonical_form(tree_obj.tree)
+
+            def add_subtree(node):
+                node_id = id(node)
+                G.add_node(node_id, label=node.name if node.is_leaf() else None)
+
                 if not node.is_root():
-                    parent_id = id(node.up)
-                    G.add_edge(parent_id, node_id)
+                    G.add_edge(id(node.up), node_id)
 
+                # Ties (identical sibling subtrees, i.e. autopolyploidy) keep their input
+                # order, which is harmless because the subtrees are identical
+                for child in sorted(node.children, key=lambda c: canon[c]):
+                    add_subtree(child)
+
+            add_subtree(tree_obj.tree)
             return G
 
         # Get graphs for both trees
