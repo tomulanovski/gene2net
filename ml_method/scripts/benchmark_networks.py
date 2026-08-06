@@ -228,6 +228,10 @@ def main():
     parser.add_argument("--profile", action="store_true",
                         help="Time the per-network compute stages (features, forward, build) "
                              "and print a summary. Excludes ASTRAL, which is loaded precomputed.")
+    parser.add_argument("--ploidy-check", action="store_true",
+                        help="Compare the built MUL-tree's per-species copy counts against "
+                             "infer_copy_bound and report how often we fall SHORT of the inferred "
+                             "ploidy (headroom for a target-ploidy build). Read-only diagnostic.")
     args = parser.parse_args()
 
     base_dir = os.path.join(os.path.dirname(__file__), "..")
@@ -257,6 +261,8 @@ def main():
     done = skipped = 0
     total_dropped = {}
     prof = {"feat": 0.0, "fwd": 0.0, "build": 0.0, "n": 0, "n_gt": 0}
+    # under-shoot accounting over polyploid species (inferred bound >= 2)
+    pchk = {"n_poly": 0, "n_short": 0, "n_match": 0, "n_missing": 0, "copies_short": 0}
     for net in NETWORKS:
         rep_dir = os.path.join(args.sim_base, net, "processed", args.config,
                                "grampa_input", f"replicate_{args.replicate}")
@@ -355,6 +361,21 @@ def main():
                     strat, args.threshold, parent_edge, copy_bound,
                     build_order=args.build_order,
                 )
+            if args.ploidy_check:
+                # mul_tree is still in internal names here, matching copy_bound.
+                actual = Counter(mul_tree.get_leaf_names())
+                for sp, bound in copy_bound.items():
+                    if bound < 2:
+                        continue  # only polyploids-per-inferred-ploidy
+                    a = actual.get(sp, 0)
+                    pchk["n_poly"] += 1
+                    if a == 0:
+                        pchk["n_missing"] += 1
+                    if a < bound:
+                        pchk["n_short"] += 1
+                        pchk["copies_short"] += bound - a
+                    elif a == bound:
+                        pchk["n_match"] += 1
             rename_leaves(mul_tree, inv_map)
             case_dir = os.path.join(out_base, strat, net)
             os.makedirs(case_dir, exist_ok=True)
@@ -383,6 +404,19 @@ def main():
               f"{per('feat')+per('fwd')+per('build'):.3f} s/net")
         print("  NOTE: ASTRAL is loaded precomputed here. For an end-to-end comparison to")
         print("  Polyphest/GRAMPA, add ASTRAL inference time and use their wall times from logs.")
+        print("=" * 60)
+
+    if args.ploidy_check and pchk["n_poly"]:
+        p = pchk["n_poly"]
+        print("\n" + "=" * 60)
+        print(f"PLOIDY UNDER-SHOOT CHECK  ({p} polyploid species, inferred bound >= 2)")
+        print(f"  reach the inferred ploidy (actual == bound): {pchk['n_match']}/{p} = {pchk['n_match']/p:.2f}")
+        print(f"  fall SHORT (actual < bound)                : {pchk['n_short']}/{p} = {pchk['n_short']/p:.2f}")
+        print(f"  missing entirely (0 copies)                : {pchk['n_missing']}/{p} = {pchk['n_missing']/p:.2f}")
+        print(f"  total copies short of inferred bound       : {pchk['copies_short']} "
+              f"({pchk['copies_short']/p:.2f} per polyploid species)")
+        print("  If we fall short a lot, using the inferred ploidy as a TARGET (not just a cap)")
+        print("  is real headroom. If most reach the bound, the edit gap is placement, not count.")
         print("=" * 60)
 
     print(f"\nDone: {done} networks x {len(strategies)} strategies, {skipped} skipped.")
