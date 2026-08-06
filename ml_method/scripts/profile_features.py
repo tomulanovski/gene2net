@@ -17,6 +17,8 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from ete3 import Tree
 
+from gene2net_gnn.data.dataset import Gene2NetSample
+from gene2net_gnn.data.tree_io import tree_to_edge_index
 from gene2net_gnn.data.features import (
     compute_copy_count_features,
     compute_clustering_summary,
@@ -58,7 +60,8 @@ def main():
     args = ap.parse_args()
 
     sim = os.path.join(args.mul_trees_dir, "simphy", args.config)
-    t = {"copy": 0.0, "cluster": 0.0, "edge_base": 0.0, "edge_det": 0.0, "n": 0, "n_gt": 0}
+    t = {"copy": 0.0, "cluster": 0.0, "edge_base": 0.0, "edge_det": 0.0,
+         "from_trees": 0.0, "gt_tensors": 0.0, "n": 0, "n_gt": 0}
     for idx in sorted(os.listdir(sim))[:args.n]:
         gt = os.path.join(sim, idx, f"replicate_{args.replicate}", "gene_trees.tre")
         sp = os.path.join(sim, idx, f"replicate_{args.replicate}", "astral_species.tre")
@@ -90,16 +93,31 @@ def main():
         compute_species_tree_edge_detection_features(astral, trees)
         t["edge_det"] += time.perf_counter() - s
 
+        # Just the gene-tree -> tensor conversion (edge_index only, per tree).
+        s = time.perf_counter()
+        for gt_ in trees:
+            tree_to_edge_index(gt_)
+        t["gt_tensors"] += time.perf_counter() - s
+
+        # Whole from_trees (features + all gene-tree tensors + branch lengths).
+        s = time.perf_counter()
+        Gene2NetSample.from_trees(astral, trees, sorted(species))
+        t["from_trees"] += time.perf_counter() - s
+
     n = max(t["n"], 1)
     print(f"\nFeature micro-profile ({args.config}) — {t['n']} networks, "
           f"mean {t['n_gt']/n:.0f} gene trees, {len(species)} species\n")
     for k, label in [("copy", "per-species copy counts"),
                      ("cluster", "per-species co-clustering summary"),
                      ("edge_base", "per-edge base (concordance, bl, size, depth)"),
-                     ("edge_det", "per-edge WGD-detection features")]:
-        print(f"  {label:<45}{t[k]/n:>8.3f} s/net")
-    total = (t["copy"] + t["cluster"] + t["edge_base"] + t["edge_det"]) / n
-    print(f"  {'TOTAL':<45}{total:>8.3f} s/net")
+                     ("edge_det", "per-edge WGD-detection features"),
+                     ("gt_tensors", "gene-tree -> edge_index tensors (500 trees)"),
+                     ("from_trees", "Gene2NetSample.from_trees (WHOLE, all of the above)")]:
+        print(f"  {label:<52}{t[k]/n:>8.3f} s/net")
+    feat_total = (t["copy"] + t["cluster"] + t["edge_base"] + t["edge_det"]) / n
+    print(f"  {'(sum of the 4 feature blocks)':<52}{feat_total:>8.3f} s/net")
+    print(f"\n  from_trees minus feature blocks (= tensor/branch-length overhead): "
+          f"{t['from_trees']/n - feat_total:.3f} s/net")
 
 
 if __name__ == "__main__":
