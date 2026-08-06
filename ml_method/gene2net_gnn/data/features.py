@@ -199,8 +199,13 @@ def compute_species_tree_edge_features(
                 biparts.add(below_sp)
         return biparts
 
-    # Count concordance for each edge
+    # Count concordance and informativeness for each edge in a single pass over the
+    # gene trees. n_informative was previously recomputed per edge by re-extracting each
+    # gene tree's leaf set twice (O(edges * trees) redundant traversals); it is exactly
+    # the "both restrictions non-empty" condition already tested here, so we count it in
+    # the same loop.
     concordance_counts = [0] * len(edge_nodes)
+    informative_counts = [0] * len(edge_nodes)
     for gtree in gene_trees:
         gt_biparts = gene_tree_species_bipartitions(gtree)
         gt_species = frozenset(leaf.name for leaf in gtree.get_leaves())
@@ -211,6 +216,7 @@ def compute_species_tree_edge_features(
             if not restricted_below or not restricted_above:
                 # Uninformative for this gene tree
                 continue
+            informative_counts[i] += 1
             # Check if this restricted bipartition is supported
             if restricted_below in gt_biparts or restricted_above in gt_biparts:
                 concordance_counts[i] += 1
@@ -227,11 +233,7 @@ def compute_species_tree_edge_features(
     # Build output
     result: Dict[int, dict] = {}
     for i, (edge_idx, node) in enumerate(edge_nodes):
-        n_informative = sum(
-            1 for gtree in gene_trees
-            if (species_bipartitions[i][1] & frozenset(leaf.name for leaf in gtree.get_leaves()))
-            and (species_bipartitions[i][2] & frozenset(leaf.name for leaf in gtree.get_leaves()))
-        )
+        n_informative = informative_counts[i]
         cf = concordance_counts[i] / n_informative if n_informative > 0 else 0.0
 
         result[edge_idx] = {
