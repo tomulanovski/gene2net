@@ -170,6 +170,8 @@ def main():
         n_gat_layers=int(mc.get("n_gat_layers", 3)),
         n_gat_heads=int(mc.get("n_gat_heads", 4)),
         dropout=float(mc.get("dropout", 0.2)),
+        partner_pair_feat_dim=int(mc.get("partner_pair_feat_dim", 2)),
+        n_parents=int(mc.get("n_parents", 1)),
     )
     for name in ["best_f1_model.pt", "best_model.pt"]:
         p = os.path.join(args.model_dir, name)
