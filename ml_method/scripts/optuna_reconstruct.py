@@ -71,6 +71,12 @@ def main():
     base_mc = cfg.get("model", {})
     base_tc = cfg.get("training", {})
     os.makedirs(args.out_root, exist_ok=True)
+    # Ensure the SQLite file's parent dir exists, else sqlite raises an opaque
+    # "unable to open database file" from deep in SQLAlchemy.
+    if args.storage.startswith("sqlite:///"):
+        db_parent = os.path.dirname(args.storage[len("sqlite:///"):])
+        if db_parent:
+            os.makedirs(db_parent, exist_ok=True)
 
     storage = optuna.storages.RDBStorage(
         args.storage, engine_kwargs={"connect_args": {"timeout": 100}})
