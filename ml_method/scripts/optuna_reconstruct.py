@@ -56,7 +56,9 @@ def make_objective(data_dirs, base_mc, base_tc, out_root):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-dir", required=True, nargs="+")
+    ap.add_argument("--data-dir", nargs="+", default=None,
+                    help="Training data dirs (all configs). Required when --n-trials > 0; "
+                         "not needed for --n-trials 0, which only creates the study.")
     ap.add_argument("--config", required=True)
     ap.add_argument("--study-name", required=True)
     ap.add_argument("--storage", required=True, help="e.g. sqlite:///.../g2n_reconstruct.db")
@@ -75,6 +77,8 @@ def main():
     study = optuna.create_study(direction="maximize", study_name=args.study_name,
                                 storage=storage, load_if_exists=True)
     if args.n_trials > 0:
+        if not args.data_dir:
+            raise ValueError("--data-dir is required when --n-trials > 0")
         # catch=(Exception,) so one bad config (a NaN loss, an OOM) is recorded as a
         # FAILED trial and logged to stderr, and the worker continues with its next
         # trial instead of aborting its whole allocation. This is visible in the study
