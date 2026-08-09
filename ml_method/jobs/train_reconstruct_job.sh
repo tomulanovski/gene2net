@@ -37,4 +37,5 @@ python "${BASE_DIR}/scripts/train_reconstruct.py" \
     ${INIT_FROM:+--init-from "$INIT_FROM"} \
     ${CLADE_LABELS:+--clade-labels} \
     ${AWAY_LABELS:+--away-labels} \
-    ${MAX_TRAIN:+--max-train-samples "$MAX_TRAIN"}
+    ${MAX_TRAIN:+--max-train-samples "$MAX_TRAIN"} \
+    ${TRAIN_FRACTION:+--train-fraction "$TRAIN_FRACTION"}

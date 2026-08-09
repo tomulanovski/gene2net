@@ -31,6 +31,13 @@ from gene2net_gnn.model.species_gnn_v2 import SpeciesTreeGNNv2
 from gene2net_gnn.training.trainer_phase1 import prepare_sample, focal_loss
 
 
+def pick_objective(history, guard_f1):
+    """Best allopolyploid partner accuracy among epochs whose detection F1 meets
+    the guard. Returns -1.0 if no epoch qualifies (so a guard-failing trial loses)."""
+    qualifying = [h["allo_acc"] for h in history if h["f1"] >= guard_f1]
+    return max(qualifying) if qualifying else -1.0
+
+
 # Module-level feature toggles set once from config (by ReconstructTrainer, and by
 # the inference entry points via set_feature_opts) so the many build_pairwise_feat /
 # model_inputs_for call sites need not thread a flag. Defaults reproduce the shipped
@@ -377,10 +384,13 @@ class ReconstructTrainer:
         best_val_loss = float("inf")
         best_partner = 0.0
         patience_counter = 0
+        history = []
 
         for epoch in range(self.max_epochs):
             train_loss = self.train_epoch(train_samples)
             val = self.evaluate(val_samples)
+            history.append({"epoch": epoch + 1, "f1": val["f1"],
+                            "allo_acc": val["allo_acc"], "val_loss": val["val_loss"]})
             self.scheduler.step(val["val_loss"])
             lr = self.optimizer.param_groups[0]["lr"]
 
@@ -413,4 +423,11 @@ class ReconstructTrainer:
         self.model.load_state_dict(
             torch.load(os.path.join(output_dir, "best_model.pt"), weights_only=True)
         )
-        return self.model
+        return {
+            "best_val_loss": best_val_loss,
+            "best_partner_acc": best_partner,
+            "best_allo_acc": max((h["allo_acc"] for h in history), default=0.0),
+            "best_f1": max((h["f1"] for h in history), default=0.0),
+            "history": history,
+            "model": self.model,
+        }

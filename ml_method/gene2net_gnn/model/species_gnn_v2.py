@@ -12,7 +12,7 @@ leveraging graph structure to improve over non-graph baselines.
 """
 import torch
 import torch.nn as nn
-from torch_geometric.nn import GATConv
+from torch_geometric.nn import GATConv, GINConv, GCNConv
 
 
 def propagate_to_internal(node_features, edge_index, is_leaf, node_feat_dim):
@@ -74,6 +74,23 @@ def propagate_to_internal(node_features, edge_index, is_leaf, node_feat_dim):
     return x
 
 
+def _make_conv(conv_type, hidden_dim, n_heads, dropout):
+    """Build one message-passing layer. GAT is the default and preserves the
+    original parameter layout so existing checkpoints still load."""
+    ct = str(conv_type).lower()
+    if ct == "gat":
+        return GATConv(hidden_dim, hidden_dim, heads=n_heads, concat=False, dropout=dropout)
+    if ct == "gcn":
+        return GCNConv(hidden_dim, hidden_dim)
+    if ct == "gin":
+        mlp = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
+        return GINConv(mlp)
+    raise ValueError(f"unknown conv_type {conv_type!r}; expected gat|gin|gcn")
+
+
 class SpeciesTreeGNNv2(nn.Module):
     """GNN on species tree with hand-crafted features only.
 
@@ -103,11 +120,13 @@ class SpeciesTreeGNNv2(nn.Module):
         dropout: float = 0.2,
         partner_pair_feat_dim: int = 0,
         n_parents: int = 2,
+        conv_type: str = "gat",
     ):
         super().__init__()
         self.node_feat_dim = node_feat_dim
         self.edge_feat_dim = edge_feat_dim
         self.hidden_dim = hidden_dim
+        self.conv_type = conv_type
 
         # Node feature projection
         self.node_proj = nn.Sequential(
@@ -121,7 +140,7 @@ class SpeciesTreeGNNv2(nn.Module):
         self.gat_norms = nn.ModuleList()
         for _ in range(n_gat_layers):
             self.gat_layers.append(
-                GATConv(hidden_dim, hidden_dim, heads=n_gat_heads, concat=False, dropout=dropout)
+                _make_conv(conv_type, hidden_dim, n_gat_heads, dropout)
             )
             self.gat_norms.append(nn.LayerNorm(hidden_dim))
         self.dropout = nn.Dropout(dropout)
