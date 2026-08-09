@@ -75,8 +75,12 @@ def main():
     study = optuna.create_study(direction="maximize", study_name=args.study_name,
                                 storage=storage, load_if_exists=True)
     if args.n_trials > 0:
+        # catch=(Exception,) so one bad config (a NaN loss, an OOM) is recorded as a
+        # FAILED trial and logged to stderr, and the worker continues with its next
+        # trial instead of aborting its whole allocation. This is visible in the study
+        # (state=FAILED), not a silent swallow.
         study.optimize(make_objective(args.data_dir, base_mc, base_tc, args.out_root),
-                       n_trials=args.n_trials)
+                       n_trials=args.n_trials, catch=(Exception,))
     print(f"Study '{args.study_name}': {len(study.trials)} trials so far.")
     if any(t.value is not None for t in study.trials):
         print(f"Best value {study.best_value:.4f} params {study.best_params}")
