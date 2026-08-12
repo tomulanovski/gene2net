@@ -1,0 +1,27 @@
+# FINAL method config: one-parter + away labels, selected by the two-stage Optuna
+# search (bounded search converged on the boundary at hidden 256 / depth 4; the
+# extended search over hidden up to 512 and depth up to 5 confirmed nothing bigger
+# or deeper beats it). Validation allopolyploid partner accuracy ~0.83 (up from ~0.51
+# untuned), detection F1 ~0.87. Train with --away-labels.
+model:
+  node_feat_dim: 13          # 8 copy count + 5 clustering summary
+  edge_feat_dim: 9           # 4 base + 5 WGD-detection
+  hidden_dim: 256
+  n_gat_layers: 4
+  n_gat_heads: 4
+  dropout: 0.1
+  partner_pair_feat_dim: 4    # 2 clade co-clustering (mean,max) + 2 copy-aware cluster-support
+  n_parents: 1                # one-partner head (our method); self-partner = auto
+  conv_type: gat
+
+training:
+  lr: 0.0005
+  weight_decay: 1.0e-05
+  batch_size: 8
+  max_epochs: 200
+  patience: 30
+  pos_class_weight: 12.0
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+  partner_weight: 1.0
+  val_split: 0.2
