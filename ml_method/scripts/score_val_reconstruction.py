@@ -200,45 +200,52 @@ def star_gene_trees_from_sample(sample):
     return stars
 
 
-def collect_val_pairs(data_dirs, expected_edge_dim, val_split,
-                      clade_labels, away_labels):
+def collect_val_handles(data_dirs, expected_edge_dim, val_split,
+                        clade_labels, away_labels):
     """Reproduce run_training's pool -> filter -> seed-42 shuffle -> 20% prefix,
-    tracking each kept sample's source example directory.
+    but store only lightweight (data_dir, index, example_dir) HANDLES, never the
+    loaded samples. Holding all ~12k pooled samples (each carrying gene trees) in
+    RAM at once can exhaust an interactive session and swap (which looks like a
+    hang); we keep only handles here and reload the ~max-samples we actually score.
 
-    Returns the list of (example_dir, sample) tuples that make up the validation
-    split, in the identical membership run_training's val_samples would have.
+    Membership is IDENTICAL to run_training: same pool order, same filters (labels
+    first, then edge-dim), same seed-42 shuffle of positions, same 20% prefix.
+    random.shuffle permutes by position, so shuffling handles yields the same
+    permutation as shuffling the samples themselves.
     """
-    all_pairs = []
+    all_handles = []
     no_label = wrong_dim = 0
     for data_dir in data_dirs:
-        print(f"Loading dataset from {data_dir}...")
+        print(f"Loading dataset from {data_dir}...", flush=True)
         dataset = Gene2NetDataset(data_dir, clade_labels=clade_labels,
                                   away_labels=away_labels)
+        n = len(dataset)
         dir_loaded = 0
-        for i in range(len(dataset)):
-            sample = dataset[i]
+        for i in range(n):
+            sample = dataset[i]                      # loaded, filtered, then freed
             if sample.labels is None:
                 no_label += 1
-                continue
-            ef = sample.species_tree_edge_features
-            if ef is None or ef.shape[1] != expected_edge_dim:
+            elif (sample.species_tree_edge_features is None or
+                  sample.species_tree_edge_features.shape[1] != expected_edge_dim):
                 wrong_dim += 1
-                continue
-            all_pairs.append((dataset.example_dirs[i], sample))
-            dir_loaded += 1
-        print(f"  {dir_loaded} samples from {os.path.basename(data_dir)}")
+            else:
+                all_handles.append((data_dir, i, dataset.example_dirs[i]))
+                dir_loaded += 1
+            if (i + 1) % 500 == 0:
+                print(f"    scanned {i + 1}/{n} ({dir_loaded} kept)", flush=True)
+        print(f"  {dir_loaded} samples from {os.path.basename(data_dir)}", flush=True)
 
-    print(f"Total: {len(all_pairs)} samples "
+    print(f"Total: {len(all_handles)} samples "
           f"({no_label} no-label, {wrong_dim} wrong-edge-dim filtered)")
 
     # Identical to run_training: seed 42, shuffle the pool, take the 20% prefix.
     random.seed(42)
-    random.shuffle(all_pairs)
-    n_val = int(len(all_pairs) * val_split)
-    val_pairs = all_pairs[:n_val]
-    print(f"Validation split: {len(val_pairs)} samples "
+    random.shuffle(all_handles)
+    n_val = int(len(all_handles) * val_split)
+    val_handles = all_handles[:n_val]
+    print(f"Validation split: {len(val_handles)} samples "
           f"(val_split={val_split}, seed=42 shuffle, 20% prefix)")
-    return val_pairs
+    return val_handles
 
 
 def idx_str_from_dir(example_dir):
@@ -326,22 +333,22 @@ def main():
     print(f"Out base:    {args.out_base}")
     print("=" * 70)
 
-    # ---- Reproduce the validation split exactly, tracking source dirs. ----
-    val_pairs = collect_val_pairs(
+    # ---- Reproduce the validation split exactly (lightweight handles only). ----
+    val_handles = collect_val_handles(
         args.data_dir, expected_edge_dim, val_split,
         clade_labels=args.clade_labels, away_labels=args.away_labels,
     )
-    if not val_pairs:
+    if not val_handles:
         raise RuntimeError("Validation split is empty — check --data-dir and label flags.")
 
     # ---- Seeded subsample of up to --max-samples for speed. ----
     rng = random.Random(SUBSAMPLE_SEED)
-    if len(val_pairs) > args.max_samples:
-        selected = rng.sample(val_pairs, args.max_samples)
-        print(f"Subsampled {len(selected)}/{len(val_pairs)} val samples "
+    if len(val_handles) > args.max_samples:
+        selected = rng.sample(val_handles, args.max_samples)
+        print(f"Subsampled {len(selected)}/{len(val_handles)} val samples "
               f"(seed={SUBSAMPLE_SEED}).")
     else:
-        selected = list(val_pairs)
+        selected = list(val_handles)
         print(f"Scoring all {len(selected)} val samples (<= max-samples).")
 
     # ---- Load the model (one-partner vs two-parent inferred from checkpoint). ----
@@ -351,59 +358,69 @@ def main():
     print(f"Decode: {'two-parent graft' if two_parent else 'one-partner'} "
           f"(model n_parents={getattr(model, 'n_parents', 1)})")
 
+    # ---- Reload ONLY the selected samples, grouped by data dir (memory-light). ----
+    from collections import defaultdict
+    by_dir = defaultdict(list)
+    for data_dir, i, example_dir in selected:
+        by_dir[data_dir].append((i, example_dir))
+
     out_strategy_dir = os.path.join(args.out_base, args.strategy)
     done = skipped = 0
-    for example_dir, sample in selected:
-        idx_str = idx_str_from_dir(example_dir)
-        config_name = config_from_dir(example_dir)
-        case_name = f"{config_name}__sample_{idx_str}"
-        mul_path = os.path.join(args.mul_trees_dir, f"mul_tree_{idx_str}.nex")
+    for data_dir, items in by_dir.items():
+        dataset = Gene2NetDataset(data_dir, clade_labels=args.clade_labels,
+                                  away_labels=args.away_labels)
+        for i, example_dir in items:
+            sample = dataset[i]
+            idx_str = idx_str_from_dir(example_dir)
+            config_name = config_from_dir(example_dir)
+            case_name = f"{config_name}__sample_{idx_str}"
+            mul_path = os.path.join(args.mul_trees_dir, f"mul_tree_{idx_str}.nex")
 
-        # ONLY documented skip: ground truth genuinely absent. Everything else propagates.
-        if not os.path.exists(mul_path):
-            print(f"  SKIP {case_name}: ground-truth {mul_path} missing")
-            skipped += 1
-            continue
+            # ONLY documented skip: ground truth genuinely absent. Else propagates.
+            if not os.path.exists(mul_path):
+                print(f"  SKIP {case_name}: ground-truth {mul_path} missing")
+                skipped += 1
+                continue
 
-        # Backbone + clades + parent map + copy bound, all from the packaged sample.
-        astral_tree = ete3_from_sample(sample)
-        clades = preorder_edge_clades(astral_tree)
-        parent_edge = build_parent_edge_map(astral_tree)
-        copy_bound = infer_copy_bound(star_gene_trees_from_sample(sample))
+            # Backbone + clades + parent map + copy bound, all from the packaged sample.
+            astral_tree = ete3_from_sample(sample)
+            clades = preorder_edge_clades(astral_tree)
+            parent_edge = build_parent_edge_map(astral_tree)
+            copy_bound = infer_copy_bound(star_gene_trees_from_sample(sample))
 
-        # One model forward for the sample.
-        with torch.no_grad():
-            inputs = model_inputs_for(sample, args.device)
-            wgd_logits, edge_emb = model(**inputs)
-            wgd_prob = torch.softmax(wgd_logits, dim=-1)[:, 1]
-            pairwise_feat = build_pairwise_feat(sample)
-        wgd_list = wgd_prob.tolist()
+            # One model forward for the sample.
+            with torch.no_grad():
+                inputs = model_inputs_for(sample, args.device)
+                wgd_logits, edge_emb = model(**inputs)
+                wgd_prob = torch.softmax(wgd_logits, dim=-1)[:, 1]
+                pairwise_feat = build_pairwise_feat(sample)
+            wgd_list = wgd_prob.tolist()
 
-        # Fail loud if the model edges and the rebuilt-tree clades disagree.
-        if len(clades) != wgd_prob.shape[0]:
-            raise RuntimeError(
-                f"{case_name}: clade count {len(clades)} != model edge count "
-                f"{wgd_prob.shape[0]} — backbone/edge alignment broken.")
+            # Fail loud if the model edges and the rebuilt-tree clades disagree.
+            if len(clades) != wgd_prob.shape[0]:
+                raise RuntimeError(
+                    f"{case_name}: clade count {len(clades)} != model edge count "
+                    f"{wgd_prob.shape[0]} — backbone/edge alignment broken.")
 
-        mul_tree, n_auto, n_allo, n_dropped = build_fn(
-            model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
-            args.strategy, args.threshold, parent_edge, copy_bound,
-            build_order=args.build_order,
-        )
+            mul_tree, n_auto, n_allo, n_dropped = build_fn(
+                model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
+                args.strategy, args.threshold, parent_edge, copy_bound,
+                build_order=args.build_order,
+            )
 
-        case_dir = os.path.join(out_strategy_dir, case_name)
-        os.makedirs(case_dir, exist_ok=True)
-        mul_tree.write(outfile=os.path.join(case_dir, "output.tre"), format=9)
-        with open(mul_path) as f:
-            gt = f.read()
-        with open(os.path.join(case_dir, "ground_truth.nex"), "w") as f:
-            f.write(gt)
+            case_dir = os.path.join(out_strategy_dir, case_name)
+            os.makedirs(case_dir, exist_ok=True)
+            mul_tree.write(outfile=os.path.join(case_dir, "output.tre"), format=9)
+            with open(mul_path) as f:
+                gt = f.read()
+            with open(os.path.join(case_dir, "ground_truth.nex"), "w") as f:
+                f.write(gt)
 
-        done += 1
-        if done % 25 == 0:
-            print(f"  {done}/{len(selected)} reconstructed "
-                  f"(last: {case_name}, events={n_auto + n_allo}"
-                  + (f", dropped {n_dropped}" if n_dropped else "") + ")")
+            done += 1
+            if done % 25 == 0:
+                print(f"  {done}/{len(selected)} reconstructed "
+                      f"(last: {case_name}, events={n_auto + n_allo}"
+                      + (f", dropped {n_dropped}" if n_dropped else "") + ")", flush=True)
 
     print(f"\nDone: {done} val samples reconstructed, {skipped} skipped "
           f"(missing ground truth).")

@@ -5,6 +5,12 @@ from pathlib import Path
 from ete3 import Tree, TreeNode
 from pyvis.network import Network
 from collections import defaultdict, Counter
+import os
+
+# The per-reticulation "malformed inference" warning below floods scoring output
+# (thousands of lines on over-reticulate reconstructions) and is not actionable
+# during benchmarking. Off by default; set RETICULATE_WARN_MALFORMED=1 to re-enable.
+_WARN_MALFORMED_RETIC = os.environ.get("RETICULATE_WARN_MALFORMED") == "1"
 
 # Convension for this class:
 # _func() for private methods, may or may not be static
@@ -825,8 +831,9 @@ class ReticulateTree:
                     # Autopolyploidy node has 1 parent - this is expected
                     pass
                 else:
-                    print(f'Warning: Reticulation node {ret} does not have exactly two parents: {parents}')
-                    print('This indicates that a Strict MUL-to-Net mode was used on a malformed inference.')
+                    if _WARN_MALFORMED_RETIC:
+                        print(f'Warning: Reticulation node {ret} does not have exactly two parents: {parents}')
+                        print('This indicates that a Strict MUL-to-Net mode was used on a malformed inference.')
 
             clades = []
             for parent in parents:
