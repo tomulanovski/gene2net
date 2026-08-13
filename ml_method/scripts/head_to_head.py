@@ -69,11 +69,12 @@ POLYPHEST_THRESHOLDS = ["polyphest_p50", "polyphest_p70", "polyphest_p90"]
 COMPETITOR_METHOD_MAP = {
     "grampa": "grampa",
     "grandma_split": "grampa_iter",
+    "grandma_split_prior": "grampa_iter_prior",  # GRAMPA-iter given the inferred ploidy prior
     "polyphest": "polyphest",  # after the p50/p70/p90 merge below
 }
 
 # Order of methods in the output (gnn first).
-OUTPUT_METHODS = ["gnn", "polyphest", "grampa", "grampa_iter"]
+OUTPUT_METHODS = ["gnn", "polyphest", "grampa", "grampa_iter", "grampa_iter_prior"]
 
 # The two wrong-rate networks the clean-config restriction drops by default.
 DEFAULT_EXCLUDE = ["Bendiksby_2011", "Marcussen_2011"]
