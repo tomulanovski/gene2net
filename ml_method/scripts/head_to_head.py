@@ -317,6 +317,45 @@ def print_summary(tidy, config, primary_metric):
     print()
 
 
+def print_common_subset(combined, config, primary_metric):
+    """FAIR comparison: means on the networks BOTH the GNN and Polyphest completed,
+    plus completion counts, plus the GNN's mean on Polyphest-completed vs -failed
+    networks (to check whether Polyphest skipped the harder ones). The per-method
+    means over *different* subsets (GNN on 21, Polyphest on the 15-18 it finishes)
+    are biased against the method that completes more; this is the unbiased view."""
+    pm = combined[combined["metric"] == primary_metric]
+    wide = pm.pivot_table(index="network", columns="method", values="value", aggfunc="mean")
+    if "gnn" not in wide.columns or "polyphest" not in wide.columns:
+        print("  (common-subset comparison needs both gnn and polyphest columns)")
+        return
+
+    print(f"{'-'*72}")
+    print(f"FAIR comparison on {primary_metric}  |  config = {config}")
+    print(f"{'-'*72}")
+    gnn_ok = wide["gnn"].notna()
+    poly_ok = wide["polyphest"].notna()
+    common = gnn_ok & poly_ok
+    print(f"Completion: total={wide.shape[0]} | gnn={int(gnn_ok.sum())} | "
+          f"polyphest={int(poly_ok.sum())} | both={int(common.sum())}")
+
+    print("\nMean on the COMMON subset (networks BOTH completed):")
+    for m in OUTPUT_METHODS:
+        if m in wide.columns:
+            vals = wide.loc[common, m].dropna()
+            if len(vals):
+                print(f"  {m:<12} {vals.mean():.4f}  (n={len(vals)})")
+
+    poly_failed = gnn_ok & ~poly_ok
+    if poly_failed.any():
+        print(f"\nGNN {primary_metric}: where Polyphest FAILED vs COMPLETED "
+              "(higher 'failed' => Polyphest skipped the harder networks):")
+        print(f"  polyphest-completed : {wide.loc[common, 'gnn'].mean():.4f} "
+              f"(n={int(common.sum())})")
+        print(f"  polyphest-failed    : {wide.loc[poly_failed, 'gnn'].mean():.4f} "
+              f"(n={int(poly_failed.sum())})")
+    print()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Join GNN benchmark scores with Polyphest/GRAMPA/GRAMPA-iter "
@@ -377,6 +416,7 @@ def main():
     print(f"\nWrote combined per-network table ({len(wide)} networks) to: {args.out}")
 
     print_summary(combined, args.config, args.metric)
+    print_common_subset(combined, args.config, args.metric)
 
 
 if __name__ == "__main__":
