@@ -49,16 +49,19 @@ def test_nested_events_compose_under_graft():
     assert _count(mul, "sp3") == 3
 
 
-def test_detach_mode_drops_nested_outer_event():
-    # The old detach mode tears sp3 out of {sp0,sp3}, so the outer event is dropped.
+def test_detach_mode_also_applies_nested_outer_event():
+    # Historically detach mode tore sp3 out of {sp0,sp3} and dropped the outer
+    # event. _find_node_by_leaf_set's superset fallback now recovers {sp0,sp3}
+    # after the inner graft, so detach mode ALSO applies the outer event (sp0 x2,
+    # dropped == 0), matching graft mode for this nested case.
     sp = Tree("(((sp0:1,sp3:1):1,(sp2:1,sp4:1):1):1,sp1:1);", format=1)
     events = [
         TwoParentEvent(frozenset({"sp0", "sp3"}), frozenset({"sp2", "sp4"}), frozenset({"sp1"}), 1.0),
         TwoParentEvent(frozenset({"sp3"}), frozenset({"sp0"}), frozenset({"sp2"}), 1.0),
     ]
     mul, dropped = build_mul_tree_two_parent(sp, events, return_dropped=True, mode="detach")
-    # sp0 stays at 1 copy because the {sp0,sp3} event could not be applied.
-    assert _count(mul, "sp0") == 1 or dropped >= 1
+    assert dropped == 0
+    assert _count(mul, "sp0") == 2
 
 
 def test_true_backbone_roundtrip_is_faithful():

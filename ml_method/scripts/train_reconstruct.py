@@ -138,7 +138,7 @@ def main():
     args = parser.parse_args()
 
     base_dir = os.path.join(os.path.dirname(__file__), "..")
-    config_path = args.config or os.path.join(base_dir, "configs", "reconstruct.yaml")
+    config_path = args.config or os.path.join(base_dir, "configs", "reconstruct_final.yaml")
     output_dir = args.output_dir or os.path.join(base_dir, "output", "reconstruct")
 
     with open(config_path) as f:

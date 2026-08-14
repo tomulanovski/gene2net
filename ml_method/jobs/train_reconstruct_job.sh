@@ -21,7 +21,7 @@ echo "==========================================================================
 echo "Reconstruction: WGD detection + partner-edge prediction"
 echo "============================================================================"
 echo "Data: ${DATA_DIR}"
-echo "Config: ${CONFIG:-${BASE_DIR}/configs/reconstruct.yaml}"
+echo "Config: ${CONFIG:-${BASE_DIR}/configs/reconstruct_final.yaml}"
 echo "Output: ${OUTPUT_DIR:-${BASE_DIR}/output/reconstruct}"
 echo "Device: $(python -c 'import torch; print("cuda" if torch.cuda.is_available() else "cpu")')"
 echo "Date: $(date)"
@@ -32,7 +32,7 @@ echo "==========================================================================
 
 python "${BASE_DIR}/scripts/train_reconstruct.py" \
     --data-dir ${DATA_DIR} \
-    --config "${CONFIG:-${BASE_DIR}/configs/reconstruct.yaml}" \
+    --config "${CONFIG:-${BASE_DIR}/configs/reconstruct_final.yaml}" \
     --output-dir "${OUTPUT_DIR:-${BASE_DIR}/output/reconstruct}" \
     ${INIT_FROM:+--init-from "$INIT_FROM"} \
     ${CLADE_LABELS:+--clade-labels} \

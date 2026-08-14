@@ -28,7 +28,7 @@ ${BASE_DIR}/data/mul_trees_2k/training/dup_loss_high_ne1M"
 DATA_DIR=""
 USE_GENERAL=false
 USE_ALL=false
-CONFIG="${BASE_DIR}/configs/reconstruct.yaml"
+CONFIG="${BASE_DIR}/configs/reconstruct_final.yaml"
 OUTPUT_DIR="${BASE_DIR}/output/reconstruct"
 INIT_FROM=""
 CLADE_LABELS=""

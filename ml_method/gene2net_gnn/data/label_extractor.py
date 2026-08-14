@@ -93,6 +93,18 @@ def decompose_mul_tree(mul_tree: Tree) -> List[WGDEvent]:
 
     Detects both autopolyploidy (identical sibling subtrees) and
     allopolyploidy (duplicate copies in distant locations).
+
+    LIMITATION (important): for allopolyploidy this emits one event PER SPECIES
+    (wgd_edge_clade = {species}), so a whole-clade allo event (e.g. the clade
+    {D,E} duplicated and grafted elsewhere) is fragmented into reciprocal per-tip
+    events ({D}->{E}, {E}->{D}) whose partners point at each other, not the true
+    external partner. This is NOT a bug that can be robustly fixed here: which
+    copy is the "home" vs the "grafted" one is inherently ambiguous from the
+    MUL-tree topology alone. For faithful, clade-level training labels use the
+    metadata path instead (gene2net_gnn.data.metadata_labels, i.e. the
+    --clade-labels / --away-labels sidecars), which reads the true events from
+    ground-truth metadata. This function feeds only the default packaging path
+    and diagnostics, never the final model's labels.
     """
     counts: Dict[str, int] = Counter(leaf.name for leaf in mul_tree.get_leaves())
     polyploids = {sp for sp, cnt in counts.items() if cnt > 1}

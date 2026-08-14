@@ -6,7 +6,7 @@ SQLite storage, no pruner, TPE sampler. Search space: conv_type, hidden_dim, dep
 dropout, lr, weight_decay. See docs/superpowers/specs/2026-08-09-hpo-learning-curve-design.md.
 
 Run one worker (a SLURM array launches several against the same study):
-  python scripts/optuna_reconstruct.py --data-dir <dir...> --config configs/reconstruct_oneparter.yaml \
+  python scripts/optuna_reconstruct.py --data-dir <dir...> --config configs/reconstruct_final.yaml \
       --study-name g2n_reconstruct --storage sqlite:///$PWD/optuna/g2n_reconstruct.db \
       --n-trials 13 --out-root output/optuna/g2n_reconstruct
 """

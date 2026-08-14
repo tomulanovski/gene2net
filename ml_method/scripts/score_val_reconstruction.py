@@ -125,6 +125,20 @@ Usage (final_project env):
         --model-config configs/reconstruct_final.yaml \
         --away-labels \
         --out-base output/reconstruct_final/val_recon
+
+Oracle ceiling (no model; builds from ground-truth metadata events instead):
+    # pure build-faithfulness floor: TRUE species tree + true events -> ~exact (~0).
+    python scripts/score_val_reconstruction.py \
+        [...same --data-dir / --model-config / --away-labels as above...] \
+        --events metadata --backbone true \
+        --out-base output/oracle_floor/true_bb
+    # realistic ceiling: true events on the REAL ASTRAL backbone (isolates the
+    # model's event-prediction error from ASTRAL backbone error).
+    python scripts/score_val_reconstruction.py [...] \
+        --events metadata --backbone sample \
+        --out-base output/oracle_floor/astral_bb
+    # then score either the same way (gene2net env):
+    #   python scripts/score_reconstructions.py --recon-dir <out-base>/bound_driven --workers 8
 """
 import argparse
 import os
@@ -147,6 +161,10 @@ from scripts.reconstruct_mul_tree import (
 from scripts.benchmark_networks import (
     build_for_strategy, build_for_strategy_two_parent,
 )
+# ORACLE mode (--events metadata): build from ground-truth events, no model.
+import json
+from gene2net_gnn.data.metadata_labels import events_from_metadata
+from gene2net_gnn.inference.mul_tree_builder import build_mul_tree
 
 # Seed for the (documented, deterministic) subsample of the val split taken for
 # speed. Separate from the seed-42 split shuffle so it never disturbs the split.
@@ -260,6 +278,18 @@ def config_from_dir(example_dir):
     return os.path.basename(os.path.normpath(os.path.dirname(example_dir)))
 
 
+def _newick_from_file(path):
+    """Extract a newick string from a .nex/.tre file (the first tree line if nexus)."""
+    txt = open(path).read().strip()
+    low = txt.lower()
+    if low.startswith("#nexus") or "begin trees" in low:
+        for line in txt.splitlines():
+            s = line.strip()
+            if s.lower().startswith("tree") and "=" in s:
+                return s.split("=", 1)[1].strip()
+    return txt
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Score a model's whole-network reconstruction on the "
@@ -290,6 +320,17 @@ def main():
                              "coclust would need real gene-tree topology, which is not "
                              "reconstructed from packaged samples.")
     parser.add_argument("--build-order", choices=["size", "confidence"], default="size")
+    parser.add_argument("--events", choices=["model", "metadata"], default="model",
+                        help="model: run the trained model (the real val-recon score). "
+                             "metadata: ORACLE — build from the ground-truth metadata "
+                             "events instead of the model, to measure the reconstruction "
+                             "ceiling. Pair with --backbone true for the pure build-"
+                             "faithfulness floor (expected ~0).")
+    parser.add_argument("--backbone", choices=["sample", "true"], default="sample",
+                        help="sample: build on the packaged (ASTRAL) species tree. "
+                             "true: build on the TRUE backbone (extract_backbone of the "
+                             "ground-truth MUL-tree). --backbone true + --events metadata "
+                             "isolates build faithfulness from ASTRAL topology error.")
     parser.add_argument("--threshold", type=float, default=0.9,
                         help="Passed through to the build; unused by bound_driven "
                              "(which is threshold-free).")
@@ -351,12 +392,18 @@ def main():
         selected = list(val_handles)
         print(f"Scoring all {len(selected)} val samples (<= max-samples).")
 
-    # ---- Load the model (one-partner vs two-parent inferred from checkpoint). ----
-    model = load_model(args.model_dir, model_config, args.device)
-    two_parent = getattr(model, "n_parents", 1) >= 2
-    build_fn = build_for_strategy_two_parent if two_parent else build_for_strategy
-    print(f"Decode: {'two-parent graft' if two_parent else 'one-partner'} "
-          f"(model n_parents={getattr(model, 'n_parents', 1)})")
+    # ---- Load the model (skipped entirely for the metadata oracle). ----
+    model = None
+    build_fn = None
+    if args.events == "model":
+        model = load_model(args.model_dir, model_config, args.device)
+        two_parent = getattr(model, "n_parents", 1) >= 2
+        build_fn = build_for_strategy_two_parent if two_parent else build_for_strategy
+        print(f"Decode: {'two-parent graft' if two_parent else 'one-partner'} "
+              f"(model n_parents={getattr(model, 'n_parents', 1)})")
+    else:
+        print(f"ORACLE: building from ground-truth metadata events "
+              f"(backbone={args.backbone}); model NOT loaded. Strategy is ignored.")
 
     # ---- Reload ONLY the selected samples, grouped by data dir (memory-light). ----
     from collections import defaultdict
@@ -382,31 +429,58 @@ def main():
                 skipped += 1
                 continue
 
-            # Backbone + clades + parent map + copy bound, all from the packaged sample.
-            astral_tree = ete3_from_sample(sample)
-            clades = preorder_edge_clades(astral_tree)
-            parent_edge = build_parent_edge_map(astral_tree)
-            copy_bound = infer_copy_bound(star_gene_trees_from_sample(sample))
+            if args.events == "metadata":
+                # ORACLE: build from the ground-truth metadata events, no model.
+                md_path = os.path.join(args.mul_trees_dir, f"metadata_{idx_str}.json")
+                if not os.path.exists(md_path):
+                    print(f"  SKIP {case_name}: metadata {md_path} missing")
+                    skipped += 1
+                    continue
+                with open(md_path) as f:
+                    events = events_from_metadata(json.load(f)["events"])
+                if args.backbone == "true":
+                    # TRUE species tree from the ground-truth species_tree_{idx}.nex —
+                    # the correct backbone (extract_backbone of the MUL-tree keeps an
+                    # arbitrary copy and is unreliable for allo). Isolates build
+                    # faithfulness from ASTRAL error (expected reconstruction ~exact).
+                    st_path = os.path.join(args.mul_trees_dir, f"species_tree_{idx_str}.nex")
+                    if not os.path.exists(st_path):
+                        print(f"  SKIP {case_name}: true species tree {st_path} missing")
+                        skipped += 1
+                        continue
+                    backbone = Tree(_newick_from_file(st_path), format=1)
+                else:
+                    backbone = ete3_from_sample(sample)   # ASTRAL backbone
+                mul_tree, n_dropped = build_mul_tree(
+                    backbone, events, return_dropped=True, order=args.build_order)
+                n_auto = sum(1 for e in events if e.partner_edge_clade == e.wgd_edge_clade)
+                n_allo = len(events) - n_auto
+            else:
+                # Backbone + clades + parent map + copy bound, all from the packaged sample.
+                astral_tree = ete3_from_sample(sample)
+                clades = preorder_edge_clades(astral_tree)
+                parent_edge = build_parent_edge_map(astral_tree)
+                copy_bound = infer_copy_bound(star_gene_trees_from_sample(sample))
 
-            # One model forward for the sample.
-            with torch.no_grad():
-                inputs = model_inputs_for(sample, args.device)
-                wgd_logits, edge_emb = model(**inputs)
-                wgd_prob = torch.softmax(wgd_logits, dim=-1)[:, 1]
-                pairwise_feat = build_pairwise_feat(sample)
-            wgd_list = wgd_prob.tolist()
+                # One model forward for the sample.
+                with torch.no_grad():
+                    inputs = model_inputs_for(sample, args.device)
+                    wgd_logits, edge_emb = model(**inputs)
+                    wgd_prob = torch.softmax(wgd_logits, dim=-1)[:, 1]
+                    pairwise_feat = build_pairwise_feat(sample)
+                wgd_list = wgd_prob.tolist()
 
-            # Fail loud if the model edges and the rebuilt-tree clades disagree.
-            if len(clades) != wgd_prob.shape[0]:
-                raise RuntimeError(
-                    f"{case_name}: clade count {len(clades)} != model edge count "
-                    f"{wgd_prob.shape[0]} — backbone/edge alignment broken.")
+                # Fail loud if the model edges and the rebuilt-tree clades disagree.
+                if len(clades) != wgd_prob.shape[0]:
+                    raise RuntimeError(
+                        f"{case_name}: clade count {len(clades)} != model edge count "
+                        f"{wgd_prob.shape[0]} — backbone/edge alignment broken.")
 
-            mul_tree, n_auto, n_allo, n_dropped = build_fn(
-                model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
-                args.strategy, args.threshold, parent_edge, copy_bound,
-                build_order=args.build_order,
-            )
+                mul_tree, n_auto, n_allo, n_dropped = build_fn(
+                    model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
+                    args.strategy, args.threshold, parent_edge, copy_bound,
+                    build_order=args.build_order,
+                )
 
             case_dir = os.path.join(out_strategy_dir, case_name)
             os.makedirs(case_dir, exist_ok=True)

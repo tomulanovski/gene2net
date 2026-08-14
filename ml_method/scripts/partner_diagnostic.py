@@ -77,7 +77,7 @@ def main():
     torch.manual_seed(42)
 
     base = os.path.join(os.path.dirname(__file__), "..")
-    cfg = args.model_config or os.path.join(base, "configs", "reconstruct.yaml")
+    cfg = args.model_config or os.path.join(base, "configs", "reconstruct_final.yaml")
     mc = yaml.safe_load(open(cfg)).get("model", {})
     edge_dim = int(mc.get("edge_feat_dim", 9))
     device = "cpu"

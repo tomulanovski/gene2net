@@ -1,30 +1,14 @@
 """MUL-tree build strategies from per-edge WGD + partner predictions.
 
 The model gives, per species-tree edge: a WGD probability and a partner
-distribution. Turning those into a MUL-tree involves choices about which edges
-become events. We expose several strategies so they can be validated against the
-reconstruction measures:
+distribution. Turning those into a MUL-tree involves choosing which edges become
+events. Two strategies are kept:
 
-  raw          - every flagged edge (prob >= threshold) is its own event (baseline).
-  collapse     - one event per connected block of flagged edges, at the block top
-                 (flagged edge whose parent edge is not flagged). Fixes
-                 over-fragmentation: a clade-spanning event becomes ONE clade
-                 duplication -> folds to one reticulation.
-  dedup        - drop any flagged edge whose clade is a strict subset of another
-                 flagged edge's clade, keeping only the most ancestral flagged
-                 edge in each containment hierarchy. Motivated by FP analysis:
-                 ~87% of false positives are tips sitting INSIDE a truly-
-                 duplicated (flagged) clade — redundant with the ancestral event.
-                 Unlike collapse this uses clade containment, not parent-
-                 adjacency, so it catches descendants even across an unflagged
-                 intermediate edge. More conservative than clade_collapse: it
-                 never invents an ancestral event or merges separate flagged edges.
-  dedup_cap    - dedup, then cap.
-  cap          - flagged edges, but cap duplications per species at the inferred
-                 copy bound (fixes genuine over-ploidy). Confidence-ordered.
-  collapse_cap - collapse, then cap.
+  cap          - flagged edges (prob >= threshold), but cap duplications per
+                 species at the inferred copy bound (fixes genuine over-ploidy).
+                 Confidence-ordered.
   bound_driven - no threshold: take edges in confidence order until each species
-                 reaches its copy bound. Removes the threshold knob.
+                 reaches its copy bound. Removes the threshold knob. (default)
 
 Event selection returns edge indices (preorder, non-root). Partners are computed
 afterward by the caller (needs the model + embeddings).
@@ -103,65 +87,18 @@ def select_event_edges(
 ) -> List[int]:
     """Return the edge indices that become WGD events under the given strategy."""
     n_edges = len(clades)
-    flagged = [i for i in range(n_edges) if float(wgd_probs[i]) >= threshold]
-    flagged_set = set(flagged)
-
-    if strategy == "raw":
-        return flagged
-
-    if strategy == "collapse":
-        # block tops: a flagged edge whose parent edge is not flagged
-        return [i for i in flagged if parent_edge[i] not in flagged_set]
-
-    if strategy in ("dedup", "dedup_cap"):
-        # Keep a flagged edge only if its clade is NOT a strict subset of another
-        # flagged edge's clade (i.e. drop redundant descendants like the tip flags
-        # inside a truly-duplicated clade). Containment-based, not parent-adjacency.
-        kept = [i for i in flagged
-                if not any(i != j and clades[i] < clades[j] for j in flagged)]
-        if strategy == "dedup_cap":
-            if copy_bound is None:
-                raise ValueError("dedup_cap strategy requires copy_bound")
-            kept = _cap(kept, wgd_probs, clades, copy_bound)
-        return kept
 
     if strategy == "cap":
         if copy_bound is None:
             raise ValueError("cap strategy requires copy_bound")
+        flagged = [i for i in range(n_edges) if float(wgd_probs[i]) >= threshold]
         return _cap(flagged, wgd_probs, clades, copy_bound)
-
-    if strategy == "collapse_cap":
-        if copy_bound is None:
-            raise ValueError("collapse_cap strategy requires copy_bound")
-        tops = [i for i in flagged if parent_edge[i] not in flagged_set]
-        return _cap(tops, wgd_probs, clades, copy_bound)
 
     if strategy == "bound_driven":
         if copy_bound is None:
             raise ValueError("bound_driven strategy requires copy_bound")
         return _cap(list(range(n_edges)), wgd_probs, clades, copy_bound)
 
-    if strategy in ("clade_collapse", "clade_collapse_cap"):
-        # The model flags individual polyploid species (tips). When a set of
-        # flagged tips forms a clade, the true event is one duplication at their
-        # common ancestor — so place a single event at the most ancestral edge
-        # whose clade is entirely flagged. Greedy maximal-clade cover: take the
-        # largest all-flagged clade edges first; remaining flagged tips stay as
-        # their own events.
-        flagged_species = set()
-        for i in flagged:
-            flagged_species |= clades[i]
-        candidates = [i for i in range(n_edges) if clades[i] <= flagged_species]
-        candidates.sort(key=lambda i: -len(clades[i]))  # largest clades first
-        selected, covered = [], set()
-        for i in candidates:
-            if not (clades[i] & covered):
-                selected.append(i)
-                covered |= clades[i]
-        if strategy == "clade_collapse_cap":
-            if copy_bound is None:
-                raise ValueError("clade_collapse_cap strategy requires copy_bound")
-            selected = _cap(selected, wgd_probs, clades, copy_bound)
-        return selected
-
-    raise ValueError(f"Unknown strategy: {strategy}")
+    raise ValueError(
+        f"Unknown strategy: {strategy!r}. Supported: 'bound_driven', 'cap'."
+    )
