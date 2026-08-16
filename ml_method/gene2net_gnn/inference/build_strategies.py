@@ -9,6 +9,11 @@ events. Two strategies are kept:
                  Confidence-ordered.
   bound_driven - no threshold: take edges in confidence order until each species
                  reaches its copy bound. Removes the threshold knob. (default)
+  detect       - detection-driven, multiset as a SOFT prior (a floor, not a cap):
+                 fill to the copy bound, then ADD any edge the detection head is
+                 confident about (prob >= threshold) beyond that bound. Recovers
+                 events fractionation deleted from the copy count, which
+                 bound_driven and cap cannot (they never exceed the bound).
 
 Event selection returns edge indices (preorder, non-root). Partners are computed
 afterward by the caller (needs the model + embeddings).
@@ -99,6 +104,21 @@ def select_event_edges(
             raise ValueError("bound_driven strategy requires copy_bound")
         return _cap(list(range(n_edges)), wgd_probs, clades, copy_bound)
 
+    if strategy == "detect":
+        # Multiset as a SOFT prior: fill to the copy bound (the baseline ploidy),
+        # then ADD any edge the detection head is confident about beyond that bound.
+        # threshold controls how sure a detection must be to exceed the ploidy
+        # estimate; tune it on the validation split. Under fractionation the bound
+        # collapses so `base` is small and the confident detections do the work,
+        # recovering events a ploidy-only method (Polyphest) structurally cannot.
+        if copy_bound is None:
+            raise ValueError("detect strategy requires copy_bound")
+        base = _cap(list(range(n_edges)), wgd_probs, clades, copy_bound)
+        base_set = set(base)
+        extra = [i for i in range(n_edges)
+                 if float(wgd_probs[i]) >= threshold and i not in base_set]
+        return base + extra
+
     raise ValueError(
-        f"Unknown strategy: {strategy!r}. Supported: 'bound_driven', 'cap'."
+        f"Unknown strategy: {strategy!r}. Supported: 'bound_driven', 'cap', 'detect'."
     )
