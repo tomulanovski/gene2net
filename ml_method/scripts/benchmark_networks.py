@@ -90,6 +90,23 @@ def load_gene_trees(path, max_trees=500):
     return trees
 
 
+def copy_bound_from_multiset(multiset_path, inv_map):
+    """Polyphest's EXACT ploidy input: read its multi_set.txt so our decode uses the
+    identical per-species copy numbers Polyphest was fed, instead of our own
+    infer_copy_bound. This removes the ploidy-estimator confound from the comparison.
+
+    multi_set.txt lists one species per line, duplicate lines meaning extra copies,
+    so Counter(lines) is species -> copies. The multiset uses ORIGINAL names, while
+    this benchmark works in the substring-fixed (replacement) names; inv_map is
+    replacement->original, so we invert it to rename original->replacement.
+    """
+    from collections import Counter
+    forward = {orig: repl for repl, orig in inv_map.items()}   # original -> replacement
+    with open(multiset_path) as f:
+        names = [line.strip() for line in f if line.strip()]
+    return dict(Counter(forward.get(n, n) for n in names))
+
+
 def build_for_strategy(model, astral_tree, clades, wgd_list, edge_emb, pairwise_feat,
                        strategy, threshold, parent_edge, copy_bound, polyploid_species=None,
                        build_order="size"):
@@ -170,6 +187,11 @@ def main():
                              "inserting clades by support).")
     parser.add_argument("--strategies", default="bound_driven,cap",
                         help="comma-separated build strategies to generate (bound_driven, cap)")
+    parser.add_argument("--copy-bound", choices=["infer", "multiset"], default="infer",
+                        help="infer: our infer_copy_bound (majority consensus over gene trees). "
+                             "multiset: read Polyphest's exact ploidy from its per-replicate "
+                             "polyphest_input/.../multi_set.txt, so the comparison isolates "
+                             "placement rather than the ploidy estimator.")
     parser.add_argument("--model-config", default=None)
     parser.add_argument("--sim-base",
                         default="/groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations")
@@ -284,7 +306,17 @@ def main():
         )
         clades = preorder_edge_clades(astral_tree)
         parent_edge = build_parent_edge_map(astral_tree)
-        copy_bound = infer_copy_bound(gene_trees)
+        if args.copy_bound == "multiset":
+            ms_path = os.path.join(rep_dir.replace("grampa_input", "polyphest_input"),
+                                   "multi_set.txt")
+            if not os.path.exists(ms_path):
+                print(f"  ERROR {net}: --copy-bound multiset but {ms_path} missing "
+                      "-- skipping this network, continuing.")
+                errored += 1
+                continue
+            copy_bound = copy_bound_from_multiset(ms_path, inv_map)
+        else:
+            copy_bound = infer_copy_bound(gene_trees)
         prof["feat"] += time.perf_counter() - _t
 
         # One inference pass for the network.
