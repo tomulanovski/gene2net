@@ -223,7 +223,7 @@ def main():
     print(f"Decode: {'two-parent graft' if two_parent else 'one-partner'} "
           f"(model n_parents={getattr(model, 'n_parents', 1)})")
 
-    done = skipped = 0
+    done = skipped = errored = 0
     total_dropped = {}
     prof = {"feat": 0.0, "fwd": 0.0, "build": 0.0, "n": 0, "n_gt": 0}
     # under-shoot accounting over polyploid species (inferred bound >= 2)
@@ -240,8 +240,17 @@ def main():
             skipped += 1
             continue
 
-        gene_trees = load_gene_trees(gene_trees_path, args.max_gene_trees)
-        astral_tree = Tree(open(astral_path).read().strip(), format=1)
+        # One malformed input tree must not kill the whole run. Report it loudly and
+        # continue so the other networks still produce output. This is not a silent
+        # skip: the network and error are printed and counted in the final summary.
+        try:
+            gene_trees = load_gene_trees(gene_trees_path, args.max_gene_trees)
+            astral_tree = Tree(open(astral_path).read().strip(), format=1)
+        except Exception as e:
+            print(f"  ERROR {net}: could not parse inputs "
+                  f"({type(e).__name__}: {e}) -- skipping this network, continuing.")
+            errored += 1
+            continue
         species_list = sorted(set(astral_tree.get_leaf_names()))
 
         inv_map = load_inverse_taxa_map(os.path.join(rep_dir, "taxa_map.txt"))
@@ -374,7 +383,8 @@ def main():
         print("  is real headroom. If most reach the bound, the edit gap is placement, not count.")
         print("=" * 60)
 
-    print(f"\nDone: {done} networks x {len(strategies)} strategies, {skipped} skipped.")
+    print(f"\nDone: {done} networks x {len(strategies)} strategies, "
+          f"{skipped} skipped (missing inputs), {errored} errored (unparseable inputs).")
     if any(total_dropped.values()):
         print("Silently-dropped events (clade unfindable after earlier grafts): "
               + ", ".join(f"{s}={n}" for s, n in total_dropped.items()))
