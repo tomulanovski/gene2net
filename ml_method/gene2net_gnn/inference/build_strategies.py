@@ -14,6 +14,10 @@ events. Two strategies are kept:
                  confident about (prob >= threshold) beyond that bound. Recovers
                  events fractionation deleted from the copy count, which
                  bound_driven and cap cannot (they never exceed the bound).
+  detect_only  - ploidy-independent: events are exactly the edges with prob >=
+                 threshold, with no copy bound at all. The analogue of iterative
+                 GRAMPA using reconciliation instead of an inferred ploidy. Robust to
+                 fractionation, but over-predicts on clean data without a cap.
 
 Event selection returns edge indices (preorder, non-root). Partners are computed
 afterward by the caller (needs the model + embeddings).
@@ -64,6 +68,53 @@ def infer_copy_bound(gene_trees) -> Dict[str, int]:
                 b = k
                 break
         bound[s] = max(b, 1)
+    return bound
+
+
+def _representative_copy_number(copy_distribution, kernel_width: int = 2) -> int:
+    """Kernel-smoothed representative copy number, robust to occasional duplication
+    and loss. Faithful reimplementation of the triangular-kernel estimator used to
+    build the inferred-ploidy multiset. One distinct value returns it; two return the
+    more frequent; three or more smooth with a triangular kernel and take the peak."""
+    sorted_counts = sorted(copy_distribution.items())
+    if len(sorted_counts) == 1:
+        return sorted_counts[0][0]
+    if len(sorted_counts) == 2:
+        return sorted_counts[0][0] if sorted_counts[0][1] >= sorted_counts[1][1] else sorted_counts[1][0]
+    copy_numbers = [num for num, _ in sorted_counts]
+    frequencies = [freq for _, freq in sorted_counts]
+    smoothed = {}
+    for center in copy_numbers:
+        for j, copy_num in enumerate(copy_numbers):
+            distance = abs(center - copy_num)
+            if distance <= kernel_width:
+                weight = 1 - (distance / (kernel_width + 1))
+                smoothed[center] = smoothed.get(center, 0) + frequencies[j] * weight
+    max_smoothed = 0
+    representative = copy_numbers[0]
+    for copy_num, val in smoothed.items():
+        if val > max_smoothed:
+            max_smoothed = val
+            representative = copy_num
+    return representative
+
+
+def infer_copy_bound_kernel(gene_trees, kernel_width: int = 2) -> Dict[str, int]:
+    """Per-species copy bound via kernel-smoothed estimation of the gene-tree copy
+    distribution. Self-contained ploidy inference for the method: for each species,
+    count its copies in every gene tree (0 when absent), smooth that distribution with
+    a triangular kernel, and take the peak. More robust to occasional duplication and
+    loss than the majority-consensus infer_copy_bound. Minimum 1."""
+    per_tree = [collections.Counter(leaf.name for leaf in gt.get_leaves()) for gt in gene_trees]
+    species = set()
+    for c in per_tree:
+        species.update(c.keys())
+    bound = {}
+    for s in species:
+        dist = collections.Counter()
+        for c in per_tree:
+            dist[c.get(s, 0)] += 1
+        bound[s] = max(_representative_copy_number(dist, kernel_width), 1)
     return bound
 
 
@@ -119,6 +170,15 @@ def select_event_edges(
                  if float(wgd_probs[i]) >= threshold and i not in base_set]
         return base + extra
 
+    if strategy == "detect_only":
+        # Ploidy-INDEPENDENT: events are exactly the edges the detection head is
+        # confident about, with no copy-number bound anywhere. This is the analogue of
+        # iterative GRAMPA relying on reconciliation rather than an inferred ploidy, so
+        # it is robust when fractionation destroys the copy count. It has no ploidy cap,
+        # so it can over-predict on clean data. Tune threshold on the validation split.
+        return [i for i in range(n_edges) if float(wgd_probs[i]) >= threshold]
+
     raise ValueError(
-        f"Unknown strategy: {strategy!r}. Supported: 'bound_driven', 'cap', 'detect'."
+        f"Unknown strategy: {strategy!r}. Supported: 'bound_driven', 'cap', 'detect', "
+        "'detect_only'."
     )

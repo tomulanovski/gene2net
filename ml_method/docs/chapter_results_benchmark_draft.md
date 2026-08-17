@@ -80,5 +80,7 @@ conditions and runs in seconds where Polyphest can take days and sometimes does 
 Polyphest is more accurate at low and moderate difficulty, where inferring ploidy from clean
 simulations is easy and the copy-number-dominated edit distance rewards it, but the method
 overtakes Polyphest at high duplication and loss, where ploidy inference breaks. The remaining
-gap at the easier conditions is copy number and placement, which the diagnostic traces to event
-prediction rather than to the backbone.
+gap at the easier conditions is copy number and placement. The diagnostic traces the method's
+edit distance to the ASTRAL backbone and not to event prediction, which the model already predicts
+as well as an oracle allows. On the benchmark a further part of the gap is distribution shift from
+the simulated training networks to the empirical ones.

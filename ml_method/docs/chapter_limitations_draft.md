@@ -9,8 +9,8 @@ The central limitation of the method is structural and is established directly b
 section. The reconstruction is built by stamping events onto a fixed ASTRAL backbone and never
 rearranges that backbone, so every backbone error is inherited by the final network. Under an
 oracle that supplies the true events with their true parents, placing them on the ASTRAL
-backbone still leaves an edit distance above 0.54, while placing the same events on the true
-backbone reaches 0.11. No detector and no placement head can cross that gap, because the method
+backbone still leaves an edit distance of about 0.37, while placing the same events on the true
+backbone reaches about 0.09. No detector and no placement head can cross that gap, because the method
 does not rebuild the backbone. This is why better detection, better thresholds, and better event
 selection do not move edit distance, and it is the frame for everything below.
 

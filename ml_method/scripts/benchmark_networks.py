@@ -29,7 +29,7 @@ from gene2net_gnn.inference.mul_tree_builder import (
     build_mul_tree, WGDEvent, build_mul_tree_two_parent, TwoParentEvent,
 )
 from gene2net_gnn.inference.build_strategies import (
-    select_event_edges, build_parent_edge_map, infer_copy_bound,
+    select_event_edges, build_parent_edge_map, infer_copy_bound, infer_copy_bound_kernel,
 )
 from scripts.reconstruct_mul_tree import (
     load_model, model_inputs_for, preorder_edge_clades, build_pairwise_feat,
@@ -187,11 +187,10 @@ def main():
                              "inserting clades by support).")
     parser.add_argument("--strategies", default="bound_driven,cap",
                         help="comma-separated build strategies to generate (bound_driven, cap)")
-    parser.add_argument("--copy-bound", choices=["infer", "multiset"], default="infer",
-                        help="infer: our infer_copy_bound (majority consensus over gene trees). "
-                             "multiset: read Polyphest's exact ploidy from its per-replicate "
-                             "polyphest_input/.../multi_set.txt, so the comparison isolates "
-                             "placement rather than the ploidy estimator.")
+    parser.add_argument("--copy-bound", choices=["kernel", "infer", "multiset"], default="kernel",
+                        help="kernel: the method's own kernel-smoothed ploidy from the gene trees "
+                             "(default). infer: majority-consensus infer_copy_bound (ablation). "
+                             "multiset: read Polyphest's exact multi_set.txt (bit-exact parity).")
     parser.add_argument("--model-config", default=None)
     parser.add_argument("--sim-base",
                         default="/groups/itay_mayrose/tomulanovski/gene2net/simulations/simulations")
@@ -315,6 +314,8 @@ def main():
                 errored += 1
                 continue
             copy_bound = copy_bound_from_multiset(ms_path, inv_map)
+        elif args.copy_bound == "kernel":
+            copy_bound = infer_copy_bound_kernel(gene_trees)
         else:
             copy_bound = infer_copy_bound(gene_trees)
         prof["feat"] += time.perf_counter() - _t
