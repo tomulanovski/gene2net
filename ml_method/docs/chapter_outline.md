@@ -23,9 +23,10 @@ always completes, and robust where copy-number methods break. Not accuracy supre
    - Architecture: ASTRAL backbone, GAT trunk, detection head + one-partner partner head.
    - Ploidy: the method's own kernel-smoothed copy-number inference. [UPDATE: describe
      kernel smoothing, not the old majority consensus.]
-   - Decode: the spectrum on a ploidy-dependence axis — `bound_driven` (trusts ploidy),
-     `detect` (ploidy as a soft floor), `detect_only` (ploidy-independent). [WRITE: this
-     is new and central; pull the mechanics from build_strategies docstrings.]
+   - Decode: two modes on a ploidy-dependence axis — ploidy-informed (`bound_driven`,
+     copy number as a ceiling) and ploidy-free (`detect_only`, no ploidy at all), selected
+     by whether a trusted copy-number list exists. [DRAFTED: `chapter_decode_draft.md`.
+     Still needs the calibrated ploidy-free threshold from the val sweep.]
    - Training: away-parent labels, the one-parter head. [confirm HPO-final config.]
 
 3. **Experimental setup.** Source: `chapter_setup_draft` (CURRENT).
@@ -71,7 +72,8 @@ always completes, and robust where copy-number methods break. Not accuracy supre
 
 - Current and ready: setup, diagnostic, retention, feature-importance, partner-limitation.
 - Fixed, ready: results-benchmark (table + runtime), limitations.
-- To write new: introduction, decode-spectrum subsection, future-work, conclusion.
+- Drafted: decode two-mode subsection (`chapter_decode_draft.md`).
+- To write new: introduction, future-work, conclusion.
 - To fill with numbers: 4a and 4e finalized 5-replicate kernel-ploidy numbers; the 4b
   runtime table (sacct wall times + --profile).
 
