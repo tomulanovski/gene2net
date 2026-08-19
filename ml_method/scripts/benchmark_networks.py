@@ -291,7 +291,7 @@ def main():
             rooted = False
             if os.path.exists(gt_path):
                 try:
-                    gt_tree = Tree(open(gt_path).read().strip(), format=1)
+                    gt_tree = Tree(open(gt_path, encoding='utf-8').read().strip(), format=1)
                     rooted = root_at_reference(astral_tree, gt_tree, name_map=forward)
                 except Exception:
                     rooted = False
@@ -338,7 +338,7 @@ def main():
         # bound the 'cap' strategy uses to limit events.
         if args.ploidy_oracle and os.path.exists(gt_path):
             try:
-                gt_counts = Counter(Tree(open(gt_path).read().strip(), format=1).get_leaf_names())
+                gt_counts = Counter(Tree(open(gt_path, encoding='utf-8').read().strip(), format=1).get_leaf_names())
                 true_bound = {s: gt_counts.get(inv_map.get(s, s), 1) for s in copy_bound}
                 n_diff = sum(1 for s in copy_bound if true_bound[s] != copy_bound[s])
                 n_inflated = sum(1 for s in copy_bound if copy_bound[s] > true_bound[s])
@@ -378,7 +378,7 @@ def main():
             os.makedirs(case_dir, exist_ok=True)
             mul_tree.write(outfile=os.path.join(case_dir, "output.tre"), format=9)
             if os.path.exists(gt_path):
-                with open(gt_path) as f:
+                with open(gt_path, encoding='utf-8') as f:
                     gt = f.read()
                 with open(os.path.join(case_dir, "ground_truth.nex"), "w") as f:
                     f.write(gt)

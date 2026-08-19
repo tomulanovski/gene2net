@@ -53,7 +53,7 @@ def test_standard_mu_vectors_match_reference(path):
     Our path counts must equal the reference's. Compared as a sorted multiset
     of vectors, since node identities differ between the two representations.
     """
-    rt = ReticulateTree(open(path).read().strip(), is_multree=True)
+    rt = ReticulateTree(open(path, encoding='utf-8').read().strip(), is_multree=True)
     reference = as_reference(rt)
 
     ours = sorted(tuple(v) for v in rt._mu_path_counts(rt.dag)[0].values())

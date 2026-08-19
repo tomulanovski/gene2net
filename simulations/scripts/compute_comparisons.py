@@ -35,11 +35,11 @@ def _compare_in_subprocess(gt_path, inf_path, method, single_ret_methods):
         # resolution level as every method whose output is a MUL-tree, rather
         # than being penalised for committing to an event ordering that no
         # MUL-tree determines. MUL-tree input is unaffected.
-        with open(gt_path, 'r') as f:
+        with open(gt_path, 'r', encoding='utf-8') as f:
             gt_newick = f.read().strip()
         gt_tree = ReticulateTree(gt_newick, refold=True)
 
-        with open(inf_path, 'r') as f:
+        with open(inf_path, 'r', encoding='utf-8') as f:
             inf_newick = f.read().strip()
         inf_tree = ReticulateTree(inf_newick, refold=True)
 
@@ -114,26 +114,26 @@ class ComparisonEngine:
         except Exception:
             return False
 
-    def load_network(self, path: str, is_multree: bool = False) -> Optional[ReticulateTree]:
+    def load_network(self, path: str, is_multree: bool = False) -> ReticulateTree:
         """
-        Load network from file using ReticulateTree
+        Load network from file using ReticulateTree.
 
-        Args:
-            path: Path to network file
-            is_multree: If True, treat as MUL-tree and convert to network
+        encoding is explicit because ground truth taxa may carry accents and a
+        cluster with no locale set would otherwise read them as ASCII and raise.
 
-        Returns:
-            ReticulateTree object or None if failed
+        refold=True only affects input that arrives as a network rather than a
+        MUL-tree, which in practice means MPAllopp's extended Newick. It is
+        unfolded and refolded with Holm so every method is compared at the same
+        resolution level. MUL-tree input is unaffected.
+
+        Raises rather than returning None, so the caller reports the actual
+        reason instead of a bare "failed to load".
         """
-        try:
-            with open(path, 'r') as f:
-                newick_str = f.read().strip()
+        with open(path, 'r', encoding='utf-8') as f:
+            newick_str = f.read().strip()
 
-            # ReticulateTree handles format detection and MUL-tree conversion
-            tree = ReticulateTree(newick_str)
-            return tree
-        except Exception as e:
-            return None
+        # ReticulateTree handles format detection and MUL-tree conversion
+        return ReticulateTree(newick_str, refold=True)
 
     def compare_pair(self, gt_path: str, inf_path: str, network: str,
                     method: str) -> Dict:
@@ -150,22 +150,15 @@ class ComparisonEngine:
             Dictionary with comparison results or error info
         """
         try:
-            # Load networks
-            gt_tree = self.load_network(gt_path)
-            if gt_tree is None:
-                return {
-                    'status': 'ERROR',
-                    'error': f'Failed to load ground truth: {gt_path}',
-                    'metrics': None
-                }
-
-            inf_tree = self.load_network(inf_path, is_multree=True)
-            if inf_tree is None:
-                return {
-                    'status': 'ERROR',
-                    'error': f'Failed to load inferred network: {inf_path}',
-                    'metrics': None
-                }
+            # Load networks. A failure raises and is caught below with its reason.
+            try:
+                gt_tree = self.load_network(gt_path)
+            except Exception as e:
+                raise RuntimeError(f'Failed to load ground truth {gt_path}: {e}') from e
+            try:
+                inf_tree = self.load_network(inf_path, is_multree=True)
+            except Exception as e:
+                raise RuntimeError(f'Failed to load inferred network {inf_path}: {e}') from e
 
             # Run comparison using existing tool
             partial_match = method in SINGLE_RETICULATION_METHODS

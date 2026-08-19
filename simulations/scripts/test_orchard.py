@@ -111,12 +111,12 @@ def test_ground_truth_orchard_status_is_as_recorded(path):
     and that has to be reported rather than quietly scored.
     """
     name = os.path.basename(path).replace('.tre', '')
-    rt = ReticulateTree(open(path).read().strip(), is_multree=True)
+    rt = ReticulateTree(open(path, encoding='utf-8').read().strip(), is_multree=True)
     assert rt.is_orchard() is (name not in NOT_ORCHARD)
 
 
 def test_most_ground_truths_are_orchard():
     """Guards against a regression that would silently flip many networks."""
-    statuses = [ReticulateTree(open(p).read().strip(), is_multree=True).is_orchard()
+    statuses = [ReticulateTree(open(p, encoding='utf-8').read().strip(), is_multree=True).is_orchard()
                 for p in sorted(glob.glob(str(NETWORKS_DIR / '*.tre')))]
     assert sum(statuses) == 14 and len(statuses) == 21

@@ -56,7 +56,7 @@ from scripts.benchmark_networks import (
 def true_copies_from_gt(gt_path, forward):
     """Per-species true copy count from the ground-truth MUL-tree, renamed from
     original to the substring-fixed (replacement) names via forward."""
-    t = Tree(open(gt_path).read().strip(), format=1)
+    t = Tree(open(gt_path, encoding='utf-8').read().strip(), format=1)
     c = Counter(t.get_leaf_names())
     return {forward.get(name, name): cnt for name, cnt in c.items()}
 

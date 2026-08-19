@@ -113,10 +113,9 @@ def test_unnormalized_distance_is_a_whole_count():
 @requires_reference
 @pytest.mark.parametrize('path', sorted(glob.glob(str(NETWORKS_DIR / '*.tre'))),
                          ids=lambda p: os.path.basename(p).replace('.tre', ''))
-@requires_reference
 def test_ground_truth_has_zero_self_distance(path):
     """Every real ground truth must be at distance 0 from itself."""
-    newick = open(path).read().strip()
+    newick = open(path, encoding='utf-8').read().strip()
     assert tree(newick).get_mu_distance(tree(newick)) == 0.0
 
 
@@ -168,7 +167,6 @@ def test_mu_vector_of_root_is_the_copy_number_vector():
 @requires_reference
 @pytest.mark.parametrize('path', sorted(glob.glob(str(NETWORKS_DIR / '*.tre'))),
                          ids=lambda p: os.path.basename(p).replace('.tre', ''))
-@requires_reference
 def test_distance_is_independent_of_newick_child_order(path):
     """
     Characterisation test for a property the metric has by construction, and
@@ -185,7 +183,7 @@ def test_distance_is_independent_of_newick_child_order(path):
     import random
     from ete3 import Tree
 
-    newick = open(path).read().strip()
+    newick = open(path, encoding='utf-8').read().strip()
     shuffled = Tree(newick, format=1)
     rnd = random.Random(1)
     for node in shuffled.traverse():
