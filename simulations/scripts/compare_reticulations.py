@@ -266,6 +266,11 @@ def compare_mu(obj1, obj2):
     '''
     mu-distance columns for one pair.
 
+    Only the normalized distance is reported, since that is the one comparable
+    across networks of different sizes. The published unnormalized count stays
+    available as get_mu_distance(normalize=False); reporting both doubled the
+    cost because each call rebuilds both representations.
+
     A pair on mismatched taxa, or whose networks fall outside the semi-binary
     stack-free class of Theorem 1, cannot be scored. Raising would discard the
     other metrics for that pair, which are still valid, so instead the distance
@@ -285,9 +290,8 @@ def compare_mu(obj1, obj2):
     '''
     try:
         return {
-            'mu_distance':     obj1.get_mu_distance(obj2, normalize=True),
-            'mu_distance_raw': obj1.get_mu_distance(obj2, normalize=False),
-            'mu_scored':       1.0,
+            'mu_distance': obj1.get_mu_distance(obj2, normalize=True),
+            'mu_scored':   1.0,
         }
     except ValueError as exc:
         reason = str(exc)
@@ -297,9 +301,8 @@ def compare_mu(obj1, obj2):
             warnings.warn(f'mu-distance not computed for at least one pair: {reason}',
                           RuntimeWarning, stacklevel=2)
         return {
-            'mu_distance':     float('nan'),
-            'mu_distance_raw': float('nan'),
-            'mu_scored':       0.0,
+            'mu_distance': float('nan'),
+            'mu_scored':   0.0,
         }
 
 
@@ -327,7 +330,6 @@ def pairwise_compare(obj1, obj2, df=None, partial_match=False):
             # and in ReticulateTree, so it can be switched back on for comparison.
             # 'edit_distance':            row1['object'] - row2['object'],  # Old: on folded networks
             # 'edit_distance_multree':    row1['object'].get_edit_distance_multree(row2['object']),  # on MUL-trees
-            'rf_distance':              row1['object'].get_rf_distance(row2['object']),  # NEW: RF on MUL-trees
             'num_rets_diff':            num_rets_comparison['abs'],  # Absolute difference (backward compatible)
             'num_rets_bias':            num_rets_comparison['signed'],  # NEW: Signed difference (bias)
             'ploidy_diff':              compare_ploidy_diff(row1['leaf_counts'], row2['leaf_counts']),
@@ -352,7 +354,6 @@ def pairwise_compare(obj1, obj2, df=None, partial_match=False):
         # approximation, and cannot depend on Newick child order. Kept here,
         # and in ReticulateTree, so it can be switched back on for comparison.
         # 'edit_distance_multree':    obj1.get_edit_distance_multree(obj2),  # edit distance on MUL-trees
-        'rf_distance':              obj1.get_rf_distance(obj2),  # NEW: Robinson-Foulds on MUL-trees
         'num_rets_diff':            num_rets_comparison['abs'],  # Absolute difference (backward compatible)
         'num_rets_bias':            num_rets_comparison['signed'],  # NEW: Signed difference (bias)
         'ploidy_diff':              compare_ploidy_diff(obj1.get_leaf_counts(), obj2.get_leaf_counts()),

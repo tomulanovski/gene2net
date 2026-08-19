@@ -5,7 +5,7 @@ The GNN benchmark (scripts/benchmark_networks.py -> scripts/score_reconstruction
 emits ONLY the GNN's own scores, one CSV per build strategy:
     <out-base>/<strategy>/reconstruction_scores.csv
 with columns:
-    sample, edit_distance_multree, rf_distance, num_rets_diff,
+    sample, mu_distance, mu_scored, num_rets_diff,
     ret_leaf_jaccard, ret_sisters_jaccard, ploidy_diff
 Here `sample` IS the network name (benchmark_networks.py writes one dir per
 network), and there is no `config` column (the config is fixed by the run).
@@ -33,7 +33,7 @@ Metric-name reconciliation (CONFIRMED): the GNN CSV stores the Jaccard/ploidy
 *distance* under the bare column name (score_reconstructions.py extracts
 comp[metric]['dist']), whereas the competitor long table stores it as
 '<metric>.dist' (e.g. ret_leaf_jaccard.dist) alongside .TP/.FP/.FN rows. Scalar
-metrics (edit_distance_multree, rf_distance, num_rets_diff) share the same name
+metrics (mu_distance, num_rets_diff) share the same name
 on both sides. The `jaccard_mode` column (partial vs standard) tags which
 scoring convention was used; in the observed data each (network, method,
 replicate, metric) appears exactly once, so no de-duplication across modes is
@@ -88,7 +88,7 @@ JACCARD_METRICS = {"ret_leaf_jaccard", "ret_sisters_jaccard", "ploidy_diff"}
 EXTRA_METRICS = ["ret_leaf_jaccard", "ret_sisters_jaccard"]
 
 # Friendly short suffix for the primary edit-distance metric in column names.
-METRIC_SHORT = {"edit_distance_multree": "edit"}
+METRIC_SHORT = {"mu_distance": "mu"}
 
 
 def short_name(metric):
@@ -370,8 +370,8 @@ def main():
                              "simulations/analysis/summary/<config>/comparisons_raw.csv")
     parser.add_argument("--config", required=True, help="e.g. conf_ils_low_10M")
     parser.add_argument("--out", required=True, help="output combined per-network CSV")
-    parser.add_argument("--metric", default="edit_distance_multree",
-                        help="primary comparison metric (default: edit_distance_multree)")
+    parser.add_argument("--metric", default="mu_distance",
+                        help="primary comparison metric (default: mu_distance)")
     parser.add_argument("--exclude-networks", default=",".join(DEFAULT_EXCLUDE),
                         help="comma-separated networks to drop (clean-config "
                              f"restriction). Default: {','.join(DEFAULT_EXCLUDE)}")

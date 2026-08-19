@@ -40,7 +40,7 @@ def tree(newick):
 @requires_reference
 def test_pairwise_compare_reports_mu_columns():
     metrics = pairwise_compare(tree(HEXAPLOID), tree(HEXAPLOID))
-    assert {'mu_distance', 'mu_distance_raw', 'mu_scored'} <= set(metrics)
+    assert {'mu_distance', 'mu_scored'} <= set(metrics)
 
 
 @requires_reference
@@ -58,7 +58,6 @@ def test_edit_distance_is_no_longer_reported():
 def test_identical_networks_score_zero_and_ok():
     metrics = pairwise_compare(tree(HEXAPLOID), tree(HEXAPLOID))
     assert metrics['mu_distance'] == 0.0
-    assert metrics['mu_distance_raw'] == 0.0
     assert metrics['mu_scored'] == 1.0
 
 
@@ -70,9 +69,15 @@ def test_different_networks_score_above_zero():
 
 
 @requires_reference
-def test_raw_distance_is_the_published_unnormalized_count():
+def test_only_the_normalized_distance_is_reported():
+    """
+    One distance column. The unnormalized published count stays reachable via
+    get_mu_distance(normalize=False) for ad hoc checks, but reporting both
+    doubled the cost since each call rebuilds both representations.
+    """
     metrics = pairwise_compare(tree(HEXAPLOID), tree(TETRAPLOID))
-    raw = metrics['mu_distance_raw']
+    assert 'mu_distance_raw' not in metrics
+    raw = tree(HEXAPLOID).get_mu_distance(tree(TETRAPLOID), normalize=False)
     assert raw == int(raw) and raw > metrics['mu_distance']
 
 
@@ -83,8 +88,8 @@ def test_mismatched_taxa_report_a_reason_without_losing_other_metrics():
     assert math.isnan(metrics['mu_distance'])
     assert metrics['mu_scored'] == 0.0
     # the rest of the comparison is unaffected and still reported
-    assert metrics['rf_distance'] is not None
-    assert 'num_rets_diff' in metrics
+    assert metrics['num_rets_diff'] is not None
+    assert 'ploidy_diff' in metrics
 
 
 @requires_reference
@@ -136,3 +141,14 @@ def test_scored_flag_aggregates_to_a_success_fraction():
     rows = [pairwise_compare(tree(HEXAPLOID), tree(HEXAPLOID))['mu_scored'],
             pairwise_compare(tree(HEXAPLOID), tree(RENAMED))['mu_scored']]
     assert pd.Series(rows).mean() == 0.5
+
+
+@requires_reference
+def test_rf_distance_is_no_longer_reported():
+    """
+    Removed entirely. It was never used, and get_rf_distance built clades with
+    frozenset, which collapses duplicate labels and destroys exactly the
+    copy-number signal that matters for polyploids.
+    """
+    assert 'rf_distance' not in pairwise_compare(tree(HEXAPLOID), tree(HEXAPLOID))
+    assert not hasattr(tree(HEXAPLOID), 'get_rf_distance')

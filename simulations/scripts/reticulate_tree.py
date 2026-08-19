@@ -1339,54 +1339,6 @@ class ReticulateTree:
 
         return distance
 
-    def get_rf_distance(self, other: 'ReticulateTree', normalize=True) -> float:
-        '''
-        Compute Robinson-Foulds distance for MUL-trees.
-
-        RF distance counts bipartitions (splits) that differ between trees.
-        Works correctly with duplicated leaf labels (polyploid species).
-
-        Args:
-            other: Another ReticulateTree instance
-            normalize: If True, normalize by maximum possible RF distance
-
-        Returns:
-            RF distance between the two MUL-trees
-        '''
-        def get_bipartitions(tree_obj):
-            """
-            Extract all bipartitions from a tree.
-            Each bipartition is a frozenset of leaf names on one side of an edge.
-            """
-            bipartitions = set()
-
-            for node in tree_obj.tree.traverse():
-                if not node.is_leaf() and not node.is_root():
-                    # Get all leaf names in this subtree
-                    leaves = frozenset(leaf.name for leaf in node.get_leaves())
-                    # Only add non-trivial bipartitions (more than 1 leaf)
-                    if len(leaves) > 1:
-                        bipartitions.add(leaves)
-
-            return bipartitions
-
-        # Get bipartitions from both trees
-        bp1 = get_bipartitions(self)
-        bp2 = get_bipartitions(other)
-
-        # RF distance = symmetric difference (splits unique to each tree)
-        unique_to_1 = bp1 - bp2
-        unique_to_2 = bp2 - bp1
-        rf_distance = len(unique_to_1) + len(unique_to_2)
-
-        if normalize:
-            # Maximum possible RF = sum of all bipartitions in both trees
-            max_rf = len(bp1) + len(bp2)
-            if max_rf > 0:
-                rf_distance = rf_distance / max_rf
-
-        return rf_distance
-
     def __sub__(self, other: 'ReticulateTree') -> float:
         '''
         Overriding the minus operator to compute the edit distance between two ReticulateTree instances.

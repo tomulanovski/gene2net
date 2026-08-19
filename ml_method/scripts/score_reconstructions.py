@@ -29,7 +29,7 @@ import pandas as pd
 # itself disabled it in pairwise_compare's object path). We use edit_distance_multree
 # (edit distance on the MUL-trees) + rf_distance instead, plus the reticulation
 # metrics, which are cheap and never hang -> all 21 networks score, every config.
-METRICS = ["edit_distance_multree", "rf_distance", "num_rets_diff",
+METRICS = ["mu_distance", "mu_scored", "num_rets_diff",
            "ret_leaf_jaccard", "ret_sisters_jaccard", "ploidy_diff"]
 
 # Set by each worker (and the parent) so the comparison imports resolve.
@@ -85,13 +85,19 @@ def score_one(task):
         comp = pairwise_compare(rt_gt, rt_inf, partial_match=partial_match)
         row = {"sample": name}
         for m in METRICS:
-            v = comp.get(m)
+            # A metric that pairwise_compare no longer returns must be a loud
+            # failure. Coercing the absence to NaN would leave a column that
+            # looks scored but is empty for every row.
+            if m not in comp:
+                raise KeyError(
+                    f"pairwise_compare did not return {m!r}. Available: "
+                    f"{sorted(comp)}. Update METRICS if the metric was renamed "
+                    "or removed."
+                )
+            v = comp[m]
             if isinstance(v, dict):
-                v = v.get("dist")  # Jaccard/ploidy metrics return {'dist','TP'}
-            try:
-                row[m] = float(v)
-            except (TypeError, ValueError):
-                row[m] = float("nan")
+                v = v["dist"]  # Jaccard/ploidy metrics return {'dist','TP'}
+            row[m] = float(v)
         return row
     except Exception as e:
         return {"sample": name, "error": f"{type(e).__name__}: {e}"}

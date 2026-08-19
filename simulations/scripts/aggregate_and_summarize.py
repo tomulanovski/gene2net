@@ -99,8 +99,8 @@ class MultiLevelSummary:
         # Define metrics to generate pivot tables for
         # PRIMARY METRICS (MUL-tree based)
         metrics_to_pivot = {
-            'edit_distance_multree': 'edit_distance_multree',  # PRIMARY: MUL-tree edit distance
-            'rf_distance': 'rf_distance',  # PRIMARY: RF distance on MUL-trees
+            'mu_distance': 'mu_distance',  # PRIMARY: modified mu-distance on folded networks
+            'mu_scored': 'mu_scored',  # fraction of pairs the metric could score
             'num_rets_diff': 'num_rets_diff',
             'num_rets_bias': 'num_rets_bias',  # Signed difference (bias)
             'ploidy_diff.dist': 'ploidy_diff',
@@ -152,7 +152,7 @@ class MultiLevelSummary:
         # Metrics to rank (lower is better for distances)
         # PRIMARY METRICS first, then secondary
         # Note: num_rets_bias is NOT ranked (it's signed, not an error magnitude)
-        distance_metrics = ['edit_distance_multree', 'rf_distance',
+        distance_metrics = ['mu_distance',
                            'num_rets_diff', 'ploidy_diff.dist',
                            'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist']
 
@@ -262,7 +262,7 @@ class MultiLevelSummary:
 
         # Focus on main distance metrics (bias is signed, not a distance metric for correlation)
         # PRIMARY METRICS first
-        main_metrics = ['edit_distance_multree', 'rf_distance',  # PRIMARY MUL-tree metrics
+        main_metrics = ['mu_distance',  # PRIMARY: modified mu-distance
                        'num_rets_diff', 'num_rets_bias']
 
         for method in merged['method'].unique():
