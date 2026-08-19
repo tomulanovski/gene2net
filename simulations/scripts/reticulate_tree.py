@@ -18,13 +18,15 @@ _WARN_MALFORMED_RETIC = os.environ.get("RETICULATE_WARN_MALFORMED") == "1"
 
 class ReticulateTree:
 
-    def __init__(self, input_data, is_multree=False, threshold=None, normalize=None):
+    def __init__(self, input_data, is_multree=False, threshold=None, normalize=None,
+                 refold=False):
         self.tree = None
         self.tree_str = None
         self.dag = None
         self.retnodes = None
         self.threshold = threshold
         self.normalize = normalize
+        self.refold = refold
 
         input_type = self._determine_input_type(input_data)
 
@@ -75,9 +77,25 @@ class ReticulateTree:
             self.dag = self.tree_to_dag(self.tree)
 
     def _init_from_dag(self, dag):
-        self.dag = dag
-        self.tree = self.__class__.dag_to_multree(self.dag, match_dag=True)
+        '''
+        Take a network that arrives already folded, such as extended Newick.
+
+        With refold=True the network is unfolded to the MUL-tree it exhibits
+        and folded again with Holm, which maps any binary resolution back onto
+        the canonical N(T). Huber et al. 2006 prove a minimal binary network
+        exhibiting a MUL-tree is a resolution of N(T), so this compares such a
+        network at the same resolution level as every method whose output is a
+        MUL-tree, instead of penalising it for committing to an event ordering
+        that no MUL-tree determines.
+
+        Off by default. get_modified_mu_representation rebuilds a
+        ReticulateTree around a suppressed graph, and refolding there would
+        silently change the metric.
+        '''
+        self.tree = self.__class__.dag_to_multree(dag, match_dag=True)
         self.tree_str = self.tree.write(format=1)
+        self.dag = (self.__class__.multree_to_dag(self.tree, strict=True)
+                    if self.refold else dag)
         
     def check_duplicated(self):
         ''' Check if the tree has duplicated labels (i.e., multiple leaves with the same name). '''
@@ -1015,6 +1033,309 @@ class ReticulateTree:
             )
             if normalization > 0:
                 distance /= normalization
+
+        return distance
+
+    def _mu_taxa(self, G=None):
+        '''
+        Sorted taxon labels of the folded network's leaves.
+
+        The mu-representation indexes its vectors by taxon, so the network must
+        carry exactly one leaf per taxon. Folding collapses the MUL-tree copies,
+        so this holds for a correctly folded network and a violation means the
+        network is not a valid comparison target.
+        '''
+        G = self.dag if G is None else G
+        labels = [G.nodes[n].get('label') for n, d in G.out_degree() if d == 0]
+        if any(label is None for label in labels):
+            raise ValueError('Network has an unlabeled leaf; cannot index mu-vectors by taxon.')
+        if len(labels) != len(set(labels)):
+            duplicated = sorted({x for x in labels if labels.count(x) > 1})
+            raise ValueError(
+                f'Network has repeated leaf labels {duplicated}; the mu-representation '
+                'requires one leaf per taxon. Was this folded?'
+            )
+        return sorted(labels)
+
+    @staticmethod
+    def _suppress_elision_nodes(G):
+        '''
+        Drop nodes with in-degree 1 and out-degree 1.
+
+        Folding can leave these behind. They carry no phylogenetic information,
+        and semi-binary requires every internal tree node to have out-degree 2,
+        so they must go before the class preconditions or the representation
+        are evaluated.
+        '''
+        H = G.copy()
+        changed = True
+        while changed:
+            changed = False
+            for node in list(H.nodes()):
+                if H.in_degree(node) == 1 and H.out_degree(node) == 1:
+                    parent = next(H.predecessors(node))
+                    child = next(H.successors(node))
+                    H.remove_node(node)
+                    if parent != child:
+                        H.add_edge(parent, child)
+                    changed = True
+                    break
+        return H
+
+    def _mu_network(self):
+        '''The folded network in the form the mu-representation is defined on.'''
+        return self._suppress_elision_nodes(self.dag)
+
+    def _check_mu_preconditions(self, G, label='network'):
+        '''
+        Enforce the hypotheses of Theorem 1 of arXiv:2412.05107.
+
+        Raises rather than returning a number the theorem does not licence. A
+        network outside the class can share its representation with a
+        non-isomorphic one, so a distance of 0 would not mean what it appears
+        to mean.
+        '''
+        reticulations = {u for u, d in G.in_degree() if d >= 2}
+
+        stacked = [(p, c) for p, c in G.edges()
+                   if p in reticulations and c in reticulations]
+        if stacked:
+            raise ValueError(
+                f'The {label} is not stack-free: {len(stacked)} reticulation(s) are '
+                'children of reticulations. Theorem 1 of the modified '
+                'mu-representation does not apply, so no distance is reported.'
+            )
+
+        offending = []
+        for node in G.nodes():
+            in_degree, out_degree = G.in_degree(node), G.out_degree(node)
+            if out_degree == 0:
+                if in_degree != 1:
+                    offending.append((in_degree, out_degree))
+            elif node in reticulations:
+                if out_degree != 1:
+                    offending.append((in_degree, out_degree))
+            elif out_degree != 2:
+                offending.append((in_degree, out_degree))
+        if offending:
+            raise ValueError(
+                f'The {label} is not semi-binary: {len(offending)} node(s) violate the '
+                f'degree constraints, e.g. (in,out) = {offending[:5]}. Tree nodes must '
+                'have out-degree 2 and reticulations out-degree 1.'
+            )
+
+    @staticmethod
+    def _suppress_node(G, node):
+        '''Bypass a node left with one parent and one child, or a stalled root.'''
+        if node not in G:
+            return
+        if G.in_degree(node) == 1 and G.out_degree(node) == 1:
+            parent = next(G.predecessors(node))
+            child = next(G.successors(node))
+            G.remove_node(node)
+            if parent != child:
+                G.add_edge(parent, child)
+        elif G.in_degree(node) == 0 and G.out_degree(node) == 1:
+            G.remove_node(node)
+
+    @classmethod
+    def _pick_reducible_pair(cls, G):
+        '''
+        Pick one cherry or reticulated cherry from G, reducing it in place.
+
+        A cherry is two leaves sharing a parent. A reticulated cherry is a leaf
+        whose parent is a reticulation that is itself a child of the parent of
+        another leaf. Returns the pair of leaf labels, or None if neither
+        exists, in which case the reduction is stuck.
+        '''
+        leaves = [n for n, d in G.out_degree() if d == 0]
+
+        by_parent = defaultdict(list)
+        for leaf in leaves:
+            if G.in_degree(leaf) == 1:
+                by_parent[next(G.predecessors(leaf))].append(leaf)
+        for parent, siblings in by_parent.items():
+            if len(siblings) >= 2:
+                removed, kept = siblings[0], siblings[1]
+                pair = (G.nodes[removed].get('label'), G.nodes[kept].get('label'))
+                G.remove_node(removed)
+                cls._suppress_node(G, parent)
+                return pair
+
+        reticulations = {n for n, d in G.in_degree() if d >= 2}
+        for leaf in leaves:
+            if G.in_degree(leaf) != 1:
+                continue
+            reticulation = next(G.predecessors(leaf))
+            if reticulation not in reticulations:
+                continue
+            for parent in list(G.predecessors(reticulation)):
+                partners = [c for c in G.successors(parent)
+                            if c != reticulation and G.out_degree(c) == 0]
+                if not partners:
+                    continue
+                pair = (G.nodes[leaf].get('label'), G.nodes[partners[0]].get('label'))
+                G.remove_edge(parent, reticulation)
+                cls._suppress_node(G, reticulation)
+                cls._suppress_node(G, parent)
+                return pair
+
+        return None
+
+    def orchard_certificate(self):
+        '''
+        Try to reduce the network to a single leaf by cherry picking.
+
+        Returns (True, sequence) when it succeeds, where sequence is the list of
+        picked pairs and therefore a certificate that the network is orchard.
+        Returns (False, None) when the reduction gets stuck.
+
+        The search is greedy. A success is a proof because the sequence is
+        exhibited. A failure is only a proof if cherry picking is confluent for
+        this class, so treat (False, None) as "no certificate found" rather than
+        as established non-orchard.
+        '''
+        G = self._mu_network()
+        sequence = []
+        while True:
+            leaves = [n for n, d in G.out_degree() if d == 0]
+            if len(leaves) <= 1:
+                return True, sequence
+            pair = self.__class__._pick_reducible_pair(G)
+            if pair is None:
+                return False, None
+            sequence.append(pair)
+
+    def is_orchard(self):
+        '''True when a cherry picking sequence reducing the network was found.'''
+        return self.orchard_certificate()[0]
+
+    def get_modified_mu_representation(self):
+        '''
+        Modified mu-representation, Definition 1 of arXiv:2412.05107.
+
+            mu-bar(v) = ( in_degree(v), mu_1(v), ..., mu_n(v) )
+
+        where mu_i(v) counts directed paths from v to leaf i. The multiset runs
+        over ALL nodes, reticulations included.
+
+        This is not the extended mu-representation of Cardona et al. 2024. That
+        one prepends the number of paths to a reticulation instead of the
+        in-degree, excludes reticulation nodes, and encodes only BINARY orchard
+        networks. Figure 1 of arXiv:2412.05107 exhibits two non-isomorphic
+        semi-binary stack-free networks sharing an extended mu-representation,
+        and MUL-tree folding produces semi-binary networks, so the extended
+        form is not sound here.
+
+        The mu-vectors themselves come from the authors' `phylonetwork`
+        package, so the path counts are the published implementation. Making
+        them semi-binary ready needs only the in-degree prepended, which the
+        package already exposes. Ours is the suppression of degree-2 nodes that
+        semi-binary requires, the class preconditions, and the distance.
+        '''
+        G = self._mu_network()
+        self._check_mu_preconditions(G)
+
+        try:
+            import phylonetwork
+        except ImportError as exc:
+            raise ImportError(
+                'The mu-vectors are computed by the phylonetwork reference '
+                'implementation (Cardona et al.), which is not installed. '
+                'Install it with: pip install phylonetwork==2.2.2'
+            ) from exc
+
+        network = phylonetwork.PhylogeneticNetwork(
+            eNewick=self.__class__(G).to_enewick()
+        )
+        return [tuple([network.in_degree(u)] + [int(x) for x in network.mu_dict[u]])
+                for u in network.nodes()]
+
+    def _mu_path_counts(self, G):
+        '''
+        Standard mu-vector of every node: mu_i(v) counts paths from v to leaf i.
+
+        Nodes are visited in reverse topological order so every child is
+        complete before its parent.
+        '''
+        taxa = self._mu_taxa(G)
+        position = {taxon: i for i, taxon in enumerate(taxa)}
+
+        vectors = {}
+        for node in reversed(list(nx.topological_sort(G))):
+            vector = [0] * len(taxa)
+            for child in G.successors(node):
+                child_vector = vectors[child]
+                for i in range(len(taxa)):
+                    vector[i] += child_vector[i]
+            if G.out_degree(node) == 0:
+                vector[position[G.nodes[node]['label']]] += 1
+            vectors[node] = vector
+
+        return vectors, taxa
+
+    def get_mu_root_vector(self):
+        '''
+        Taxa and the root's per-taxon path counts.
+
+        mu_i(root) counts root-to-leaf-i paths, which equals the number of
+        copies of taxon i in the MUL-tree, so this is the copy-number (ploidy)
+        vector of the network.
+        '''
+        G = self._mu_network()
+        vectors, taxa = self._mu_path_counts(G)
+        root = self.__class__.get_dag_root(G)
+        return taxa, tuple(vectors[root])
+
+    def get_mu_distance(self, other: 'ReticulateTree', normalize=True) -> float:
+        '''
+        Extended mu-distance between two folded networks.
+
+        d(N1, N2) = |mu-bar(N1) symmetric-difference mu-bar(N2)|, Theorem 1 of
+        arXiv:2412.05107: for N1 semi-binary stack-free orchard and N2
+        semi-binary stack-free, this is 0 exactly when N1 and N2 are isomorphic.
+
+        Uses the MODIFIED mu-representation, which prepends each node's
+        in-degree to its standard mu-vector and ranges over all nodes. The
+        extended mu-representation of Cardona et al. 2024, which the
+        phylonetwork package implements, encodes only BINARY orchard networks
+        and is not sound on the semi-binary networks MUL-tree folding produces.
+        Our standard mu-vectors are cross-checked against that package.
+
+        Networks outside the semi-binary stack-free class, and pairs on
+        different taxon sets, raise rather than returning a number the theorem
+        does not licence.
+
+        With normalize=True the count is divided by the total number of
+        mu-vectors, giving a value in [0, 1] that can be averaged across
+        networks of different sizes.
+        '''
+        network_self = self._mu_network()
+        network_other = other._mu_network()
+        self._check_mu_preconditions(network_self, 'first network')
+        other._check_mu_preconditions(network_other, 'second network')
+
+        taxa_self = self._mu_taxa(network_self)
+        taxa_other = other._mu_taxa(network_other)
+        if taxa_self != taxa_other:
+            only_self = sorted(set(taxa_self) - set(taxa_other))
+            only_other = sorted(set(taxa_other) - set(taxa_self))
+            raise ValueError(
+                'Cannot compute mu-distance between networks on different taxa. '
+                f'Only in first: {only_self}. Only in second: {only_other}.'
+            )
+
+        mu_self = self.get_modified_mu_representation()
+        mu_other = other.get_modified_mu_representation()
+        set_self, set_other = set(mu_self), set(mu_other)
+        distance = float(sum(1 for vector in mu_self + mu_other
+                             if vector not in set_self or vector not in set_other))
+
+        if normalize:
+            normalization = len(mu_self) + len(mu_other)
+            if normalization == 0:
+                raise ValueError('Both networks have empty mu-representations.')
+            distance /= normalization
 
         return distance
 

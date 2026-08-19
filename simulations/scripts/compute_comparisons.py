@@ -29,13 +29,19 @@ from compare_reticulations import pairwise_compare, SINGLE_RETICULATION_METHODS
 def _compare_in_subprocess(gt_path, inf_path, method, single_ret_methods):
     """Module-level function for multiprocessing (must be picklable)."""
     try:
+        # refold=True only bites on input that arrives as a network rather than
+        # a MUL-tree, which in practice means MPAllopp's extended Newick. It is
+        # unfolded and refolded with Holm so it is compared at the same
+        # resolution level as every method whose output is a MUL-tree, rather
+        # than being penalised for committing to an event ordering that no
+        # MUL-tree determines. MUL-tree input is unaffected.
         with open(gt_path, 'r') as f:
             gt_newick = f.read().strip()
-        gt_tree = ReticulateTree(gt_newick)
+        gt_tree = ReticulateTree(gt_newick, refold=True)
 
         with open(inf_path, 'r') as f:
             inf_newick = f.read().strip()
-        inf_tree = ReticulateTree(inf_newick)
+        inf_tree = ReticulateTree(inf_newick, refold=True)
 
         partial_match = method in single_ret_methods
         metrics = pairwise_compare(gt_tree, inf_tree, partial_match=partial_match)

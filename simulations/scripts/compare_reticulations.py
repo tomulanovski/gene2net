@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -256,6 +257,52 @@ def match_and_compare(leaves1, leaves2, sisters1=None, sisters2=None, precompute
 
     return totals
 
+# Distinct mu precondition failures already reported, so a run warns once per
+# reason instead of thousands of times for the same cause.
+_MU_REPORTED = set()
+
+
+def compare_mu(obj1, obj2):
+    '''
+    mu-distance columns for one pair.
+
+    A pair on mismatched taxa, or whose networks fall outside the semi-binary
+    stack-free class of Theorem 1, cannot be scored. Raising would discard the
+    other metrics for that pair, which are still valid, so instead the distance
+    is NaN and mu_scored is 0.0.
+
+    Every value returned here must be numeric. Metrics land in a long-format
+    'value' column that aggregate_replicates runs mean/std/min/max over, and a
+    string there raises TypeError and takes the whole summary down. That is why
+    the reason is emitted as a warning rather than returned as a column.
+
+    mu_scored exists so the loss is countable: its mean over a group is the
+    fraction of pairs that could be scored, which appears in every summary
+    table. Without it a mean over mu_distance would quietly skip the failures
+    and only n_valid would record them.
+
+    Only precondition failures are caught. Anything else propagates.
+    '''
+    try:
+        return {
+            'mu_distance':     obj1.get_mu_distance(obj2, normalize=True),
+            'mu_distance_raw': obj1.get_mu_distance(obj2, normalize=False),
+            'mu_scored':       1.0,
+        }
+    except ValueError as exc:
+        reason = str(exc)
+        key = reason.split('.')[0]
+        if key not in _MU_REPORTED:
+            _MU_REPORTED.add(key)
+            warnings.warn(f'mu-distance not computed for at least one pair: {reason}',
+                          RuntimeWarning, stacklevel=2)
+        return {
+            'mu_distance':     float('nan'),
+            'mu_distance_raw': float('nan'),
+            'mu_scored':       0.0,
+        }
+
+
 def pairwise_compare(obj1, obj2, df=None, partial_match=False):
     '''
     Compare two ReticulateTree objects (or their cached rows in df).
@@ -274,8 +321,12 @@ def pairwise_compare(obj1, obj2, df=None, partial_match=False):
         num_rets_comparison = compare_num_rets(row1['reticulation_count'], row2['reticulation_count'])
 
         return {
-            'edit_distance':            row1['object'] - row2['object'],  # Old: on folded networks
-            'edit_distance_multree':    row1['object'].get_edit_distance_multree(row2['object']),  # NEW: on MUL-trees
+            # Superseded by mu_distance below. The mu-representation is a metric on
+            # semi-binary stack-free orchard networks, is exact rather than an
+            # approximation, and cannot depend on Newick child order. Kept here,
+            # and in ReticulateTree, so it can be switched back on for comparison.
+            # 'edit_distance':            row1['object'] - row2['object'],  # Old: on folded networks
+            # 'edit_distance_multree':    row1['object'].get_edit_distance_multree(row2['object']),  # on MUL-trees
             'rf_distance':              row1['object'].get_rf_distance(row2['object']),  # NEW: RF on MUL-trees
             'num_rets_diff':            num_rets_comparison['abs'],  # Absolute difference (backward compatible)
             'num_rets_bias':            num_rets_comparison['signed'],  # NEW: Signed difference (bias)
@@ -286,6 +337,7 @@ def pairwise_compare(obj1, obj2, df=None, partial_match=False):
             'ret_sisters_jaccard':      match_and_compare(row1['reticulation_leaves'], row2['reticulation_leaves'],
                                         row1['reticulation_sisters'], row2['reticulation_sisters'], precomputed,
                                         partial_match=partial_match),
+            **compare_mu(row1['object'], row2['object']),
         }
     # object-based comparison
     precomputed = run_hungarian_on_groups(obj1.get_reticulation_leaves().values(), obj2.get_reticulation_leaves().values())
@@ -295,7 +347,11 @@ def pairwise_compare(obj1, obj2, df=None, partial_match=False):
 
     return {
         # 'edit_distance':            obj1 - obj2,  # Disabled: GED on folded networks is NP-hard, hangs on large trees
-        'edit_distance_multree':    obj1.get_edit_distance_multree(obj2),  # edit distance on MUL-trees
+        # Superseded by mu_distance below. The mu-representation is a metric on
+        # semi-binary stack-free orchard networks, is exact rather than an
+        # approximation, and cannot depend on Newick child order. Kept here,
+        # and in ReticulateTree, so it can be switched back on for comparison.
+        # 'edit_distance_multree':    obj1.get_edit_distance_multree(obj2),  # edit distance on MUL-trees
         'rf_distance':              obj1.get_rf_distance(obj2),  # NEW: Robinson-Foulds on MUL-trees
         'num_rets_diff':            num_rets_comparison['abs'],  # Absolute difference (backward compatible)
         'num_rets_bias':            num_rets_comparison['signed'],  # NEW: Signed difference (bias)
@@ -306,6 +362,7 @@ def pairwise_compare(obj1, obj2, df=None, partial_match=False):
         'ret_sisters_jaccard':      match_and_compare(obj1.get_reticulation_leaves(), obj2.get_reticulation_leaves(),
                                         obj1.get_reticulation_sisters(), obj2.get_reticulation_sisters(), precomputed,
                                         partial_match=partial_match),
+        **compare_mu(obj1, obj2),
     }
 
 def are_identical(obj1, obj2):
