@@ -1245,9 +1245,28 @@ class ReticulateTree:
                 'Install it with: pip install phylonetwork==2.2.2'
             ) from exc
 
+        # phylonetwork indexes mu-vectors by every node LABEL, not only leaves,
+        # so an internal node carrying a name would add a coordinate. Vectors of
+        # two networks would then have different widths, no tuple could compare
+        # equal, and the distance would pin at exactly 1.0 while the taxon guard,
+        # which looks at leaves only, saw nothing wrong. Strip them.
+        stripped = G.copy()
+        for node in stripped.nodes():
+            if stripped.out_degree(node) != 0:
+                stripped.nodes[node].pop('label', None)
+
         network = phylonetwork.PhylogeneticNetwork(
-            eNewick=self.__class__(G).to_enewick()
+            eNewick=self.__class__(stripped).to_enewick()
         )
+
+        taxa = self._mu_taxa(G)
+        if sorted(network.taxa) != taxa:
+            raise ValueError(
+                'Taxa seen by the reference implementation do not match the leaf '
+                f'labels of the network. Leaves: {taxa}. Reference: '
+                f'{sorted(network.taxa)}. The mu-vectors would be misaligned.'
+            )
+
         return [tuple([network.in_degree(u)] + [int(x) for x in network.mu_dict[u]])
                 for u in network.nodes()]
 

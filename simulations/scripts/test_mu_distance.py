@@ -206,3 +206,27 @@ def test_mu_vectors_require_the_reference_implementation(monkeypatch):
     monkeypatch.setitem(sys.modules, 'phylonetwork', None)
     with pytest.raises(ImportError, match='phylonetwork'):
         tree(HEXAPLOID).get_modified_mu_representation()
+
+
+@requires_reference
+def test_internal_node_names_do_not_affect_the_distance():
+    """
+    Regression. phylonetwork indexes mu-vectors by every node LABEL, not only
+    leaves, so a network whose internal nodes carry names produced longer
+    vectors. No tuple could then compare equal and the distance pinned at
+    exactly 1.0 while the taxon guard, which looks at leaves only, saw nothing
+    wrong. That is how mpsugar scored 1.0000 on every network.
+    """
+    plain = ReticulateTree("((A,X),(B,X));", is_multree=True)
+    named = ReticulateTree("((A,X)ancestor1,(B,X)ancestor2);", is_multree=True)
+
+    assert plain._mu_taxa() == named._mu_taxa()
+    assert plain.get_mu_distance(named) == 0.0
+
+
+@requires_reference
+def test_vector_width_is_one_plus_the_leaf_taxa():
+    """The only coordinates are the in-degree and one per leaf taxon."""
+    rt = ReticulateTree("((A,X)ancestor1,(B,X)ancestor2);", is_multree=True)
+    width = len(rt._mu_taxa()) + 1
+    assert all(len(v) == width for v in rt.get_modified_mu_representation())
