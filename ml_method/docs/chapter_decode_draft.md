@@ -59,7 +59,7 @@ The alternative is to force each species to exactly its copy number, adding even
 count is met whether or not the model supports them. We tested this forcing. It recovers the copy
 number by construction, so it scores well on the copy-number measures, but it places the forced
 copies on edges where the detection head has no support, and those arbitrary placements raise the
-edit distance and the reticulation-sister error. Forcing the exact count therefore buys the
+mu-distance and the reticulation-sister error. Forcing the exact count therefore buys the
 copy-number measures at the cost of the topology, and the cost is the larger one. The ceiling
 declines to invent placements it cannot justify, which is why it is the published behavior.
 
@@ -93,7 +93,7 @@ We publish a single default and expose the threshold as a configurable option, w
 standard treatment of an operating point. The default is calibrated on the held-out validation
 split rather than chosen a priori. We reconstruct the validation networks with the ploidy-free
 decode across a range of thresholds and score them on the reconstruction metric, and we take the
-threshold that minimizes the validation edit distance as the default. The calibration uses only
+threshold that minimizes the validation mu-distance as the default. The calibration uses only
 networks the model was selected on and never trained on, so it does not leak into the benchmark.
 The same sweep is reported as a sensitivity analysis, so that the reader can see the result is not
 fragile to the exact value. [FILL: the calibrated default and the sensitivity curve from the

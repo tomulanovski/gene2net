@@ -3,22 +3,28 @@
 DRAFT for the thesis. Prose style follows the thesis convention of no semicolons, no
 non-mathematical parentheses, and no em-dashes.
 
+**[PENDING mu re-run]** The oracle floor and ceiling quoted below (about 0.09 and 0.37) are
+edit-distance values and must be replaced by the mu-distance values from `jobs/val_oracle_mu.sh`.
+The "backbone is the binding limitation" claim itself is inherited from the diagnostic and must be
+re-confirmed under mu before this section is final.
+
 ## The backbone is the binding limitation
 
 The central limitation of the method is structural and is established directly by the diagnostic
 section. The reconstruction is built by stamping events onto a fixed ASTRAL backbone and never
 rearranges that backbone, so every backbone error is inherited by the final network. Under an
 oracle that supplies the true events with their true parents, placing them on the ASTRAL
-backbone still leaves an edit distance of about 0.37, while placing the same events on the true
-backbone reaches about 0.09. No detector and no placement head can cross that gap, because the method
-does not rebuild the backbone. This is why better detection, better thresholds, and better event
-selection do not move edit distance, and it is the frame for everything below.
+backbone still leaves a mu-distance of about 0.37 [PENDING mu value], while placing the same events
+on the true backbone reaches about 0.09 [PENDING mu value]. No detector and no placement head can
+cross that gap, because the method does not rebuild the backbone. This is why better detection,
+better thresholds, and better event selection do not move the reconstruction distance, and it is
+the frame for everything below.
 
 ## Placement is bounded by the same backbone
 
 Placement of the second parent looked like an independent weakness, but it reduces to the same
 cause. Hand-crafted features do not improve it. A defect in the training target does, and
-repairing the target raises partner accuracy and improves ploidy and edit distance on the
+repairing the target raises partner accuracy and improves ploidy and mu-distance on the
 benchmark, but the improvement is modest and does not generalize to the finer reticulation
 measures. The reason is that the correct parent is well-defined only when ASTRAL places the
 polyploid coherently, and undefined when it does not. The residual placement error and the

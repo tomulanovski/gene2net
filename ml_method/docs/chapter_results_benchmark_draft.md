@@ -1,86 +1,103 @@
-# Results: detection and comparison to baselines
+# Results: comparison to baselines
 
 DRAFT for the thesis. Prose style follows the thesis convention of no semicolons, no
-non-mathematical parentheses, and no em-dashes. Edit distance is the canonical multi-labeled-tree
-edit distance, so it does not depend on Newick child order. Lower is better for every distance.
-The method here is the final one, namely the one-partner model with the away-parent labels and
-the fill-to-inferred-ploidy build. Items marked TODO are to confirm before submission. GNN scores
-are over all 21 networks. The competitor columns are over the 15 to 18 networks each competitor
-completes, so the competitor means are taken on the subset each can finish.
+non-mathematical parentheses, and no em-dashes. The headline metric is the normalized
+mu-distance, a distance on the folded network that does not depend on Newick child order and
+equals zero exactly when two networks are isomorphic. Lower is better for every distance. The
+learned method appears in its two decode modes, ploidy-informed and ploidy-free. Every method
+infers its own ploidy from the gene trees, so Polyphest here is the inferred-ploidy variant and
+the comparison is prior-free on both sides. Scores are the mean over five replicates. The learned
+method is scored on all 21 networks. Each competitor mean is over the networks that competitor
+completes, which is fewer, so the two sides are also compared on the common subset.
 
-## Detection
+## The benchmark
 
-The whole genome duplication detector reaches an F1 of about 0.80 on the held-out validation
-split. [TODO confirm precision and recall from the training log.] Detection is deliberately
-recall-oriented, because the fill-to-inferred-ploidy build reaches each species' inferred copy
-number from the ranked candidate events rather than from a hard probability threshold, so a
-moderately confident true event is still used.
+We compare against the GRAMPA family and Polyphest on the 21 benchmark networks. The six
+discordance configurations are shown first, namely three levels of incomplete lineage sorting and
+three rates of duplication and loss at a fixed effective population size of one million. The two
+other effective population sizes and the fractionation configurations follow and confirm the same
+pattern. The table reports mean mu-distance.
 
-## Reconstruction benchmark
-
-We compare against three baselines on the 21 benchmark networks across all six configurations.
-All four methods infer ploidy from the gene trees, so the comparison is between prior-free
-methods on equal inputs. The table reports mean edit distance.
-
-| Configuration | GNN | Polyphest | GRAMPA | GRAMPA-iter |
+| Configuration | GNN informed | GNN free | Polyphest | GRAMPA-iter |
 | --- | --- | --- | --- | --- |
-| ils_low | 0.573 | 0.065 | 0.682 | 0.681 |
-| ils_medium | 0.571 | 0.112 | 0.695 | 0.720 |
-| ils_high | 0.554 | 0.209 | 0.709 | 0.825 |
-| dup_loss_low | 0.570 | 0.196 | 0.700 | 0.729 |
-| dup_loss_medium | 0.564 | 0.177 | 0.707 | 0.756 |
-| dup_loss_high | 0.603 | 0.636 | 0.716 | 0.812 |
+| ILS low | 0.268 | 0.270 | 0.021 | 0.321 |
+| ILS medium | 0.290 | 0.300 | 0.036 | 0.335 |
+| ILS high | 0.288 | 0.303 | 0.090 | 0.375 |
+| dup/loss low | 0.284 | 0.290 | 0.043 | 0.350 |
+| dup/loss medium | 0.287 | 0.293 | 0.059 | 0.340 |
+| dup/loss high | 0.339 | 0.301 | 0.216 | 0.359 |
 
-Four findings.
+Five findings.
 
-First, the method beats both GRAMPA and iterative GRAMPA in every configuration, by roughly 0.1
-to 0.25 in edit distance. Among the prior-free methods that reconstruct a full network from gene
-trees, the method is clearly better than the GRAMPA family across all conditions.
+First, the learned method beats the GRAMPA family on mu in every configuration. Against
+GRAMPA-iter, the fair prior-free peer that also searches for reticulations without a ploidy input,
+the ploidy-free mode is lower in all six configurations, by about 0.05 to 0.09. It is also below
+single-pass GRAMPA everywhere, and below iterative GRAMPA given the inferred ploidy prior, though
+that last margin is narrow, for example 0.301 against 0.319 at high duplication and loss. So among
+methods that reconstruct a full network without being told the ploidy, the learned method is the
+most accurate.
 
-Second, Polyphest is the strongest method at low and moderate difficulty, and by a large margin.
-This traces to copy number. The edit distance on multi-labeled trees is dominated by getting each
-species' copy number right, and Polyphest builds its start tree from the inferred consensus
-multiset, which on clean simulations is essentially the true ploidy. So on the easy conditions
-Polyphest is effectively handed the copy-number structure and only has to place events, which is
-why it reaches an edit distance as low as 0.065.
+Second, Polyphest is more accurate than the learned method on mu in every configuration, and the
+gap is large at low difficulty. This traces to the metric and the method together. The mu-distance
+is a distance on the folded network, where recovering each species' copy number and the reticulation
+structure it implies dominates the count, and Polyphest's folding of its inferred multiset recovers
+that structure closely on clean data. The advantage narrows as duplication and loss rise, from a
+gap of about 0.25 at low sorting to about 0.09 at high duplication and loss, but it does not
+reverse. This corrects an earlier reading under a different metric. Under the mu-distance, Polyphest
+is the more accurate reconstruction wherever it completes.
 
-Third, that advantage erodes as duplication and loss rise and reverses at the hardest condition.
-Under high duplication and loss the copy-number signal is corrupted, the inferred multiset stops
-matching the truth, and Polyphest's start tree is wrong. There the method reaches 0.603 against
-Polyphest's 0.636, so it is the better method, and the reticulation-leaf distance agrees at that
-condition, with the method at 0.264 against Polyphest's 0.412. The method reaches each species'
-inferred ploidy from its ranked events rather than from a fixed start tree, so it degrades more
-gracefully when ploidy inference is hard.
+Third, the common subset does not change this ordering. Restricting both methods to the networks
+each completes leaves Polyphest ahead everywhere, for example 0.257 against 0.021 at low sorting
+and 0.288 against 0.211 at high duplication and loss. So the ordering is not an artifact of the two
+sides being scored on different subsets of networks.
 
-Fourth, the comparison understates the method's robustness. Polyphest is scored on 15 to 18 of
-the networks per configuration because it does not complete the rest, while the method completes
-all 21. So Polyphest's means are taken over the subset it can finish, and the method always
-produces an answer.
+Fourth, completion separates the methods in the other direction. The learned method reconstructs
+all 21 networks in every configuration. Polyphest completes 17 to 20 of the 21 at these six
+configurations, and as few as 5 at the hardest configuration in the wider sweep below. On the
+networks Polyphest does not complete, the learned method still returns an answer, and on the three
+such networks at high duplication and loss its mu is 0.245, which is lower than its own mean on the
+networks Polyphest does complete. So the networks Polyphest fails on are not the ones the learned
+method finds hardest.
 
-On the reticulation distances the ordering matches the edit distance. Polyphest leads on the
-networks it completes at low and moderate difficulty, the method beats iterative GRAMPA
-everywhere and GRAMPA on the reticulation-leaf distance in most configurations, and the method
-overtakes Polyphest at high duplication and loss.
+Fifth, the two decode modes trade off with copy-number reliability, and this is visible in the
+table. On the clean and moderate configurations the two modes are close, with ploidy-informed
+slightly ahead. At high duplication and loss the copy number is corrupted, and the ploidy-free mode
+overtakes the ploidy-informed mode, from 0.339 to 0.301 on mu and far more on the reticulation-leaf
+distance, from 0.782 to 0.298. This is the decode principle developed in the decode section, and it
+is why the method offers two modes rather than one. The same reticulation-leaf result places the
+ploidy-free mode ahead of Polyphest on reticulation recovery at high duplication and loss, 0.298
+against 0.377, even though Polyphest's overall mu is lower there.
+
+## The effective-population-size sweep
+
+The six findings hold unchanged at effective population sizes of two hundred thousand and two
+million. Polyphest is more accurate on mu at every configuration and population size. The learned
+method completes all 21 networks throughout, while Polyphest's completion falls as difficulty
+rises, reaching 5 of 21 at high duplication and loss at the largest population size. The ploidy-free
+mode overtakes the ploidy-informed mode at every high duplication and loss configuration, with the
+reticulation-leaf distance dropping from about 0.77 to about 0.30 in each case. So none of the
+conclusions is specific to one effective population size, and the reticulation-recovery advantage of
+the ploidy-free mode over Polyphest strengthens as sorting increases.
 
 ## Runtime
 
-The method reconstructs a network in a few seconds. Its per-network compute, excluding the ASTRAL
-step, is about 8 seconds on the benchmark, of which the graph neural network forward pass is a
-fraction of a second and the rest is feature extraction from the gene trees. ASTRAL adds a few
-seconds. Polyphest, by contrast, ranges from seconds on easy networks to days on hard ones, and
-does not complete the networks it is missing from the table above. [TODO insert a concrete
-Polyphest wall time or range from the run logs.] So the method offers a bounded, predictable
-runtime of seconds per network, against a search-based competitor whose runtime is variable and
-can be prohibitive.
+The learned method reconstructs a network in seconds. Its per-network compute beyond the ASTRAL step
+is about eight seconds on the benchmark, of which the graph neural network forward pass is a fraction
+of a second and the remainder is feature extraction from the gene trees. ASTRAL adds a few seconds.
+Polyphest ranges from seconds on easy networks to days on hard ones, and does not complete the
+networks it is missing from the tables, with individual runs still unfinished after several days on
+the hardest configurations. [TODO insert the concrete Polyphest wall-time range from the run logs.]
+So the method offers a bounded runtime of seconds per network against a search whose runtime is
+variable and can be prohibitive.
 
 ## Summary
 
-The method is a fast, prior-free reconstruction that beats the GRAMPA family across all
-conditions and runs in seconds where Polyphest can take days and sometimes does not finish.
-Polyphest is more accurate at low and moderate difficulty, where inferring ploidy from clean
-simulations is easy and the copy-number-dominated edit distance rewards it, but the method
-overtakes Polyphest at high duplication and loss, where ploidy inference breaks. The remaining
-gap at the easier conditions is copy number and placement. The diagnostic traces the method's
-edit distance to the ASTRAL backbone and not to event prediction, which the model already predicts
-as well as an oracle allows. On the benchmark a further part of the gap is distribution shift from
-the simulated training networks to the empirical ones.
+Read on a single axis the result is clear and not in the method's favor. On the mu-distance,
+Polyphest is the more accurate reconstruction in every configuration, even on the common subset,
+because the metric rewards the exact copy-number structure that folding an inferred multiset
+recovers on clean data. Read across axes the method has a defensible place. It completes every
+network where Polyphest completes 5 to 20, it runs in seconds where Polyphest can take days, it
+beats the fair prior-free baseline GRAMPA-iter on mu in every configuration, and it recovers
+reticulate lineages better than Polyphest exactly where copy number is corrupted. The contribution
+is therefore not accuracy supremacy on the mu-distance but a fast, complete, prior-free method with
+a clear niche, together with a decode that adapts to whether copy number can be trusted.

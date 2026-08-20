@@ -10,7 +10,7 @@ itself, are excluded from this figure because they are easy and inflate the comb
 ## The question
 
 The previous section showed that the backbone, not the events, is the dominant source of
-edit distance. One part of the event prediction is nonetheless weak on its own terms, namely
+mu-distance. One part of the event prediction is nonetheless weak on its own terms, namely
 the choice of the allopolyploid parent, and it is worth locating. The one-parter method
 reaches an allopolyploid partner accuracy of only 0.45. This section asks whether that number
 can be raised, first by better features and then by a correction to the training target, and
@@ -115,9 +115,9 @@ clade incorrectly in the first place.
 Partner prediction is limited by two things, and only one of them is a partner problem.
 Hand-crafted features are exhausted, but the target itself was wrong in the majority of
 allopolyploid events, and repairing it raises partner accuracy by 0.070 and improves ploidy
-and edit distance on the benchmark. What remains is not a partner problem. The parents are
+and mu-distance on the benchmark. What remains is not a partner problem. The parents are
 recoverable whenever ASTRAL places the polyploid coherently, and undefined whenever it does
-not, so the residual error and the coverage bound both trace to the same source as the edit
-wall, namely the backbone. This is why the corrected target helps but does not close the gap,
+not, so the residual error and the coverage bound both trace to the same source as the
+reconstruction wall, namely the backbone. This is why the corrected target helps but does not close the gap,
 and why the remaining ceiling is a better backbone through phasing rather than any further
 change to the target or the features.

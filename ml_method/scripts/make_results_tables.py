@@ -54,13 +54,14 @@ STRAT_LABEL = {
 # head_to_head canonical competitor names -> thesis display names.
 COMPETITOR_LABEL = {
     "polyphest": "Polyphest",
+    "polyphest_real": "Polyphest (true ploidy)",
     "grampa_iter": "GRAMPA-iter",
     "grampa_iter_prior": "GRAMPA-iter + prior",
     "grampa": "GRAMPA",
 }
 ROW_ORDER = [
     "GNN (ploidy-informed)", "GNN (ploidy-free)",
-    "Polyphest", "GRAMPA-iter", "GRAMPA-iter + prior", "GRAMPA",
+    "Polyphest", "Polyphest (true ploidy)", "GRAMPA-iter", "GRAMPA-iter + prior", "GRAMPA",
 ]
 
 CONFIG_TITLE = {

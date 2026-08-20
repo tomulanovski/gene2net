@@ -18,8 +18,8 @@ Training uses a large set of synthetic networks simulated under the same six con
 [TODO confirm count, on the order of two thousand networks per configuration]. For each network
 the gene trees are simulated, the ASTRAL backbone is inferred, and the true events are mapped
 to backbone edges to produce the training labels. The species tree is re-rooted before feature
-extraction and labeling, because ASTRAL output is unrooted and an arbitrary root inflates the
-edit distance and misaligns the labels. A fixed random split holds out one fifth of the
+extraction and labeling, because ASTRAL output is unrooted and an arbitrary root misaligns the
+events with the backbone edges during labeling. A fixed random split holds out one fifth of the
 networks for validation, and the same split is used across all experiments so that validation
 numbers are comparable.
 
@@ -30,9 +30,14 @@ training.
 
 ## Metrics
 
-Reconstructions are scored against the true network by six distance measures, all oriented so
-that lower is better. The multi-labeled-tree edit distance is the primary measure of overall
-reconstruction quality. The Robinson-Foulds distance measures the topological error of the
+Reconstructions are scored against the true network by several distance measures, all oriented so
+that lower is better. The primary measure of overall reconstruction quality is the normalized
+mu-distance, a distance on the folded network. It compares two networks by the multiset of
+per-node vectors that count the directed paths from each node to each leaf, taken together with
+each node's in-degree, and it equals zero exactly when the two networks are isomorphic. It does not
+depend on the order in which children are written, so it avoids the ordering sensitivity of a
+graph-edit-distance search, and it is normalized to the unit interval so it can be averaged across
+networks of different sizes. The Robinson-Foulds distance measures the topological error of the
 backbone. The reticulation count difference measures whether the right number of reticulations
 was inferred. The reticulation-leaf and reticulation-sister Jaccard distances measure whether
 the reticulations involve the right lineages, and they are the measures most directly

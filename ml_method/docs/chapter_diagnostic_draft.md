@@ -1,12 +1,20 @@
-# Diagnostic: where the edit distance comes from
+# Diagnostic: where the reconstruction error comes from
 
 DRAFT for the thesis. Prose style follows the thesis convention of no semicolons, no
-non-mathematical parentheses, and no em-dashes. All edit distances here use the canonical
-multi-labelled-tree edit distance, which orders children by a topology-determined canonical form
-before scoring so the result does not depend on the arbitrary Newick child order. Numbers are
-computed on the held-out validation split, n = 300 networks pooled across the six training
-configurations, and the oracle events are read from the ground-truth simulation metadata in
-clade-level form rather than decomposed from the MUL-tree.
+non-mathematical parentheses, and no em-dashes.
+
+**[PENDING mu re-run — this whole section is edit-era]** Everything below was computed under the
+old edit-distance metric and needs a full rewrite under the mu-distance once the numbers are in.
+Three things change: (1) the floor/ceiling/per-configuration NUMBERS must be recomputed under mu
+via `jobs/val_oracle_mu.sh` (build floor, backbone ceiling, model); (2) the "backbone is the wall"
+CONCLUSION must be re-confirmed under mu, not assumed, since mu weights ploidy structure differently
+from edit distance; (3) the final subsection on correcting the edit-distance greedy search is MOOT
+under mu and should be deleted, because the mu-distance is order-invariant by construction and has
+no such search. Do not quote any number from this draft as a mu value until then.
+
+Numbers are computed on the held-out validation split, n = 300 networks pooled across the six
+training configurations, and the oracle events are read from the ground-truth simulation metadata
+in clade-level form rather than decomposed from the MUL-tree.
 
 ## The question
 

@@ -31,7 +31,7 @@ always completes, and robust where copy-number methods break. Not accuracy supre
 
 3. **Experimental setup.** Source: `chapter_setup_draft` (CURRENT).
    - Six discordance/dup-loss configs plus three fractionation configs, 21 benchmark
-     networks, five replicates. Metrics: edit distance, ret_leaf, ret_sisters, plus
+     networks, five replicates. Metrics: mu-distance, ret_leaf, ret_sisters, plus
      completion and runtime. Baselines: Polyphest, GRAMPA-iter, GRAMPA-iter+prior.
 
 4. **Results.**

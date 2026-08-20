@@ -63,6 +63,10 @@ import pandas as pd
 # Constants describing the competitor schema (see module docstring).
 # ---------------------------------------------------------------------------
 POLYPHEST_THRESHOLDS = ["polyphest_p50", "polyphest_p70", "polyphest_p90"]
+# True-ploidy Polyphest (the `_real` runs): same folding, given ground-truth ploidy
+# instead of the inferred multiset. Kept as a separate 'polyphest_real' reference to
+# decompose Polyphest's edge into ploidy-inference vs folding/placement.
+POLYPHEST_REAL_THRESHOLDS = ["polyphest_real_p50", "polyphest_real_p70", "polyphest_real_p90"]
 
 # competitor method label -> canonical name used in the output columns.
 # grandma_split is the iterative GRAMPA variant (GRAMPA^Iter in the figures).
@@ -70,11 +74,12 @@ COMPETITOR_METHOD_MAP = {
     "grampa": "grampa",
     "grandma_split": "grampa_iter",
     "grandma_split_prior": "grampa_iter_prior",  # GRAMPA-iter given the inferred ploidy prior
-    "polyphest": "polyphest",  # after the p50/p70/p90 merge below
+    "polyphest": "polyphest",  # after the p50/p70/p90 merge below (inferred ploidy)
+    "polyphest_real": "polyphest_real",  # after the real p50/p70/p90 merge (true ploidy)
 }
 
 # Order of methods in the output (gnn first).
-OUTPUT_METHODS = ["gnn", "polyphest", "grampa", "grampa_iter", "grampa_iter_prior"]
+OUTPUT_METHODS = ["gnn", "polyphest", "polyphest_real", "grampa", "grampa_iter", "grampa_iter_prior"]
 
 # The two wrong-rate networks the clean-config restriction drops by default.
 DEFAULT_EXCLUDE = ["Bendiksby_2011", "Marcussen_2011"]
@@ -178,23 +183,23 @@ def load_gnn_scores(path, config, metrics):
     return tidy[["network", "config", "method", "metric", "value"]]
 
 
-def merge_polyphest(long_df):
-    """Collapse polyphest_p50/p70/p90 into a single 'polyphest'.
+def _merge_percentiles(long_df, thresholds, out_label):
+    """Collapse a set of percentile-cutoff runs into a single method label.
 
     Mirrors simulations/scripts/create_analysis_figures.py::merge_polyphest_comparisons:
-    per (config, network, replicate) keep the LOWEST percentile that has any
-    SUCCESS row, and relabel it 'polyphest'. Non-polyphest rows pass through.
+    per (config, network, replicate) keep the LOWEST percentile that has any SUCCESS
+    row, and relabel it out_label. Rows not in `thresholds` pass through unchanged. If
+    none of the thresholds are present, the frame is returned untouched.
     """
-    non_poly = long_df[~long_df["method"].isin(POLYPHEST_THRESHOLDS)].copy()
-    poly = long_df[long_df["method"].isin(POLYPHEST_THRESHOLDS)].copy()
+    poly = long_df[long_df["method"].isin(thresholds)].copy()
     if poly.empty:
-        return non_poly
-
+        return long_df
+    non_poly = long_df[~long_df["method"].isin(thresholds)].copy()
     group_cols = [c for c in ("config", "network", "replicate") if c in poly.columns]
     kept = []
     for _, group in poly.groupby(group_cols):
         chosen = None
-        for method in POLYPHEST_THRESHOLDS:
+        for method in thresholds:
             rows = group[group["method"] == method]
             if len(rows) > 0 and (rows["status"] == "SUCCESS").any():
                 chosen = method
@@ -202,12 +207,19 @@ def merge_polyphest(long_df):
         if chosen is None:
             continue
         sel = group[group["method"] == chosen].copy()
-        sel["method"] = "polyphest"
+        sel["method"] = out_label
         kept.append(sel)
-
     if kept:
         return pd.concat([non_poly] + kept, ignore_index=True)
     return non_poly
+
+
+def merge_polyphest(long_df):
+    """Collapse both the inferred (p50/p70/p90 -> 'polyphest') and the true-ploidy
+    (real p50/p70/p90 -> 'polyphest_real') percentile runs. Each is absent-safe."""
+    df = _merge_percentiles(long_df, POLYPHEST_THRESHOLDS, "polyphest")
+    df = _merge_percentiles(df, POLYPHEST_REAL_THRESHOLDS, "polyphest_real")
+    return df
 
 
 def load_competitor_scores(path, config, metrics):
