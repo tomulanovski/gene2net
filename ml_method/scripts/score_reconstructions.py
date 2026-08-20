@@ -30,7 +30,9 @@ import pandas as pd
 # (edit distance on the MUL-trees) + rf_distance instead, plus the reticulation
 # metrics, which are cheap and never hang -> all 21 networks score, every config.
 METRICS = ["mu_distance", "mu_scored", "num_rets_diff",
-           "ret_leaf_jaccard", "ret_sisters_jaccard", "ploidy_diff"]
+           "ret_leaf_jaccard", "ret_sisters_jaccard",
+           "ret_leaf_jaccard_matched", "ret_sisters_jaccard_matched",
+           "ploidy_diff"]
 
 # Set by each worker (and the parent) so the comparison imports resolve.
 _SIM_SCRIPTS = None

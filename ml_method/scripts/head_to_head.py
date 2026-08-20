@@ -85,8 +85,12 @@ OUTPUT_METHODS = ["gnn", "polyphest", "polyphest_real", "grampa", "grampa_iter",
 DEFAULT_EXCLUDE = ["Bendiksby_2011", "Marcussen_2011"]
 
 # Metrics stored as '<metric>.dist' in the competitor long table but under the
-# bare name in the GNN CSV. Used only to translate the competitor side.
-JACCARD_METRICS = {"ret_leaf_jaccard", "ret_sisters_jaccard", "ploidy_diff"}
+# bare name in the GNN CSV. Used only to translate the competitor side. The
+# _matched variants are the partial-match jaccards (placement isolated, no penalty
+# for unmatched reticulations); they are jaccards too, so they also carry the .dist
+# suffix on the competitor side.
+JACCARD_METRICS = {"ret_leaf_jaccard", "ret_sisters_jaccard", "ploidy_diff",
+                   "ret_leaf_jaccard_matched", "ret_sisters_jaccard_matched"}
 
 # Extra metrics to carry alongside the primary --metric when both sides have
 # them (kept short and thesis-relevant).

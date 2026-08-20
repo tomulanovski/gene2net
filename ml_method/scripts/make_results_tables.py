@@ -31,7 +31,13 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(__file__))
 from head_to_head import load_gnn_scores, load_competitor_scores  # noqa: E402
 
-METRICS = ["mu_distance", "ret_leaf_jaccard", "ret_sisters_jaccard"]
+# mu = overall; num_rets_diff = count/completeness; the plain jaccards penalize
+# unmatched reticulations ("did it find them"); the _matched jaccards isolate placement
+# with no penalty for unmatched ("were the ones it found right"). The matched columns
+# must be read next to num_rets_diff so a well-placing under-predictor is not misread.
+METRICS = ["mu_distance", "num_rets_diff",
+           "ret_leaf_jaccard", "ret_leaf_jaccard_matched",
+           "ret_sisters_jaccard", "ret_sisters_jaccard_matched"]
 
 # Config groups for the two results sections. ne2M is included in the benchmark
 # group; it is dropped automatically (with a printed note) if not yet scored.
@@ -158,8 +164,8 @@ def table_md(means, title):
         return f"{x:.3f}" if pd.notna(x) else "-"
     lines = [
         f"**{title}**", "",
-        "| method | mu | ret_leaf | ret_sisters | n |",
-        "| --- | --- | --- | --- | --- |",
+        "| method | mu | num_rets | ret_leaf | ret_leaf_m | ret_sis | ret_sis_m | n |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for m in ROW_ORDER:
         if m not in means.index:
@@ -167,8 +173,9 @@ def table_md(means, title):
         r = means.loc[m]
         n = int(r["n"]) if pd.notna(r.get("n")) else 0
         lines.append(
-            f"| {m} | {f(r.get('mu_distance'))} | {f(r.get('ret_leaf_jaccard'))} "
-            f"| {f(r.get('ret_sisters_jaccard'))} | {n} |"
+            f"| {m} | {f(r.get('mu_distance'))} | {f(r.get('num_rets_diff'))} "
+            f"| {f(r.get('ret_leaf_jaccard'))} | {f(r.get('ret_leaf_jaccard_matched'))} "
+            f"| {f(r.get('ret_sisters_jaccard'))} | {f(r.get('ret_sisters_jaccard_matched'))} | {n} |"
         )
     lines.append("")
     return "\n".join(lines)
