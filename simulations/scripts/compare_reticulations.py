@@ -339,6 +339,16 @@ def pairwise_compare(obj1, obj2, df=None, partial_match=False):
             'ret_sisters_jaccard':      match_and_compare(row1['reticulation_leaves'], row2['reticulation_leaves'],
                                         row1['reticulation_sisters'], row2['reticulation_sisters'], precomputed,
                                         partial_match=partial_match),
+            # *_matched normalise over matched pairs only, so a reticulation the
+            # method never found costs nothing. They answer "were the ones it found
+            # right", where the penalised columns answer "did it find them". These
+            # use partial_match=True for every method, so unlike the columns above
+            # they mean the same thing in every row and compare across methods.
+            'ret_leaf_jaccard_matched': match_and_compare(row1['reticulation_leaves'], row2['reticulation_leaves'],
+                                        precomputed_match=precomputed, partial_match=True),
+            'ret_sisters_jaccard_matched': match_and_compare(row1['reticulation_leaves'], row2['reticulation_leaves'],
+                                        row1['reticulation_sisters'], row2['reticulation_sisters'], precomputed,
+                                        partial_match=True),
             **compare_mu(row1['object'], row2['object']),
         }
     # object-based comparison
@@ -363,6 +373,16 @@ def pairwise_compare(obj1, obj2, df=None, partial_match=False):
         'ret_sisters_jaccard':      match_and_compare(obj1.get_reticulation_leaves(), obj2.get_reticulation_leaves(),
                                         obj1.get_reticulation_sisters(), obj2.get_reticulation_sisters(), precomputed,
                                         partial_match=partial_match),
+        # *_matched normalise over matched pairs only, so a reticulation the
+        # method never found costs nothing. They answer "were the ones it found
+        # right", where the penalised columns answer "did it find them". These
+        # use partial_match=True for every method, so unlike the columns above
+        # they mean the same thing in every row and compare across methods.
+        'ret_leaf_jaccard_matched': match_and_compare(obj1.get_reticulation_leaves(), obj2.get_reticulation_leaves(),
+                                        precomputed_match=precomputed, partial_match=True),
+        'ret_sisters_jaccard_matched': match_and_compare(obj1.get_reticulation_leaves(), obj2.get_reticulation_leaves(),
+                                        obj1.get_reticulation_sisters(), obj2.get_reticulation_sisters(), precomputed,
+                                        partial_match=True),
         **compare_mu(obj1, obj2),
     }
 

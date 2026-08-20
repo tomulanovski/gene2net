@@ -106,6 +106,9 @@ class MultiLevelSummary:
             'ploidy_diff.dist': 'ploidy_diff',
             'ret_leaf_jaccard.dist': 'ret_leaf_jaccard',
             'ret_sisters_jaccard.dist': 'ret_sisters_jaccard',
+            # unpenalised companions: were the reticulations it DID find correct
+            'ret_leaf_jaccard_matched.dist': 'ret_leaf_jaccard_matched',
+            'ret_sisters_jaccard_matched.dist': 'ret_sisters_jaccard_matched',
         }
 
         for metric_name, output_name in metrics_to_pivot.items():
