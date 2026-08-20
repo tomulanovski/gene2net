@@ -37,6 +37,7 @@ METRICS = ["mu_distance", "ret_leaf_jaccard", "ret_sisters_jaccard"]
 # group; it is dropped automatically (with a printed note) if not yet scored.
 BENCHMARK_CONFIGS = [
     "conf_ils_low_10M", "conf_ils_medium_10M", "conf_ils_high_10M",
+    "conf_dup_loss_low_10M", "conf_dup_loss_medium_10M", "conf_dup_loss_high_10M",
     "conf_dup_loss_low_10M_ne1M", "conf_dup_loss_medium_10M_ne1M", "conf_dup_loss_high_10M_ne1M",
     "conf_dup_loss_low_10M_ne2M", "conf_dup_loss_medium_10M_ne2M", "conf_dup_loss_high_10M_ne2M",
 ]
@@ -66,6 +67,9 @@ CONFIG_TITLE = {
     "conf_ils_low_10M": "ILS low",
     "conf_ils_medium_10M": "ILS medium",
     "conf_ils_high_10M": "ILS high",
+    "conf_dup_loss_low_10M": "dup/loss low (Ne 200k)",
+    "conf_dup_loss_medium_10M": "dup/loss medium (Ne 200k)",
+    "conf_dup_loss_high_10M": "dup/loss high (Ne 200k)",
     "conf_dup_loss_low_10M_ne1M": "dup/loss low (Ne 1M)",
     "conf_dup_loss_medium_10M_ne1M": "dup/loss medium (Ne 1M)",
     "conf_dup_loss_high_10M_ne1M": "dup/loss high (Ne 1M)",
@@ -93,8 +97,8 @@ def per_method_means(combined):
 
 
 def build_config_table(base, config, competitor_path):
-    """Load competitors once and both GNN decodes, return the per-method mean table,
-    or None if the competitor side is missing (printed loudly)."""
+    """Load competitors once and both GNN decodes. Return (per-method mean table,
+    network-level combined tidy frame), or None if the competitor side is missing."""
     try:
         comp = load_competitor_scores(competitor_path, config, METRICS)
     except SystemExit as exc:
@@ -115,7 +119,37 @@ def build_config_table(base, config, competitor_path):
         frames.append(g)
 
     combined = pd.concat(frames, ignore_index=True)
-    return per_method_means(combined)
+    return per_method_means(combined), combined
+
+
+def common_subset_md(combined, config):
+    """FAIR comparison on mu: each GNN decode vs Polyphest, averaged ONLY over the
+    networks BOTH completed (finite mu on both). The per-method means elsewhere are
+    over different subsets -- Polyphest over the easy ones it finishes, the GNN over
+    all 21 -- so this is the unbiased head-to-head. Completion counts are shown too."""
+    pm = combined[combined["metric"] == "mu_distance"]
+    wide = pm.pivot_table(index="network", columns="method", values="value", aggfunc="mean")
+    lines = ["_Fair mu comparison (means over networks BOTH methods completed):_", ""]
+    if "Polyphest" not in wide.columns:
+        lines.append("_(no Polyphest column for this config)_\n")
+        return "\n".join(lines)
+    n_poly = int(wide["Polyphest"].notna().sum())
+    lines.append("| comparison | GNN mu | Polyphest mu | n_common |")
+    lines.append("| --- | --- | --- | --- |")
+    for gnn_label in ("GNN (ploidy-informed)", "GNN (ploidy-free)"):
+        if gnn_label not in wide.columns:
+            continue
+        both = wide[[gnn_label, "Polyphest"]].dropna()
+        n_gnn = int(wide[gnn_label].notna().sum())
+        if len(both):
+            lines.append(
+                f"| {gnn_label} vs Polyphest | {both[gnn_label].mean():.3f} "
+                f"| {both['Polyphest'].mean():.3f} | {len(both)} |"
+            )
+    lines.append("")
+    lines.append(f"_Completion: GNN 21, Polyphest {n_poly} (of 21)._")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def table_md(means, title):
@@ -142,10 +176,12 @@ def table_md(means, title):
 def section(base, configs, heading, competitor_path):
     out = [f"## {heading}", ""]
     for config in configs:
-        means = build_config_table(base, config, competitor_path)
-        if means is None:
+        result = build_config_table(base, config, competitor_path)
+        if result is None:
             continue
+        means, combined = result
         out.append(table_md(means, CONFIG_TITLE.get(config, config)))
+        out.append(common_subset_md(combined, config))
     return "\n".join(out)
 
 
