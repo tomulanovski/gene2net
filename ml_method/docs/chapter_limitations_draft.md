@@ -1,24 +1,20 @@
-# Limitations and future work
+# Limitations
 
 DRAFT for the thesis. Prose style follows the thesis convention of no semicolons, no
 non-mathematical parentheses, and no em-dashes.
 
-**[PENDING mu re-run]** The oracle floor and ceiling quoted below (about 0.09 and 0.37) are
-edit-distance values and must be replaced by the mu-distance values from `jobs/val_oracle_mu.sh`.
-The "backbone is the binding limitation" claim itself is inherited from the diagnostic and must be
-re-confirmed under mu before this section is final.
-
 ## The backbone is the binding limitation
 
 The central limitation of the method is structural and is established directly by the diagnostic
-section. The reconstruction is built by stamping events onto a fixed ASTRAL backbone and never
-rearranges that backbone, so every backbone error is inherited by the final network. Under an
-oracle that supplies the true events with their true parents, placing them on the ASTRAL
-backbone still leaves a mu-distance of about 0.37 [PENDING mu value], while placing the same events
-on the true backbone reaches about 0.09 [PENDING mu value]. No detector and no placement head can
-cross that gap, because the method does not rebuild the backbone. This is why better detection,
-better thresholds, and better event selection do not move the reconstruction distance, and it is
-the frame for everything below.
+section, and it holds under the mu-distance. The reconstruction is built by stamping events onto a
+fixed ASTRAL backbone and never rearranges that backbone, so every backbone error is inherited by
+the final network. Under an oracle that supplies the true events with their true parents, placing
+them on the ASTRAL backbone still leaves a mu-distance of 0.099, while placing the same events on
+the true backbone reaches 0.028. The backbone therefore contributes 0.071 of the error, against
+only 0.014 that the trained model loses beyond the ceiling. No detector and no placement head can
+cross the backbone gap, because the method does not rebuild the backbone. This is why better
+detection, better thresholds, and better event selection move the reconstruction distance by at
+most 0.014, and it is the frame for everything below.
 
 ## Placement is bounded by the same backbone
 
@@ -53,10 +49,11 @@ Several narrower items remain. The clade-level target repair covers only clades 
 keeps monophyletic, so at high discordance a portion of clade events is left uncorrected, and
 extending coverage there depends on a better backbone rather than on the repair itself. The
 placement head returns a single second parent, which matches the reconstruction but is a
-one-sided view of a symmetric pair of parents. The method also does not model post-duplication
-diploidization, where one subgenome is gradually fractionated by loss, which would make a
-polyploid look diploid in a growing fraction of gene trees and is a natural refinement of both
-the copy-number features and the simulation. Finally, the reported comparison uses a single
-detection threshold and a copy-bound event selection, and a held-out calibration of these
-operating points would make the reported numbers an honest operating choice rather than a fixed
-default.
+one-sided view of a symmetric pair of parents. Post-duplication diploidization, where one
+subgenome is gradually fractionated by loss and a polyploid comes to look diploid in a growing
+fraction of gene trees, is evaluated directly in the fractionation section, and training the model
+on fractionated data rather than only testing on it is the natural refinement, discussed in the
+future-work section. The detection threshold of the ploidy-free decode is calibrated on the
+held-out validation split rather than fixed a priori, as described in the decode section, though
+that split is clean, so a calibration on fractionated data remains the outstanding refinement of
+the operating point.
