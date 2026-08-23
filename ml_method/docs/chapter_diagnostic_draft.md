@@ -61,7 +61,10 @@ corrects a still earlier reading of this diagnostic, which had compared the benc
 the validation ceiling and concluded that event prediction was the dominant source of error. That
 comparison mixed two different test sets. Measured correctly, with the model and the ceiling on the
 same validation networks, the model is essentially at the ceiling and the backbone carries the
-error.
+error. This is corroborated by the hyperparameter search, which raised the detection and partner
+proxies it was tuned on without changing the overall reconstruction measures much, exactly as
+expected when event prediction is already close to the ceiling and the backbone caps what better
+events can buy.
 
 The consequence for the method is that the remaining lever for in-distribution quality is the
 species tree, not the events. A rebuilt backbone, for example through phasing before tree inference,

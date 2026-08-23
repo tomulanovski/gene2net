@@ -37,7 +37,7 @@ copy number is reliable, and it is the fair comparison to Polyphest, because fee
 the same copy-number list isolates the difference to placement.
 
 The second mode is ploidy-free. It ignores copy number entirely. An edge becomes an event if and
-only if its detection probability exceeds a threshold, with no copy-number bound anywhere in the
+only if its detection probability is at least a threshold, with no copy-number bound anywhere in the
 decode. This makes the mode genuinely free of ploidy, since it computes no copy-number estimate
 at all. It is the natural mode when no trusted copy number exists, and it is the fair comparison
 to iterative GRAMPA, which likewise searches for reticulations without a ploidy input. It is also
@@ -88,24 +88,48 @@ multiset, reimplemented inside the method so that ploidy-informed mode needs no 
 
 ## The threshold in ploidy-free mode
 
-Ploidy-free mode has one parameter, the detection threshold above which an edge becomes an event.
-We publish a single default and expose the threshold as a configurable option, which is the
-standard treatment of an operating point. The default is calibrated on the held-out validation
-split rather than chosen a priori. We reconstruct the validation networks with the ploidy-free
-decode across a range of thresholds and score them on the reconstruction metric, and we take the
-threshold that minimizes the validation mu-distance as the default. The calibration uses only
-networks the model was selected on and never trained on, so it does not leak into the benchmark.
-The same sweep is reported as a sensitivity analysis, so that the reader can see the result is not
-fragile to the exact value. [FILL: the calibrated default and the sensitivity curve from the
-validation threshold sweep.]
+Ploidy-free mode has one parameter, the detection threshold at or above which an edge becomes an
+event. We fix it at 0.5, the classifier's natural decision boundary, and expose it as a configurable
+option. A fixed default is the honest choice here, because the regime in which the ploidy-free mode
+is used, namely corrupted copy number, is not the regime the model was trained and selected on, so a
+threshold tuned on the clean training distribution would not transfer to it in a principled way.
+Calibrating the threshold per regime, ideally on data that matches the corruption the mode targets,
+is left as future work.
+
+## Building the multi-labeled tree
+
+Once the events are selected and their partners named, they are grafted onto a copy of the ASTRAL
+backbone to produce the multi-labeled tree. The grafting mirrors the way the training networks are
+generated, so the output has the same form as the ground truth. Events are applied smallest target
+clade first, so that an event nested inside another is placed before the outer event that may
+duplicate it.
+
+An autopolyploidy, where the partner is the clade itself, is grafted by attaching an identical copy
+of the target clade as a sibling. The target is detached, a new internal node is inserted in its
+place under the same parent, and the target and a deep copy of it become the two children of that
+node. This produces two identical sibling subtrees, which is the signature of an autopolyploidy and
+folds later to ploidy without a reticulation.
+
+An allopolyploidy, where the partner is a different clade, is grafted by leaving the target at its
+backbone position and attaching a copy of it on the partner's edge. The partner edge is subdivided
+by a new internal node that holds the partner and the copy of the target. The original target
+therefore stays where ASTRAL placed it and only the copy moves to the second parent, which is why
+the model predicts a single second parent rather than both. This is the structural root of the
+placement limitation discussed later, since the home position of the polyploid is fixed by the
+backbone and never chosen by the model.
+
+An event whose target or partner clade can no longer be located, which happens when an earlier graft
+has added foreign leaves inside that clade, is dropped and counted. The dropped count is small and
+concentrated on networks with nested or overlapping events, and it is the source of the small build
+residual reported in the diagnostic.
 
 ## Summary
 
-The decode turns per-edge detection and partner predictions into a network by choosing which
-edges become events, and it is defined along how much it trusts the species copy number. The
+The decode turns per-edge detection and partner predictions into a multi-labeled tree by choosing
+which edges become events, and it is defined along how much it trusts the species copy number. The
 published method offers the two ends of that axis as two modes. Ploidy-informed mode fills each
 species up to a copy-number ceiling, inferred by the method or supplied by the user, and never
 forces an unsupported copy. Ploidy-free mode discards copy number and keeps the edges the
-detection head is confident about, at a validation-calibrated threshold. The user selects the
+detection head is confident about, at a fixed default threshold. The user selects the
 mode by whether a trusted copy-number list exists, which also fixes the fair baseline for each
 mode, Polyphest for the ploidy-informed mode and iterative GRAMPA for the ploidy-free mode.

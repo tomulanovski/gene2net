@@ -18,11 +18,12 @@ most 0.014, and it is the frame for everything below.
 
 ## Placement is bounded by the same backbone
 
-Placement of the second parent looked like an independent weakness, but it reduces to the same
-cause. Hand-crafted features do not improve it. A defect in the training target does, and
-repairing the target raises partner accuracy and improves ploidy and mu-distance on the
-benchmark, but the improvement is modest and does not generalize to the finer reticulation
-measures. The reason is that the correct parent is well-defined only when ASTRAL places the
+Placement of the second parent reduces to the same cause as the backbone limitation. Hand-crafted
+features do not improve it. A fragmentation defect in the decomposed training target does, which is
+why the shipped model uses away-parent labels, and the model reaches an allopolyploid partner
+accuracy of 0.828 on the validation split. Raising that accuracy, however, has only a modest effect
+on the overall reconstruction measures and does not reach the finer reticulation measures. The
+reason is that the correct parent is well-defined only when ASTRAL places the
 polyploid coherently, and undefined when it does not. The residual placement error and the
 coverage bound of the repair both trace to the backbone. When ASTRAL scatters a polyploid or a
 polyploid clade, there is no coherent home against which to name the second parent, and the
@@ -53,7 +54,7 @@ one-sided view of a symmetric pair of parents. Post-duplication diploidization, 
 subgenome is gradually fractionated by loss and a polyploid comes to look diploid in a growing
 fraction of gene trees, is evaluated directly in the fractionation section, and training the model
 on fractionated data rather than only testing on it is the natural refinement, discussed in the
-future-work section. The detection threshold of the ploidy-free decode is calibrated on the
-held-out validation split rather than fixed a priori, as described in the decode section, though
-that split is clean, so a calibration on fractionated data remains the outstanding refinement of
-the operating point.
+future-work section. The detection threshold of the ploidy-free decode is a fixed
+default, as described in the decode section, because the corrupted regime it targets does not match
+the clean distribution the model was trained on, so calibrating it on data that matches that regime
+remains an outstanding refinement of the operating point.

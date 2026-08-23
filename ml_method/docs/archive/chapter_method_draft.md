@@ -4,22 +4,11 @@ DRAFT for the thesis method section. Prose style follows the thesis convention o
 semicolons, no non-mathematical parentheses, and no em-dashes. Numbers and mechanics here
 are code-verified. Empirical results belong in the results and diagnostic sections.
 
-## Overview and rationale
-
-The method reconstructs a polyploid phylogenetic network from a set of gene trees. It follows
-a detect-then-place strategy. First it builds a single-copy species tree backbone from the gene
-trees with ASTRAL. Then a graph neural network reads that backbone together with features
-summarising the gene trees, and it makes two predictions on every backbone edge. The first
-prediction is detection, namely whether a whole genome duplication occurred on that edge. The
-second is placement, namely which other lineage is the second parent of the duplicated lineage.
-The predicted events are then stamped onto the backbone to produce a multi-labeled tree, and
-that tree is folded into a network.
-
-Two properties motivate this design in the context of a benchmarking study. The method is fast,
-because it reasons over one fixed backbone rather than searching tree space. It is also
-prior-free, because it infers its own per-species copy number from the gene trees rather than
-being supplied a ploidy vector. This makes it directly comparable to the prior-free iterative
-GRAMPA baseline, and it removes an input that some competitors require.
+This section describes PlaceNet in detail, its input representation, its architecture, and its
+training. The output of PlaceNet is a MUL tree. Comparing that output to a phylogenetic network,
+whether for scoring against the true network or for reporting, uses the same MUL-tree folding based
+on the Holm algorithm that the evaluation applies to every method, so the folding is a property of
+the comparison and not part of PlaceNet.
 
 ## Input representation
 
@@ -48,40 +37,49 @@ single-ancestry lineage from one with divided ancestry.
 
 ### Edge features
 
-The 9 edge features are computed per backbone branch, where each branch corresponds to the clade
-of species below it. Four are structural. Concordance is the gene-tree support for the
-species-level bipartition induced by the branch. The remaining three are the branch length from
-the species tree, the clade size, and the depth.
+The nine edge features are computed per backbone edge, where each edge corresponds to the clade of
+species below it. Four of them are structural. The concordance factor is the fraction of the
+informative gene trees that recover the species-level bipartition the edge induces, where a gene
+tree is informative for an edge when it has species on both sides of that bipartition. The branch
+length is the length of the edge in the ASTRAL species tree. The clade size is the number of species
+below the edge, and the depth is the number of edges from the root down to it. The clade size and
+depth give the model context for where in the tree an edge sits.
 
-The other five edge features are designed to detect whole genome duplication, which is one event
-that duplicates an entire lineage at a single time. Duplication synchrony is the mean pairwise
-correlation, across the clade species, of a per gene tree indicator of whether the species is
-duplicated. A shared event makes the clade species duplicate together, so synchrony is high. The
-mirrored-sister fraction is the fraction of gene trees in which a subset of the clade appears as
-two identical sister subtrees, which is the signature of autopolyploidy. The copy-pair divergence
-mean is the mean, over duplicated clade species and gene trees, of the branch-length distance
-between the two closest copies of a species, normalised by the tree scale. This is a tree-based
-analogue of the synonymous-site divergence used to date duplication events, so it estimates the
-typical age of the duplication. The copy-pair divergence coefficient of variation measures
-whether those ages are consistent, which is low for one shared event and high for scattered gene
-duplications. The clade-duplicated fraction is the mean fraction of clade species that are
-duplicated per gene tree.
+The other five edge features capture the signal of a whole genome duplication on the edge. Like the
+other features they feed both prediction heads through the shared trunk, but these are the ones that
+measure the duplication itself. Because a whole genome duplication copies an entire clade at once,
+its trace in the gene trees is that the species below the edge are duplicated together and to a
+common age. Duplication synchrony measures whether the clade species tend to be duplicated in the
+same gene trees, which a single shared event produces and scattered duplications do not. The
+clade-duplicated fraction is the mean, per gene tree, of the fraction of the clade species present in
+that tree that are duplicated, which measures how pervasive the duplication is. The mirrored-sister
+fraction is the fraction of gene trees in which part of the clade appears as two identical sister
+subtrees, the signature of an autopolyploidy. The copy-pair divergence is the mean distance between a
+species' two closest copies, taken over the duplicated clade species and gene trees and normalised by
+the tree scale. It is a tree-based analogue of the synonymous-site divergence, or Ks, used to date
+duplications, so it estimates the typical age of the copies. The copy-pair divergence coefficient of
+variation measures how consistent those ages are, low for a single shared event and high for
+independent gene duplications.
 
 ## Model architecture
 
-The network has around 82 thousand parameters and proceeds in five stages.
+The network has about 1.5 million parameters and proceeds in five stages. Its width, depth, and the
+other hyperparameters below are the values selected by the hyperparameter search described in the
+training section.
 
 First, the leaf feature vectors are propagated to the internal nodes. Each internal node receives
 the mean of the feature vectors of the leaves below it. This step has no learnable parameters and
 is computed once per sample, so it is a fixed preprocessing operation rather than a learned
 aggregation.
 
-Second, the node features are projected to a hidden dimension of 64 by a two-layer perceptron.
+Second, the node features are projected to a hidden dimension of 256 by a two-layer perceptron.
 
-Third, three graph attention layers refine the node representations. Each layer uses four
-attention heads, a residual connection, and layer normalisation. Message passing over the tree
-lets the representation of each edge endpoint be informed by the whole tree, so the per-edge
-predictions that follow are made in global context rather than from local features alone.
+Third, four graph attention layers refine the node representations. Each layer uses four attention
+heads, a dropout of 0.1, a residual connection, and layer normalisation. The attention passes
+messages between nodes, so after these layers each node representation carries information from
+across the whole tree. Because the edge embeddings built in the next stage are formed from their two
+endpoint nodes, the per-edge predictions inherit that global context indirectly, through the nodes,
+rather than resting on the local edge features alone.
 
 Fourth, each branch is given an embedding. For a branch with parent node representation and child
 node representation, the embedding is produced by a perceptron applied to the concatenation of the
@@ -100,12 +98,13 @@ chosen branch.
 ### Pairwise placement features
 
 The pairwise feature for an ordered pair of branches carries the relational co-clustering signal
-that the placement head needs and that no per-branch feature can express. For clade i and clade j
-it is the mean and maximum, over the species in i crossed with the species in j, of the leaf-sister
-co-clustering matrix. For a candidate that is a single species this reduces to the exact
-co-clustering value between the two species. A copy-aware variant based on local neighbourhoods
-was also implemented, but it did not improve accuracy, so the reported model uses the mean and
-maximum co-clustering only.
+that the placement head needs and that no per-branch feature can express. It has four channels. Two
+are the mean and maximum, over the species in clade i crossed with the species in clade j, of the
+leaf-sister co-clustering matrix, which for a single-species candidate reduce to the exact
+co-clustering value between the two species. The other two are copy-aware cluster-support channels,
+a co-clustering signal that conditions on the duplicated copies of the source clade. The
+copy-aware cluster-support did not help an earlier two-parent variant but does contribute to the
+one-partner model reported here, as the feature-importance section shows.
 
 ## Training objective
 
@@ -123,8 +122,11 @@ Placement uses a cross-entropy loss over the candidate branches, and it is appli
 branches that carry a true event. The target for an autopolyploidy is the branch itself, and the
 target for an allopolyploidy is the second parent branch.
 
-Optimisation uses Adam with a learning rate of 0.001 and weight decay of 0.0001. Each species
-tree is one graph, and gradients are accumulated over eight graphs before each optimiser step.
+Optimisation uses Adam with a learning rate of 0.0005 and weight decay of 0.00001. Each species
+tree is one graph, and gradients are accumulated over eight graphs before each optimiser step. The
+hyperparameters given here and in the architecture, namely the hidden dimension, the number of
+layers, the learning rate, and the weight decay, were selected by a two-stage hyperparameter search
+on the validation split.
 
 ## From predictions to a network
 

@@ -30,7 +30,6 @@ SECTIONS = [
     ("chapter_retention_draft.md", None),
     ("chapter_feature_importance_draft.md", None),
     ("chapter_limitations_draft.md", None),
-    ("chapter_partner_limitation_draft.md", None),
     ("chapter_future_work_draft.md", None),
     ("chapter_conclusion_draft.md", None),
 ]
