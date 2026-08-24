@@ -13,7 +13,7 @@ by create_analysis_figures.py -- applied independently to the inferred and the
 real runs.
 
 Metrics (lower is better for all three):
-  edit_distance_multree, ret_leaf_jaccard.dist, ret_sisters_jaccard.dist
+  mu_distance, ret_leaf_jaccard.dist, ret_sisters_jaccard.dist
 
 For each (method-pair, metric) the unit is one network: the mean over replicates
 (SUCCESS only). A paired scatter (x = inferred, y = real, with the y=x diagonal)
@@ -40,9 +40,11 @@ import pandas as pd
 # Configuration
 # ---------------------------------------------------------------------------
 
-METRICS = ['edit_distance_multree', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist']
+# was: METRICS = ['edit_distance_multree', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist']   (superseded by the mu-distance)
+METRICS = ['mu_distance', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist']
 METRIC_LABELS = {
-    'edit_distance_multree': 'Edit Distance (MUL-tree)',
+    # was: 'edit_distance_multree': 'Edit Distance (MUL-tree)',   (superseded by the mu-distance)
+    'mu_distance': '$\\mu$-distance (MUL-tree)',
     'ret_leaf_jaccard.dist': 'Ret. Descendants (Jaccard dist.)',
     'ret_sisters_jaccard.dist': 'Ret. Sister (Jaccard dist.)',
 }

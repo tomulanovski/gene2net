@@ -1,5 +1,13 @@
 # Edit Distance Metric - Detailed Explanation
 
+> **SUPERSEDED.** The benchmark no longer uses the graph edit distance. The headline
+> metric is now the normalized mu-distance, the modified mu-representation of Reichling
+> et al. (2026) built on the extended mu-representation of Cardona et al. (2024). It is
+> exact rather than approximate, invariant to Newick child order, and defined on the
+> semi-binary networks that folding actually produces. See
+> `ReticulateTree.get_mu_distance` and `docs/mu_distance_manuscript_revision.md`.
+> This file is kept because the edit distance code is still present and callable.
+
 ## What is Edit Distance?
 
 **Edit distance** (also called graph edit distance) measures the minimum number of operations needed to transform one network into another.

@@ -187,7 +187,8 @@ def display_name(method: str) -> str:
 
 # Key metrics for analysis
 KEY_METRICS = {
-    'edit_distance_multree': 'Edit Distance',
+    # was: 'edit_distance_multree': 'Edit Distance',   (superseded by the mu-distance)
+    'mu_distance': '$\\mu$-distance',
     # 'rf_distance': 'Robinson-Foulds Distance',  # Disabled: RF not well-defined for MUL-trees
     'ret_leaf_jaccard.dist': 'Reticulation Descendants Measure',
     'ret_sisters_jaccard.dist': 'Reticulation Sister Measure',
@@ -408,7 +409,8 @@ class CrossConfigAnalyzer:
 
         # --- 2. Accuracy across conditions (one per key metric, per family) ---
         for metric_key, metric_label in [
-            ('edit_distance_multree', 'Edit Distance'),
+            # was: ('edit_distance_multree', 'Edit Distance'),   (superseded by the mu-distance)
+            ('mu_distance', '$\\mu$-distance'),
             # ('rf_distance', 'Robinson-Foulds Distance'),  # Disabled: RF not well-defined for MUL-trees
             ('ret_leaf_jaccard.dist', 'Reticulation Descendants Measure'),
             ('ploidy_diff.dist', 'Ploidy Distance'),
@@ -419,8 +421,8 @@ class CrossConfigAnalyzer:
 
         # --- 3. Accuracy heatmaps ---
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Accuracy heatmap (edit distance)...")
-        self.plot_accuracy_heatmap('edit_distance_multree', 'Mean Edit Distance')
+        print(f"[{plot_num}/{total_plots}] Accuracy heatmap (mu-distance)...")
+        self.plot_accuracy_heatmap('mu_distance', 'Mean $\\mu$-distance')
 
         plot_num += 1
         print(f"[{plot_num}/{total_plots}] Accuracy heatmap (ret leaf Jaccard)...")
@@ -797,8 +799,8 @@ class CrossConfigAnalyzer:
             print("  WARNING: Missing data for complexity interaction, skipping")
             return
 
-        metric_key = 'edit_distance_multree'
-        metric_label = 'Edit Distance'
+        metric_key = 'mu_distance'
+        metric_label = '$\\mu$-distance'
 
         metric_df = self.comparisons[
             (self.comparisons['metric'] == metric_key) &
@@ -889,7 +891,8 @@ class CrossConfigAnalyzer:
         # Metrics to rank on (lower is better for distance metrics,
         # but we handle them uniformly since all are distance-like)
         rank_metrics = {
-            'edit_distance_multree': 'Edit\nDistance',
+            # was: 'edit_distance_multree': 'Edit\nDistance',   (superseded by the mu-distance)
+            'mu_distance': 'Edit\nDistance',
             # 'rf_distance': 'Robinson-Foulds\nDistance',  # Disabled: RF not well-defined for MUL-trees
             'ret_leaf_jaccard.dist': 'Ret.\nDescendants',
             'ret_sisters_jaccard.dist': 'Ret.\nSister',
@@ -1183,7 +1186,7 @@ class PolyphestThresholdAnalyzer:
 
         self.plot_completion_heatmap()
         self.plot_completion_across_conditions()
-        self.plot_accuracy_across_conditions('edit_distance_multree', 'Edit Distance')
+        self.plot_accuracy_across_conditions('mu_distance', '$\\mu$-distance')
         self.plot_accuracy_across_conditions('ret_leaf_jaccard.dist', 'Reticulation Descendants Measure')
         self.plot_accuracy_across_conditions('ploidy_diff.dist', 'Ploidy Distance')
         self.plot_accuracy_across_conditions('num_rets_bias', 'Reticulation Bias (%)')
@@ -1411,7 +1414,8 @@ class PolyphestThresholdAnalyzer:
             return
 
         metrics = [
-            ('edit_distance_multree', 'Edit Distance'),
+            # was: ('edit_distance_multree', 'Edit Distance'),   (superseded by the mu-distance)
+            ('mu_distance', '$\\mu$-distance'),
             ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
             ('ploidy_diff.dist', 'Ploidy Distance'),
         ]
@@ -1482,7 +1486,7 @@ class PolyphestThresholdAnalyzer:
                     'completion_rate': comp_rate,
                 }
 
-                for metric_key in ['edit_distance_multree', 'ret_leaf_jaccard.dist',
+                for metric_key in ['mu_distance', 'ret_leaf_jaccard.dist',
                                    'ploidy_diff.dist', 'num_rets_bias']:
                     vals = self.comparisons[
                         (self.comparisons['method'] == threshold) &
@@ -1663,7 +1667,8 @@ class TetraploidSubsetAnalyzer:
             return
 
         panel_metrics = [
-            ('edit_distance_multree', 'Edit Distance'),
+            # was: ('edit_distance_multree', 'Edit Distance'),   (superseded by the mu-distance)
+            ('mu_distance', '$\\mu$-distance'),
             ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
             ('ret_sisters_jaccard.dist', 'Ret. Sister Measure'),
         ]
@@ -1737,7 +1742,8 @@ class TetraploidSubsetAnalyzer:
             return
 
         panel_metrics = [
-            ('edit_distance_multree', 'Edit Distance'),
+            # was: ('edit_distance_multree', 'Edit Distance'),   (superseded by the mu-distance)
+            ('mu_distance', '$\\mu$-distance'),
             ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
             ('ret_sisters_jaccard.dist', 'Ret. Sister Measure'),
             ('num_rets_bias', 'Ret. Count Bias (%)'),
@@ -1836,7 +1842,7 @@ class TetraploidSubsetAnalyzer:
 
         methods = self._get_methods_with_data()
         metrics = [
-            'edit_distance_multree', 'ret_leaf_jaccard.dist',
+            'mu_distance', 'ret_leaf_jaccard.dist',
             'ret_sisters_jaccard.dist', 'ploidy_diff.dist',
             'num_rets_bias', 'num_rets_bias_count', 'num_rets_diff',
         ]

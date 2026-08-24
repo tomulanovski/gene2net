@@ -95,7 +95,8 @@ METHOD_DISPLAY = {
 }
 
 METRICS = {
-    'edit_distance_multree': 'Edit Distance',
+    # was: 'edit_distance_multree': 'Edit Distance',   (superseded by the mu-distance)
+    'mu_distance': '$\\mu$-distance',
     'ret_leaf_jaccard.dist': 'Reticulation Descendants Measure',
     'ret_sisters_jaccard.dist': 'Reticulation Sister Measure',
     'ploidy_diff.dist': 'Ploidy Distance',
@@ -242,7 +243,7 @@ class PolyphestVsGrampaIter:
         print(f"{'='*70}\n")
 
         self.plot_completion_comparison()
-        self.plot_metric_across_conditions('edit_distance_multree')
+        self.plot_metric_across_conditions('mu_distance')
         self.plot_metric_across_conditions('ret_leaf_jaccard.dist')
         self.plot_metric_across_conditions('ret_sisters_jaccard.dist')
         self.plot_metric_across_conditions('ploidy_diff.dist')
@@ -398,12 +399,13 @@ class PolyphestVsGrampaIter:
     # 3. Combined accuracy panel (edit dist + ret leaf + bias in one figure)
     # ------------------------------------------------------------------
     def plot_combined_accuracy_panel(self):
-        """Multi-panel figure: edit distance, ret leaf distance, reticulation bias."""
+        """Multi-panel figure: mu-distance, ret leaf distance, reticulation bias."""
         if self.comparisons.empty:
             return
 
         panel_metrics = [
-            ('edit_distance_multree', 'Edit Distance', None),
+            # was: ('edit_distance_multree', 'Edit Distance', None),   (superseded by the mu-distance)
+            ('mu_distance', '$\\mu$-distance', None),
             ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure', None),
             ('num_rets_bias', 'Ret. Count Bias (%)', 0),  # 0 = reference line
         ]
@@ -494,7 +496,8 @@ class PolyphestVsGrampaIter:
             return
 
         box_metrics = [
-            ('edit_distance_multree', 'Edit Distance'),
+            # was: ('edit_distance_multree', 'Edit Distance'),   (superseded by the mu-distance)
+            ('mu_distance', '$\\mu$-distance'),
             ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
             ('ret_sisters_jaccard.dist', 'Ret. Sister Measure'),
             ('ploidy_diff.dist', 'Ploidy Distance'),
@@ -547,13 +550,13 @@ class PolyphestVsGrampaIter:
     # 5. Per-network comparison (paired bars or scatter)
     # ------------------------------------------------------------------
     def plot_per_network_comparison(self):
-        """Per-network edit distance under low ILS: paired bars sorted by network complexity."""
+        """Per-network mu-distance under low ILS: paired bars sorted by network complexity."""
         if self.comparisons.empty or self.network_stats is None:
             return
 
         # Use low ILS as baseline
         baseline_config = 'conf_ils_low_10M'
-        metric_key = 'edit_distance_multree'
+        metric_key = 'mu_distance'
 
         metric_data = self.comparisons[
             (self.comparisons['metric'] == metric_key) &
@@ -595,8 +598,8 @@ class PolyphestVsGrampaIter:
         ax.set_xticks(x)
         labels = [f'{n}\n(H={h})' for n, h in zip(net_order, h_strict_vals)]
         ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=8)
-        ax.set_ylabel('Edit Distance', fontsize=12, fontweight='bold')
-        ax.set_title(f'Per-Network Edit Distance (Low ILS)', fontsize=14, fontweight='bold', pad=15)
+        ax.set_ylabel('$\\mu$-distance', fontsize=12, fontweight='bold')
+        ax.set_title(f'Per-Network $\\mu$-distance (Low ILS)', fontsize=14, fontweight='bold', pad=15)
         ax.legend(fontsize=11, framealpha=0.9, loc='upper left')
         ax.grid(True, alpha=0.25, linestyle='--', axis='y')
         ax.set_ylim(0, 1.05)
@@ -606,7 +609,7 @@ class PolyphestVsGrampaIter:
         fig.savefig(self.plots_dir / "05_per_network_edit_distance.png", bbox_inches='tight', dpi=300)
         plt.close('all')
         gc.collect()
-        print("  [5] Per-network edit distance")
+        print("  [5] Per-network mu-distance")
 
     # ------------------------------------------------------------------
     # 6. Degradation lines (how accuracy changes across conditions)
@@ -617,7 +620,8 @@ class PolyphestVsGrampaIter:
             return
 
         line_metrics = [
-            ('edit_distance_multree', 'Edit Distance'),
+            # was: ('edit_distance_multree', 'Edit Distance'),   (superseded by the mu-distance)
+            ('mu_distance', '$\\mu$-distance'),
             ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
             ('ret_sisters_jaccard.dist', 'Ret. Sister Measure'),
         ]

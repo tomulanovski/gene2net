@@ -382,54 +382,54 @@ class ConfigurationAnalyzer:
         print("CATEGORY 2: Accuracy Metrics vs Network Characteristics")
         print("="*80)
 
-        # Edit Distance plots (PRIMARY METRIC)
+        # mu-distance plots (PRIMARY METRIC)
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Edit Distance vs Num Species (combined)...")
+        print(f"[{plot_num}/{total_plots}] mu-distance vs Num Species (combined)...")
         self.plot_accuracy_vs_characteristic_combined(
-            'Num_Species', 'Number of Species', 'edit_distance_multree',
-            'Edit Distance', '11_combined_editdist_multree_vs_num_species')
+            'Num_Species', 'Number of Species', 'mu_distance',
+            '$\\mu$-distance', '11_combined_mu_distance_vs_num_species')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Edit Distance vs Num Species (faceted)...")
+        print(f"[{plot_num}/{total_plots}] mu-distance vs Num Species (faceted)...")
         self.plot_accuracy_vs_characteristic_faceted(
-            'Num_Species', 'Number of Species', 'edit_distance_multree',
-            'Edit Distance', '11_faceted_editdist_multree_vs_num_species')
+            'Num_Species', 'Number of Species', 'mu_distance',
+            '$\\mu$-distance', '11_faceted_mu_distance_vs_num_species')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Edit Distance vs H_Strict (combined)...")
+        print(f"[{plot_num}/{total_plots}] mu-distance vs H_Strict (combined)...")
         self.plot_accuracy_vs_characteristic_combined(
-            'H_Strict', 'Number of Reticulations (Holm Fold)', 'edit_distance_multree',
-            'Edit Distance', '12_combined_editdist_multree_vs_h_strict')
+            'H_Strict', 'Number of Reticulations (Holm Fold)', 'mu_distance',
+            '$\\mu$-distance', '12_combined_mu_distance_vs_h_strict')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Edit Distance vs H_Strict (faceted)...")
+        print(f"[{plot_num}/{total_plots}] mu-distance vs H_Strict (faceted)...")
         self.plot_accuracy_vs_characteristic_faceted(
-            'H_Strict', 'Number of Reticulations (Holm Fold)', 'edit_distance_multree',
-            'Edit Distance', '12_faceted_editdist_multree_vs_h_strict')
+            'H_Strict', 'Number of Reticulations (Holm Fold)', 'mu_distance',
+            '$\\mu$-distance', '12_faceted_mu_distance_vs_h_strict')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Edit Distance vs Num Polyploids (combined)...")
+        print(f"[{plot_num}/{total_plots}] mu-distance vs Num Polyploids (combined)...")
         self.plot_accuracy_vs_characteristic_combined(
-            'Num_Polyploids', 'Number of Polyploid Species', 'edit_distance_multree',
-            'Edit Distance', '13_combined_editdist_multree_vs_polyploids')
+            'Num_Polyploids', 'Number of Polyploid Species', 'mu_distance',
+            '$\\mu$-distance', '13_combined_mu_distance_vs_polyploids')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Edit Distance vs Num Polyploids (faceted)...")
+        print(f"[{plot_num}/{total_plots}] mu-distance vs Num Polyploids (faceted)...")
         self.plot_accuracy_vs_characteristic_faceted(
-            'Num_Polyploids', 'Number of Polyploid Species', 'edit_distance_multree',
-            'Edit Distance', '13_faceted_editdist_multree_vs_polyploids')
+            'Num_Polyploids', 'Number of Polyploid Species', 'mu_distance',
+            '$\\mu$-distance', '13_faceted_mu_distance_vs_polyploids')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Edit Distance vs Max Copies (combined)...")
+        print(f"[{plot_num}/{total_plots}] mu-distance vs Max Copies (combined)...")
         self.plot_accuracy_vs_characteristic_combined(
-            'Max_Copies', 'Maximum Copies per Species', 'edit_distance_multree',
-            'Edit Distance', '14_combined_editdist_multree_vs_max_copies')
+            'Max_Copies', 'Maximum Copies per Species', 'mu_distance',
+            '$\\mu$-distance', '14_combined_mu_distance_vs_max_copies')
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Edit Distance vs Max Copies (faceted)...")
+        print(f"[{plot_num}/{total_plots}] mu-distance vs Max Copies (faceted)...")
         self.plot_accuracy_vs_characteristic_faceted(
-            'Max_Copies', 'Maximum Copies per Species', 'edit_distance_multree',
-            'Edit Distance', '14_faceted_editdist_multree_vs_max_copies')
+            'Max_Copies', 'Maximum Copies per Species', 'mu_distance',
+            '$\\mu$-distance', '14_faceted_mu_distance_vs_max_copies')
 
         # RF Distance plots — DISABLED: RF distance is not well-defined for MUL-trees
         # (bipartitions with duplicated leaf labels lose information via set deduplication)
@@ -525,7 +525,7 @@ class ConfigurationAnalyzer:
         self.plot_reticulation_error_distribution()
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Edit Distance Distribution...")
+        print(f"[{plot_num}/{total_plots}] mu-distance Distribution...")
         self.plot_edit_distance_distribution()
         
         plot_num += 1
@@ -533,10 +533,10 @@ class ConfigurationAnalyzer:
         self.plot_distance_metrics_comparison()
 
         plot_num += 1
-        print(f"[{plot_num}/{total_plots}] Edit Distance Distribution...")
-        self.plot_metric_distribution('edit_distance_multree',
-                                      'Edit Distance',
-                                      '08b_edit_distance_multree_distribution')
+        print(f"[{plot_num}/{total_plots}] mu-distance Distribution...")
+        self.plot_metric_distribution('mu_distance',
+                                      '$\\mu$-distance',
+                                      '08b_mu_distance_distribution')
 
         # RF Distance Distribution — DISABLED: RF not well-defined for MUL-trees
         # plot_num += 1
@@ -989,23 +989,23 @@ class ConfigurationAnalyzer:
         gc.collect()
 
     def plot_edit_distance_distribution(self):
-        """Plot MUL-tree edit distance distribution for each method"""
+        """Plot MUL-tree mu-distance distribution for each method"""
         if self.metrics is None:
             return
 
-        # Use MUL-tree edit distance (PRIMARY METRIC)
-        edit_data = self.metrics[self.metrics['metric'] == 'edit_distance_multree'].copy()
+        # Use MUL-tree mu-distance (PRIMARY METRIC)
+        mu_data = self.metrics[self.metrics['metric'] == 'mu_distance'].copy()
         
-        # Fallback to network edit distance if MUL-tree not available
-        if len(edit_data) == 0:
-            edit_data = self.metrics[self.metrics['metric'] == 'edit_distance'].copy()
+        # Fallback to network mu-distance if MUL-tree not available
+        if len(mu_data) == 0:
+            mu_data = self.metrics[self.metrics['metric'] == 'edit_distance'].copy()
             metric_type = 'Network'
-            if len(edit_data) == 0:
+            if len(mu_data) == 0:
                 return
         else:
             metric_type = 'MUL-tree'
 
-        methods = sorted(edit_data['method'].unique())
+        methods = sorted(mu_data['method'].unique())
 
         fig, ax = plt.subplots(figsize=(12, 7))
 
@@ -1014,7 +1014,7 @@ class ConfigurationAnalyzer:
         colors = []
 
         for method in methods:
-            method_data = edit_data[edit_data['method'] == method]['mean'].dropna()
+            method_data = mu_data[mu_data['method'] == method]['mean'].dropna()
             if len(method_data) > 0:
                 data_by_method.append(method_data)
                 labels.append(display_name(method))
@@ -1031,17 +1031,17 @@ class ConfigurationAnalyzer:
             patch.set_facecolor(color)
             patch.set_alpha(0.7)
 
-        ax.set_ylabel(f'Edit Distance\n(0 = identical, 1 = very different)',
+        ax.set_ylabel(f'$\\mu$-distance\n(0 = identical, 1 = very different)',
                      fontsize=14, fontweight='bold')
         ax.set_xlabel('Method', fontsize=14, fontweight='bold')
-        ax.set_title(f'Edit Distance Distribution ({self.ils_level})',
+        ax.set_title(f'$\\mu$-distance Distribution ({self.ils_level})',
                     fontsize=15, fontweight='bold', pad=20)
         ax.grid(True, alpha=0.25, axis='y', linestyle='--')
         plt.xticks(rotation=45, ha='right', fontsize=11)
 
         plt.tight_layout()
-        fig.savefig(self.plots_dir / "08_edit_distance_multree_boxplot.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "08_edit_distance_multree_boxplot.png", bbox_inches='tight', dpi=300)
+        fig.savefig(self.plots_dir / "08_mu_distance_boxplot.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "08_mu_distance_boxplot.png", bbox_inches='tight', dpi=300)
         plt.close('all')
         gc.collect()
 
@@ -1057,7 +1057,8 @@ class ConfigurationAnalyzer:
         # Collect data for distance metrics (RF disabled: not well-defined for MUL-trees)
         metrics_to_compare = {
             'edit_distance': 'Network Edit Distance',
-            'edit_distance_multree': 'Edit Distance',
+            # was: 'edit_distance_multree': 'Edit Distance',   (superseded by the mu-distance)
+            'mu_distance': '$\\mu$-distance',
             # 'rf_distance': 'RF Distance (MUL-tree)',  # Disabled: RF not well-defined for MUL-trees
         }
 
@@ -1126,7 +1127,7 @@ class ConfigurationAnalyzer:
             plt.setp(ax.get_xticklabels(), ha='right')
             
             # Highlight if this is the primary metric
-            if metric_name in ['edit_distance_multree']:
+            if metric_name in ['mu_distance']:
                 ax.patch.set_edgecolor('#2E8B57')
                 ax.patch.set_linewidth(3)
         
@@ -1415,7 +1416,7 @@ class ConfigurationAnalyzer:
         gc.collect()
 
     def plot_method_summary(self):
-        """Summary bar plot: completion rate, edit distance, and reticulation error with bias"""
+        """Summary bar plot: completion rate, mu-distance, and reticulation error with bias"""
         if self.inventory is None or self.metrics is None:
             return
 
@@ -1431,13 +1432,13 @@ class ConfigurationAnalyzer:
             comp_rate = method_inv['inferred_exists'].sum() / len(method_inv) * 100
             completion_rates.append(comp_rate)
 
-            # Use MUL-tree edit distance (PRIMARY METRIC)
+            # Use MUL-tree mu-distance (PRIMARY METRIC)
             method_edit = self.metrics[
                 (self.metrics['method'] == method) &
-                (self.metrics['metric'] == 'edit_distance_multree')
+                (self.metrics['metric'] == 'mu_distance')
             ]
             
-            # Fallback to network edit distance if needed
+            # Fallback to network mu-distance if needed
             if len(method_edit) == 0:
                 method_edit = self.metrics[
                     (self.metrics['method'] == method) &
@@ -1504,11 +1505,11 @@ class ConfigurationAnalyzer:
             ax1.text(bar.get_x() + bar.get_width()/2., height,
                     f'{val:.1f}%', ha='center', va='bottom', fontsize=10, fontweight='bold')
 
-        # Edit distance
+        # mu-distance
         bars2 = ax2.bar(method_labels, edit_distances, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
-        ax2.set_ylabel('Mean Edit Distance', fontsize=13, fontweight='bold')
+        ax2.set_ylabel('Mean $\\mu$-distance', fontsize=13, fontweight='bold')
         ax2.set_xlabel('Method', fontsize=13, fontweight='bold')
-        ax2.set_title('Edit Distance (lower = better)', fontsize=14, fontweight='bold', pad=15)
+        ax2.set_title('$\\mu$-distance (lower = better)', fontsize=14, fontweight='bold', pad=15)
         ax2.grid(True, alpha=0.25, axis='y', linestyle='--')
         ax2.tick_params(axis='x', rotation=45, labelsize=10)
         plt.setp(ax2.get_xticklabels(), ha='right')
@@ -1983,7 +1984,7 @@ class ConfigurationAnalyzer:
 
                 for _, metric_row in net_metrics.iterrows():
                     metric_name = metric_row['metric']
-                    if metric_name in ['edit_distance_multree', 'num_rets_diff']:
+                    if metric_name in ['mu_distance', 'num_rets_diff']:
                         row[metric_name] = metric_row['mean']
 
                 correlation_data.append(row)
@@ -1997,7 +1998,7 @@ class ConfigurationAnalyzer:
         # Select columns for correlation
         property_cols = ['Num_Species', 'H_Strict', 'H_Relaxed', 'Num_Polyploids',
                         'Max_Copies', 'Total_WGD', 'Polyploid_Ratio']
-        metric_cols = ['completion_rate', 'edit_distance_multree', 'num_rets_diff']
+        metric_cols = ['completion_rate', 'mu_distance', 'num_rets_diff']
 
         # Keep only available columns
         property_cols = [c for c in property_cols if c in df.columns]
@@ -2071,7 +2072,7 @@ class ConfigurationAnalyzer:
 
                 for _, metric_row in net_metrics.iterrows():
                     metric_name = metric_row['metric']
-                    if metric_name in ['edit_distance_multree', 'num_rets_diff']:
+                    if metric_name in ['mu_distance', 'num_rets_diff']:
                         row[metric_name] = metric_row['mean']
 
                 correlation_data.append(row)
@@ -2085,7 +2086,7 @@ class ConfigurationAnalyzer:
         # Select columns for correlation
         property_cols = ['Num_Species', 'H_Strict', 'H_Relaxed', 'Num_Polyploids',
                         'Max_Copies', 'Total_WGD', 'Polyploid_Ratio']
-        metric_cols = ['completion_rate', 'edit_distance_multree', 'num_rets_diff']
+        metric_cols = ['completion_rate', 'mu_distance', 'num_rets_diff']
 
         # Keep only available columns
         property_cols = [c for c in property_cols if c in df.columns]
@@ -2144,13 +2145,13 @@ class ConfigurationAnalyzer:
             successful = method_inv['inferred_exists'].sum()
             comp_rate = successful / total * 100 if total > 0 else 0
 
-            # Use MUL-tree edit distance (PRIMARY METRIC)
+            # Use MUL-tree mu-distance (PRIMARY METRIC)
             method_edit = self.metrics[
                 (self.metrics['method'] == method) &
-                (self.metrics['metric'] == 'edit_distance_multree')
+                (self.metrics['metric'] == 'mu_distance')
             ]
             
-            # Fallback to network edit distance if needed
+            # Fallback to network mu-distance if needed
             if len(method_edit) == 0:
                 method_edit = self.metrics[
                     (self.metrics['method'] == method) &
@@ -2242,14 +2243,14 @@ class ConfigurationAnalyzer:
                 else:
                     row[f'{method}_CompRate_%'] = np.nan
 
-                # Edit distance (MUL-tree, PRIMARY)
+                # mu-distance (MUL-tree, PRIMARY)
                 method_edit = self.metrics[
                     (self.metrics['method'] == method) &
                     (self.metrics['network'] == network) &
-                    (self.metrics['metric'] == 'edit_distance_multree')
+                    (self.metrics['metric'] == 'mu_distance')
                 ]
                 
-                # Fallback to network edit distance
+                # Fallback to network mu-distance
                 if len(method_edit) == 0:
                     method_edit = self.metrics[
                         (self.metrics['method'] == method) &

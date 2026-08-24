@@ -97,7 +97,8 @@ METHOD_DISPLAY = {
 }
 
 METRICS = {
-    'edit_distance_multree':  'Edit Distance',
+    # was: 'edit_distance_multree':  'Edit Distance',   (superseded by the mu-distance)
+    'mu_distance':  '$\\mu$-distance',
     'ret_leaf_jaccard.dist':  'Reticulation Descendants Measure',
     'ret_sisters_jaccard.dist': 'Reticulation Sister Measure',
     'ploidy_diff.dist':       'Ploidy Distance',
@@ -364,7 +365,8 @@ class PriorComparison:
             return
 
         panel_metrics = [
-            ('edit_distance_multree',  'Edit Distance',      None),
+            # was: ('edit_distance_multree',  'Edit Distance',      None),   (superseded by the mu-distance)
+            ('mu_distance',  '$\\mu$-distance',      None),
             ('ret_leaf_jaccard.dist',  'Ret. Descendants Measure', None),
             ('num_rets_bias',          'Ret. Bias (%)',       0),
         ]
@@ -428,7 +430,8 @@ class PriorComparison:
             return
 
         box_metrics = [
-            ('edit_distance_multree',   'Edit Distance'),
+            # was: ('edit_distance_multree',   'Edit Distance'),   (superseded by the mu-distance)
+            ('mu_distance',   '$\\mu$-distance'),
             ('ret_leaf_jaccard.dist',   'Ret. Descendants Measure'),
             ('ret_sisters_jaccard.dist','Ret. Sister Measure'),
             ('ploidy_diff.dist',        'Ploidy Distance'),
@@ -478,7 +481,7 @@ class PriorComparison:
             return
 
         baseline = 'conf_ils_low_10M'
-        metric_key = 'edit_distance_multree'
+        metric_key = 'mu_distance'
 
         metric_data = self.comparisons[
             (self.comparisons['metric'] == metric_key) &
@@ -517,15 +520,15 @@ class PriorComparison:
         ax.set_xticks(x)
         ax.set_xticklabels([f'{n}\n(H={h})' for n, h in zip(net_order, h_vals)],
                            rotation=45, ha='right', fontsize=8)
-        ax.set_ylabel('Edit Distance', fontsize=12, fontweight='bold')
-        ax.set_title('Per-Network Edit Distance (Low ILS)', fontsize=14, fontweight='bold', pad=15)
+        ax.set_ylabel('$\\mu$-distance', fontsize=12, fontweight='bold')
+        ax.set_title('Per-Network $\\mu$-distance (Low ILS)', fontsize=14, fontweight='bold', pad=15)
         ax.legend(fontsize=10, framealpha=0.9, loc='upper left')
         ax.grid(True, alpha=0.25, linestyle='--', axis='y')
         ax.set_ylim(0, 1.05)
 
         plt.tight_layout()
         self._save(fig, "05_per_network_edit_distance")
-        print("  [5] Per-network edit distance")
+        print("  [5] Per-network mu-distance")
 
     # ── 6. degradation lines ──────────────────────────────────────────────────
     def plot_degradation_lines(self):
@@ -533,7 +536,8 @@ class PriorComparison:
             return
 
         line_metrics = [
-            ('edit_distance_multree',    'Edit Distance'),
+            # was: ('edit_distance_multree',    'Edit Distance'),   (superseded by the mu-distance)
+            ('mu_distance',    '$\\mu$-distance'),
             ('ret_leaf_jaccard.dist',    'Reticulation Descendants Measure'),
             ('ret_sisters_jaccard.dist', 'Reticulation Sister Measure'),
         ]

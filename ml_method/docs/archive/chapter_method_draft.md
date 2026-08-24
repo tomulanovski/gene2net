@@ -72,7 +72,7 @@ the mean of the feature vectors of the leaves below it. This step has no learnab
 is computed once per sample, so it is a fixed preprocessing operation rather than a learned
 aggregation.
 
-Second, the node features are projected to a hidden dimension of 256 by a two-layer perceptron.
+Second, the node features are projected to a hidden dimension of 256 by a two-layer MLP.
 
 Third, four graph attention layers refine the node representations. Each layer uses four attention
 heads, a dropout of 0.1, a residual connection, and layer normalisation. The attention passes
@@ -82,29 +82,37 @@ endpoint nodes, the per-edge predictions inherit that global context indirectly,
 rather than resting on the local edge features alone.
 
 Fourth, each branch is given an embedding. For a branch with parent node representation and child
-node representation, the embedding is produced by a perceptron applied to the concatenation of the
+node representation, the embedding is produced by a two-layer MLP applied to the concatenation of the
 parent representation, the child representation, and the 9 edge features of that branch.
 
-Fifth, two prediction heads read the branch embeddings. The detection head is a perceptron that
+Fifth, two prediction heads read the branch embeddings. The detection head is a two-layer MLP that
 maps each branch embedding to a binary decision, whether a whole genome duplication occurred on
 that branch. The placement head scores, for each detected branch, every other branch as a
 candidate second parent. For a source branch i and a candidate branch j, the score is produced by
-a perceptron applied to the concatenation of the embedding of i, the embedding of j, and the
-pairwise feature of the ordered pair i and j. Applying a softmax over the candidates gives a
+a two-layer MLP applied to the concatenation of the embedding of i, the embedding of j, and the
+pairwise features of the ordered pair i and j. Applying a softmax over the candidates gives a
 distribution over parents. When the highest scoring candidate is the source branch itself the
 event is an autopolyploidy, and otherwise it is an allopolyploidy whose second parent is the
 chosen branch.
 
 ### Pairwise placement features
 
-The pairwise feature for an ordered pair of branches carries the relational co-clustering signal
-that the placement head needs and that no per-branch feature can express. It has four channels. Two
-are the mean and maximum, over the species in clade i crossed with the species in clade j, of the
-leaf-sister co-clustering matrix, which for a single-species candidate reduce to the exact
-co-clustering value between the two species. The other two are copy-aware cluster-support channels,
-a co-clustering signal that conditions on the duplicated copies of the source clade. The
-copy-aware cluster-support did not help an earlier two-parent variant but does contribute to the
-one-partner model reported here, as the feature-importance section shows.
+For a clade the detection head has flagged as duplicated, the placement head scores every other edge
+as the candidate second parent, the edge onto which a copy of that clade is grafted. This choice is
+relational. It depends on how the duplicated clade sits relative to a candidate parent rather than on
+either edge alone, so it needs a signal defined on the ordered pair of the source clade and the
+candidate, which no single-edge feature can provide. That signal is co-clustering, the frequency
+across the gene trees with which a species from the source clade appears as a sister to a species from
+the candidate. It is informative because an
+allopolyploid grafts a copy of its clade next to its second parent, so the two co-cluster there. There
+are four pairwise features, in two pairs. The first pair is the mean and the maximum, across the
+species of the two clades, of this co-clustering. The second pair is a copy-aware cluster-support
+signal. When a species is duplicated, one copy tends to stay home among its own clade while the other
+lands away near its allopolyploid partner. For each such away copy we measure the fraction of its
+local neighborhood in the gene tree that belongs to the candidate partner clade, and we summarise that
+fraction over the gene trees as an intensity and as a per-copy peak. This second pair is the sharper
+allopolyploid signal, because it reads the neighborhood of the copy that actually moved rather than
+symmetric sisterhood alone.
 
 ## Training objective
 

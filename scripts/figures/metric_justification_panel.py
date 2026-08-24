@@ -1,8 +1,12 @@
 """
 metric_justification_panel.py - Build a thesis figure that demonstrates why
-edit distance alone is insufficient for evaluating phylogenetic network
+a single global distance is insufficient for evaluating phylogenetic network
 inference, and how the complementary metrics in `pairwise_compare`
 decompose disagreement into three error categories: identity, count, parents.
+
+The global distance reported here is the normalized mu-distance, the same
+headline metric the benchmark uses. It replaced the graph edit distance, which
+is retained commented out below so the earlier numbers can be reproduced.
 
 Outputs (under scripts/figures/output/metric_justification/):
   - metric_justification_panel.{pdf,png}  (3x2 figure of folded networks)
@@ -37,12 +41,32 @@ from compare_reticulations import (
 )
 
 
+def mu_distance(t1: ReticulateTree, t2: ReticulateTree,
+                normalize: bool = True) -> float:
+    """Normalized mu-distance between the two folded networks.
+
+    Delegates to `ReticulateTree.get_mu_distance`, so this figure reports
+    exactly the metric the benchmark does. Unlike the graph edit distance it
+    replaced, it is exact rather than approximate and cannot depend on the
+    order children happen to appear in the Newick string.
+
+    Raises rather than returning a placeholder when the networks fall outside
+    the class the metric is defined on, so a figure is never built on a
+    silently substituted number.
+    """
+    return t1.get_mu_distance(t2, normalize=normalize)
+
+
 def safe_edit_distance_multree(t1: ReticulateTree, t2: ReticulateTree,
                                 normalize: bool = True) -> float:
     """Graph edit distance on the underlying MUL-trees.
 
+    Superseded by `mu_distance` and no longer part of METRIC_ORDER. Kept so
+    the earlier version of the table can be reproduced by adding
+    'edit_distance_multree' back to METRIC_ORDER and to compute_pair_metrics.
+
     Delegates to `ReticulateTree.get_edit_distance_multree`, so this figure
-    reports exactly the metric the benchmark does, canonical child ordering
+    reports exactly the metric the benchmark did, canonical child ordering
     included. This module used to carry its own copy to dodge the POSIX-only
     SIGALRM timeout; that is now guarded inside the method, so the duplicate
     is gone and the two cannot drift apart again.
@@ -146,7 +170,8 @@ def draw_reticulate_tree(tree: ReticulateTree, ax, title: str = '') -> None:
 
 
 METRIC_ORDER = [
-    'edit_distance_multree',
+    'mu_distance',
+    # 'edit_distance_multree',   # superseded by mu_distance
     'num_rets_diff',
     'num_rets_bias',
     'polyploid_species_jaccard',
@@ -163,9 +188,8 @@ def compute_pair_metrics(truth: ReticulateTree,
                          inferred: ReticulateTree) -> dict:
     """Build the full metric vector for one (truth, inferred) pair.
 
-    Mirrors `pairwise_compare` from compare_reticulations.py minus
-    rf_distance (excluded per spec) and using the Windows-safe edit
-    distance helper.
+    Mirrors `pairwise_compare` from compare_reticulations.py. The global
+    measure is the normalized mu-distance, matching the benchmark.
     """
     num_rets = compare_num_rets(
         truth.get_reticulation_count(),
@@ -198,7 +222,8 @@ def compute_pair_metrics(truth: ReticulateTree,
     )
 
     return {
-        'edit_distance_multree': safe_edit_distance_multree(truth, inferred),
+        'mu_distance': mu_distance(truth, inferred),
+        # 'edit_distance_multree': safe_edit_distance_multree(truth, inferred),
         'num_rets_diff': num_rets['abs'],
         'num_rets_bias': num_rets['signed'],
         'polyploid_species_jaccard': poly_jac,

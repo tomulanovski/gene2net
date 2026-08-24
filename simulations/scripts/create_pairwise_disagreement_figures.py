@@ -88,7 +88,8 @@ CONFIG_FAMILIES = {
 LEVEL_ORDER = ['Low', 'Medium', 'High']
 
 TARGET_METRICS = {
-    'edit_distance_multree': 'Edit Distance',
+    # was: 'edit_distance_multree': 'Edit Distance',   (superseded by the mu-distance)
+    'mu_distance': '$\\mu$-distance',
     'ret_leaf_jaccard.dist': 'Reticulation Descendants Measure',
     'ret_sisters_jaccard.dist': 'Reticulation Sister Measure',
 }
