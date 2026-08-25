@@ -181,6 +181,18 @@ METHOD_DISPLAY = {
 CROSS_CONFIG_EXCLUDE = {'grandma_split_prior'}
 
 
+def per_network(df):
+    """Collapse replicate-level rows to one value per network.
+
+    Replicates of the same network are not independent observations, so every
+    mean and standard error in this module is taken across networks rather than
+    across replicate rows. Pooling replicates would treat correlated draws as
+    independent and give standard errors that are too small, and it would also
+    weight each network by how many of its replicates happened to complete.
+    """
+    return df.groupby('network')['value'].mean()
+
+
 def display_name(method: str) -> str:
     """Return publication-ready display name for a method."""
     return METHOD_DISPLAY.get(method, method)
@@ -588,7 +600,7 @@ class CrossConfigAnalyzer:
                 means = []
                 sems = []
                 for level in LEVEL_ORDER:
-                    level_data = method_data[method_data['level'] == level]['value']
+                    level_data = method_data[method_data['level'] == level].pipe(per_network)
                     if len(level_data) > 0:
                         means.append(level_data.mean())
                         sems.append(level_data.std() / np.sqrt(len(level_data)) if len(level_data) > 1 else 0)
@@ -640,7 +652,8 @@ class CrossConfigAnalyzer:
             print(f"  WARNING: No data for {metric_key}, skipping heatmap")
             return
 
-        pivot = metric_df.groupby(['method', 'config'])['value'].mean().unstack()
+        pivot = (metric_df.groupby(['method', 'config', 'network'])['value'].mean()
+                 .groupby(['method', 'config']).mean().unstack())
 
         # Order columns
         config_order = []
@@ -750,7 +763,7 @@ class CrossConfigAnalyzer:
                 errs_low = []
                 errs_high = []
                 for level in LEVEL_ORDER:
-                    level_data = method_data[method_data['level'] == level]['value']
+                    level_data = method_data[method_data['level'] == level].pipe(per_network)
                     if len(level_data) > 0:
                         med = level_data.median()
                         centers.append(med)
@@ -846,7 +859,7 @@ class CrossConfigAnalyzer:
                     comp_data = method_data[method_data['complexity'] == complexity]
                     means = []
                     for level in LEVEL_ORDER:
-                        level_data = comp_data[comp_data['level'] == level]['value']
+                        level_data = comp_data[comp_data['level'] == level].pipe(per_network)
                         means.append(level_data.mean() if len(level_data) > 0 else np.nan)
 
                     label = f"{method} ({complexity})"
@@ -909,7 +922,8 @@ class CrossConfigAnalyzer:
             ]
             if metric_df.empty:
                 continue
-            means = metric_df.groupby('method')['value'].mean()
+            means = (metric_df.groupby(['method', 'network'])['value'].mean()
+                 .groupby('method').mean())
             method_metric_means[metric_key] = means
 
         # Add completion rate (invert: 100 - rate so lower = better for ranking)
@@ -1037,9 +1051,9 @@ class CrossConfigAnalyzer:
             if metric_df.empty:
                 continue
 
-            summary = metric_df.groupby(['method', 'config'])['value'].agg(
-                ['mean', 'std', 'count']
-            ).reset_index()
+            summary = (metric_df.groupby(['method', 'config', 'network'])['value'].mean()
+                       .groupby(['method', 'config'])
+                       .agg(['mean', 'std', 'count']).reset_index())
             summary['metric'] = metric_key
             summary['metric_label'] = metric_label
             rows.append(summary)
@@ -1363,7 +1377,7 @@ class PolyphestThresholdAnalyzer:
                 errs_high = []
                 for level in LEVEL_ORDER:
                     cfg = fam_info['configs'].get(level)
-                    level_data = fam_data[(fam_data['method'] == threshold) & (fam_data['config'] == cfg)]['value']
+                    level_data = fam_data[(fam_data['method'] == threshold) & (fam_data['config'] == cfg)].pipe(per_network)
                     if len(level_data) > 0:
                         if use_median:
                             med = level_data.median()
@@ -1439,7 +1453,7 @@ class PolyphestThresholdAnalyzer:
             labels = []
             colors = []
             for threshold in POLYPHEST_THRESHOLDS:
-                vals = metric_data[metric_data['method'] == threshold]['value'].dropna()
+                vals = metric_data[metric_data['method'] == threshold].pipe(per_network).dropna()
                 if len(vals) > 0:
                     data_by_threshold.append(vals.values)
                     labels.append(self._poly_display(threshold))
@@ -1493,7 +1507,7 @@ class PolyphestThresholdAnalyzer:
                         (self.comparisons['config'] == config) &
                         (self.comparisons['metric'] == metric_key) &
                         (self.comparisons['status'] == 'SUCCESS')
-                    ]['value']
+                    ].pipe(per_network)
                     row[f'{metric_key}_mean'] = vals.mean() if len(vals) > 0 else np.nan
                     row[f'{metric_key}_std'] = vals.std() if len(vals) > 1 else np.nan
 
@@ -1699,7 +1713,7 @@ class TetraploidSubsetAnalyzer:
                 cfg_data = metric_data[metric_data['config'] == ils_cfg]
                 centers, errs = [], []
                 for method in methods:
-                    vals = cfg_data[cfg_data['method'] == method]['value'].dropna()
+                    vals = cfg_data[cfg_data['method'] == method].pipe(per_network).dropna()
                     if len(vals) > 0:
                         c = vals.mean()
                         sem = vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0
@@ -1780,7 +1794,7 @@ class TetraploidSubsetAnalyzer:
                         vals = metric_data[
                             (metric_data['method'] == method) &
                             (metric_data['config'] == cfg[0])
-                        ]['value'].dropna()
+                        ].pipe(per_network).dropna()
                         if len(vals) > 0:
                             if use_median:
                                 c = vals.median()
@@ -1861,7 +1875,7 @@ class TetraploidSubsetAnalyzer:
                     (self.comparisons['method'] == method) &
                     (self.comparisons['metric'] == metric_key) &
                     (self.comparisons['status'] == 'SUCCESS')
-                ]['value'].dropna()
+                ].pipe(per_network).dropna()
 
                 if len(vals) > 0:
                     row[f'{metric_key}_mean'] = round(vals.mean(), 3)

@@ -114,6 +114,18 @@ plt.rcParams['lines.linewidth'] = 2.5
 plt.rcParams['lines.markersize'] = 8
 
 
+def per_network(df):
+    """Collapse replicate-level rows to one value per network.
+
+    Replicates of the same network are not independent observations, so every
+    mean and standard error in this module is taken across networks rather than
+    across replicate rows. Pooling replicates would treat correlated draws as
+    independent and give standard errors that are too small, and it would also
+    weight each network by how many of its replicates happened to complete.
+    """
+    return df.groupby('network')['value'].mean()
+
+
 def dn(method):
     return METHOD_DISPLAY.get(method, method)
 
@@ -347,7 +359,7 @@ class PolyphestVsGrampaIter:
                     vals = metric_data[
                         (metric_data['method'] == method) &
                         (metric_data['config'] == cfg)
-                    ]['value']
+                    ].pipe(per_network)
                     if len(vals) > 0:
                         if use_median:
                             centers.append(vals.median())
@@ -436,7 +448,7 @@ class PolyphestVsGrampaIter:
                         vals = metric_data[
                             (metric_data['method'] == method) &
                             (metric_data['config'] == cfg)
-                        ]['value']
+                        ].pipe(per_network)
                         if len(vals) > 0:
                             if use_median:
                                 med = vals.median()
@@ -518,7 +530,7 @@ class PolyphestVsGrampaIter:
             labels = []
             colors = []
             for method in METHODS:
-                vals = metric_data[metric_data['method'] == method]['value'].dropna()
+                vals = metric_data[metric_data['method'] == method].pipe(per_network).dropna()
                 if len(vals) > 0:
                     data_list.append(vals.values)
                     labels.append(dn(method))
@@ -650,7 +662,7 @@ class PolyphestVsGrampaIter:
                         vals = metric_data[
                             (metric_data['method'] == method) &
                             (metric_data['config'] == cfg)
-                        ]['value']
+                        ].pipe(per_network)
                         if len(vals) > 0:
                             if use_median:
                                 med = vals.median()
@@ -722,7 +734,7 @@ class PolyphestVsGrampaIter:
                         (self.comparisons['config'] == config) &
                         (self.comparisons['metric'] == metric_key) &
                         (self.comparisons['status'] == 'SUCCESS')
-                    ]['value']
+                    ].pipe(per_network)
                     row[f'{metric_key}_mean'] = vals.mean() if len(vals) > 0 else np.nan
                     row[f'{metric_key}_median'] = vals.median() if len(vals) > 0 else np.nan
                     row[f'{metric_key}_std'] = vals.std() if len(vals) > 1 else np.nan
