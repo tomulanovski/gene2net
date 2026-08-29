@@ -164,8 +164,9 @@ def main():
     w('')
     mu_rows = pairwise[pairwise['metric'] == 'mu_distance']
     pair = find_pair(mu_rows, 'polyphest', 'grandma_split').iloc[0]
+    median = f'{pair["median"]:.2f}' if 'median' in pair else 'RERUN FOR MEDIAN'
     w(f'  mu-distance   min {pair["min"]:.2f}   max {pair["max"]:.2f}   '
-      f'mean {pair["mean"]:.2f}   sd {pair["std"]:.2f}')
+      f'mean {pair["mean"]:.2f}   median {median}   sd {pair["std"]:.2f}')
     w(f'  datasets scored (n_networks): {int(pair["n_networks"])}'
       '   (edit distance covered 10)')
 
@@ -183,14 +184,15 @@ def main():
     # unchanged reticulation measures, reprinted so the rest of 3.3.2 can be checked
     w('')
     w('  unchanged by the metric switch, reprinted to confirm:')
-    for metric, was in (('ret_leaf_jaccard.dist', '0.33 to 0.95'),
-                        ('ret_sisters_jaccard.dist', '0.72 to 0.97')):
+    for metric, was in (('ret_leaf_jaccard.dist', '0.33 to 0.95, median 0.73'),
+                        ('ret_sisters_jaccard.dist', '0.72 to 0.97, median 0.87')):
         sub = pairwise[pairwise['metric'] == metric]
         if sub.empty:
             w(f'    !! {metric} absent from pairwise_summary.csv')
             continue
         r = find_pair(sub, 'polyphest', 'grandma_split').iloc[0]
-        w(f'    {metric:<26} {r["min"]:.2f} to {r["max"]:.2f}   (was {was})')
+        med = f', median {r["median"]:.2f}' if 'median' in r else ''
+        w(f'    {metric:<26} {r["min"]:.2f} to {r["max"]:.2f}{med}   (was {was})')
 
     # ------------------------------------------------------- overall coverage
     w('')

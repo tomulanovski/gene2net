@@ -19,6 +19,12 @@ import seaborn as sns
 from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
+# run_analysis.py imports this module at startup, before the comparison phase runs,
+# so the blanket ignore above silences the whole pipeline and not just the plotting.
+# The mu-distance precondition warning is the ONLY record of why a pair could not be
+# scored, so it is exempted. Without this the mu_scored column says a pair failed but
+# nothing anywhere says why.
+warnings.filterwarnings('always', message='mu-distance not computed')
 
 # Publication-quality settings
 plt.rcParams['figure.dpi'] = 300

@@ -105,7 +105,8 @@ class ResultSummarizer:
         Generate pairwise comparison summary aggregated across all networks
 
         Returns:
-            DataFrame with columns: method1, method2, metric, mean, std, min, max, n_networks
+            DataFrame with columns: method1, method2, metric, mean, median, std,
+                                    min, max, n_networks
         """
         if self.valid_df.empty:
             return pd.DataFrame()
@@ -113,8 +114,11 @@ class ResultSummarizer:
         # Group by (method1, method2, metric) and aggregate across networks
         grouped = self.valid_df.groupby(['method1', 'method2', 'metric'])['value']
 
+        # median is reported alongside mean because the manuscript quotes medians for
+        # the reticulation measures, which are skewed.
         summary = grouped.agg([
             ('mean', 'mean'),
+            ('median', 'median'),
             ('std', 'std'),
             ('min', 'min'),
             ('max', 'max'),
