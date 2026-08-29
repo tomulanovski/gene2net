@@ -197,6 +197,20 @@ echo "Starting GRANDMA_SPLIT with real ploidy prior..."
 echo "============================================================================"
 echo ""
 
+
+# Grandma pickles the whole gene-tree set plus registry to a
+# tempfile.mkstemp() file once per collapse batch (grampack/ops.py:1633), which
+# lands in /tmp unless TMPDIR says otherwise. On 2026-07-10 that filled /tmp and
+# killed 31 runs of conf_dup_loss_high_10M_ne2M with OSError 28. Send it to
+# node-local scratch and delete it when the job ends, even if killed.
+if [ -d /localscratch ]; then
+    export TMPDIR="$(mktemp -d -p /localscratch grandma.XXXXXX)"
+else
+    export TMPDIR="$(mktemp -d)"
+fi
+trap 'rm -rf "$TMPDIR"' EXIT
+echo "Temp dir (TMPDIR): $TMPDIR"
+
 start_time=$(date +%s)
 
 python "$GRANDMA_SPLIT_SCRIPT" \
