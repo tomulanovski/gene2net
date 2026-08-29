@@ -196,7 +196,7 @@ class ComparisonEngine:
 
         Input:
             {
-                'edit_distance': 0.234,
+                'mu_distance': 0.234,
                 'num_rets_diff': 2,
                 'ploidy_diff': {'dist': 0.1, 'FP': 0.2, 'FN': 0.1, 'TP': 0.7},
                 ...
@@ -204,7 +204,7 @@ class ComparisonEngine:
 
         Output:
             {
-                'edit_distance': 0.234,
+                'mu_distance': 0.234,
                 'num_rets_diff': 2,
                 'ploidy_diff.dist': 0.1,
                 'ploidy_diff.FP': 0.2,

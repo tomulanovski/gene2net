@@ -165,14 +165,16 @@ class ResultSummarizer:
         Lower distance = better (methods are more similar to others).
 
         Returns:
-            DataFrame with columns: method, avg_edit_distance_multree, avg_rf_distance, 
-                                   avg_num_rets_diff, rank_edit_distance, rank_rf_distance, etc.
+            DataFrame with columns: method, avg_mu_distance, avg_num_rets_diff,
+                                   rank_mu_distance, rank_num_rets_diff, etc.
         """
         if self.valid_df.empty:
             return pd.DataFrame()
 
-        # Focus on key metrics for ranking
-        key_metrics = ['edit_distance_multree', 'rf_distance', 'num_rets_diff']
+        # Focus on key metrics for ranking. mu_distance replaces the approximate
+        # MUL-tree edit distance as the global structural measure, and rf_distance
+        # was removed from the comparison engine entirely.
+        key_metrics = ['mu_distance', 'num_rets_diff']
 
         rankings = []
 
@@ -209,7 +211,54 @@ class ResultSummarizer:
             if col in rankings_df.columns:
                 rankings_df[f'rank_{metric}'] = rankings_df[col].rank(ascending=True, method='min')
 
-        return rankings_df.sort_values('rank_edit_distance_multree' if 'rank_edit_distance_multree' in rankings_df.columns else 'method')
+        return rankings_df.sort_values('rank_mu_distance' if 'rank_mu_distance' in rankings_df.columns else 'method')
+
+    def generate_mu_scoring_report(self) -> pd.DataFrame:
+        """
+        Report how many comparisons the mu-distance could actually score.
+
+        A pair on mismatched taxa, or whose folded networks fall outside the
+        semi-binary stack-free class of Reichling et al. (2026, Theorem 1), gets
+        mu_distance = NaN and mu_scored = 0.0 rather than an error, so the pair
+        still contributes valid values for every other metric. An unscored pair
+        is therefore invisible in a mean over mu_distance and has to be counted
+        through mu_scored instead.
+
+        This is the table behind the manuscript's claim about the number of
+        empirical datasets on which the global distance could be computed.
+
+        Returns:
+            DataFrame with columns: method1, method2, n_pairs, n_scored,
+                                    n_unscored, frac_scored, networks_unscored
+        """
+        if self.valid_df.empty:
+            return pd.DataFrame()
+
+        scored = self.valid_df[self.valid_df['metric'] == 'mu_scored']
+        if scored.empty:
+            raise ValueError(
+                "No 'mu_scored' rows in the comparisons table. These comparisons "
+                "predate the mu-distance switch. Re-run run_analysis.py with "
+                "--force-recompute: the cache is keyed on network file hashes "
+                "only, not on the metric code, so it is otherwise reused as-is."
+            )
+
+        records = []
+        for (m1, m2), group in scored.groupby(['method1', 'method2']):
+            n_pairs = len(group)
+            n_scored = int((group['value'] == 1.0).sum())
+            unscored = sorted(group.loc[group['value'] != 1.0, 'network'].unique())
+            records.append({
+                'method1': m1,
+                'method2': m2,
+                'n_pairs': n_pairs,
+                'n_scored': n_scored,
+                'n_unscored': n_pairs - n_scored,
+                'frac_scored': n_scored / n_pairs if n_pairs else float('nan'),
+                'networks_unscored': ';'.join(unscored),
+            })
+
+        return pd.DataFrame(records).sort_values(['method1', 'method2'])
 
     def generate_all_summaries(self, output_dir: Path):
         """
@@ -258,6 +307,20 @@ class ResultSummarizer:
             print(f"  Comparison columns: {len(per_network.columns) - 1}")
         else:
             print("  WARNING: No valid comparisons for per-network table")
+
+        # mu-distance scoring coverage
+        print("\nGenerating mu-distance scoring report...")
+        mu_report = self.generate_mu_scoring_report()
+        if not mu_report.empty:
+            mu_report_file = output_dir / "mu_scoring_report.csv"
+            mu_report.to_csv(mu_report_file, index=False)
+            print(f"  Saved: {mu_report_file}")
+            total_pairs = int(mu_report['n_pairs'].sum())
+            total_scored = int(mu_report['n_scored'].sum())
+            print(f"  Scored {total_scored}/{total_pairs} pairs "
+                  f"({100 * total_scored / total_pairs:.1f}%)")
+        else:
+            print("  WARNING: No comparisons for mu-distance scoring report")
 
         # Method rankings
         print("\nGenerating method rankings...")

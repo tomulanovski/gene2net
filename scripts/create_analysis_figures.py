@@ -98,9 +98,8 @@ class RealDataAnalyzer:
     def _get_metric_label(self, metric: str) -> str:
         """Get human-readable label for a metric"""
         metric_labels = {
-            'edit_distance_multree': 'Edit Distance',
-            'edit_distance': 'Network Edit Distance',
-            # 'rf_distance': 'RF Distance',  # Disabled: RF not well-defined for MUL-trees
+            'mu_distance': '$\mu$-distance',
+            'mu_scored': 'Fraction of Pairs Scored',
             'num_rets_diff': 'Reticulation Count Difference',
             'polyploid_species_jaccard': 'Polyploid Species Distance',
             'ploidy_diff.dist': 'Ploidy Distance',
@@ -186,7 +185,7 @@ class RealDataAnalyzer:
         fig.savefig(self.plots_dir / "02_availability_heatmap.png", bbox_inches='tight', dpi=300)
         plt.close()
 
-    def plot_pairwise_heatmap(self, metric: str = 'edit_distance_multree'):
+    def plot_pairwise_heatmap(self, metric: str = 'mu_distance'):
         """Heatmap showing mean pairwise distances between methods"""
         if self.valid_comparisons.empty:
             print(f"  WARNING: No valid comparisons for {metric}")
@@ -250,7 +249,7 @@ class RealDataAnalyzer:
         fig.savefig(self.plots_dir / f"03_pairwise_{metric_safe}_heatmap.png", bbox_inches='tight', dpi=300)
         plt.close()
 
-    def plot_pairwise_boxplots(self, metric: str = 'edit_distance_multree'):
+    def plot_pairwise_boxplots(self, metric: str = 'mu_distance'):
         """Boxplots showing distribution of pairwise distances for each method pair"""
         if self.valid_comparisons.empty:
             return
@@ -306,7 +305,7 @@ class RealDataAnalyzer:
         fig.savefig(self.plots_dir / f"04_pairwise_{metric_safe}_boxplot.png", bbox_inches='tight', dpi=300)
         plt.close()
 
-    def plot_per_network_comparisons(self, metric: str = 'edit_distance_multree'):
+    def plot_per_network_comparisons(self, metric: str = 'mu_distance'):
         """Grouped bar chart showing pairwise distances per network"""
         if self.valid_comparisons.empty:
             return
@@ -362,31 +361,31 @@ class RealDataAnalyzer:
                 (self.valid_comparisons['method1'] == method) | (self.valid_comparisons['method2'] == method)
             ]
 
-            # Focus on edit_distance_multree
-            ed_data = method_comparisons[method_comparisons['metric'] == 'edit_distance_multree']['value']
+            # Focus on mu_distance
+            ed_data = method_comparisons[method_comparisons['metric'] == 'mu_distance']['value']
             avg_ed = ed_data.mean() if len(ed_data) > 0 else np.nan
 
             rankings.append({
                 'method': method,
-                'avg_edit_distance_multree': avg_ed
+                'avg_mu_distance': avg_ed
             })
 
-        rankings_df = pd.DataFrame(rankings).sort_values('avg_edit_distance_multree', ascending=True)
+        rankings_df = pd.DataFrame(rankings).sort_values('avg_mu_distance', ascending=True)
 
         fig, ax = plt.subplots(figsize=(10, 6))
 
         colors = [METHOD_COLORS.get(m, '#CCCCCC') for m in rankings_df['method']]
-        bars = ax.barh(rankings_df['method'], rankings_df['avg_edit_distance_multree'],
+        bars = ax.barh(rankings_df['method'], rankings_df['avg_mu_distance'],
                       color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
 
-        ax.set_xlabel('Average Edit Distance', fontsize=13, fontweight='bold')
+        ax.set_xlabel('Average $\mu$-distance', fontsize=13, fontweight='bold')
         ax.set_ylabel('Method', fontsize=13, fontweight='bold')
         ax.set_title('Method Similarity Rankings\nAverage Distance to Other Methods (Lower = More Similar)', 
                     fontsize=15, fontweight='bold', pad=20)
         ax.grid(True, alpha=0.25, axis='x', linestyle='--')
 
         # Add value labels
-        for bar, val in zip(bars, rankings_df['avg_edit_distance_multree']):
+        for bar, val in zip(bars, rankings_df['avg_mu_distance']):
             if not np.isnan(val):
                 width = bar.get_width()
                 ax.text(width, bar.get_y() + bar.get_height()/2.,
@@ -398,16 +397,21 @@ class RealDataAnalyzer:
         plt.close()
 
     def plot_distance_metrics_comparison(self):
-        """Compare Edit Distance metrics side-by-side"""
+        """Compare global distance metrics side-by-side"""
         if self.valid_comparisons.empty:
             return
 
         metrics_to_compare = {
-            'edit_distance_multree': 'Edit Distance',
-            # 'rf_distance': 'RF Distance',  # Disabled: RF not well-defined for MUL-trees
+            'mu_distance': '$\mu$-distance',
         }
 
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        # One panel per metric. RF distance was removed from the codebase and the
+        # MUL-tree edit distance was superseded by the mu-distance, so a hard-coded
+        # two-panel figure would leave a blank axis in the manuscript.
+        fig, axes = plt.subplots(1, len(metrics_to_compare),
+                                 figsize=(8 * len(metrics_to_compare), 6),
+                                 squeeze=False)
+        axes = axes.ravel()
 
         for idx, (metric_name, metric_label) in enumerate(metrics_to_compare.items()):
             ax = axes[idx]
@@ -669,11 +673,10 @@ class RealDataAnalyzer:
         # Pairwise comparisons
         print("Plotting pairwise comparisons...")
         metrics_to_plot = [
-            'edit_distance_multree', 'num_rets_diff',
+            'mu_distance', 'num_rets_diff',
             'polyploid_species_jaccard',
             'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist',
             'ploidy_diff.dist'
-            # 'rf_distance' disabled: RF not well-defined for MUL-trees
         ]
         for metric in metrics_to_plot:
             print(f"  {metric}...")
@@ -686,7 +689,7 @@ class RealDataAnalyzer:
 
         # Per-network analysis
         print("Plotting per-network comparisons...")
-        self.plot_per_network_comparisons('edit_distance_multree')
+        self.plot_per_network_comparisons('mu_distance')
 
         # Method rankings
         print("Plotting method rankings...")

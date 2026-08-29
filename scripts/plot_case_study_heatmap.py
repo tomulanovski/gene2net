@@ -30,9 +30,8 @@ METHOD_DISPLAY = {
 
 # Display names for metrics
 METRIC_DISPLAY = {
-    'edit_distance_multree': 'Edit Distance',
+    'mu_distance': '$\\mu$-distance',
     'polyploid_species_jaccard': 'Polyploid Species\nDistance',
-    # 'rf_distance': 'RF Distance',  # Disabled: RF not well-defined for MUL-trees
     'ret_leaf_jaccard.dist': 'Reticulation Descendants\nMeasure',
     'ret_sisters_jaccard.dist': 'Reticulation Sister\nMeasure',
     'ploidy_diff.dist': 'Ploidy Distance',
@@ -161,7 +160,7 @@ def main():
                         help='Dataset name (e.g., Wu_2015)')
     parser.add_argument('--metrics', nargs='+',
                         default=['ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist',
-                                 'edit_distance_multree', 'num_rets_diff'],
+                                 'mu_distance', 'num_rets_diff'],
                         help='Metrics to plot (only used with --individual)')
     parser.add_argument('--output', help='Output directory (default: plots/{dataset}/ next to CSV)')
     parser.add_argument('--combined', action='store_true',
@@ -173,7 +172,7 @@ def main():
                              'and LOWER metric in lower triangle. Can be repeated for '
                              'multiple split heatmaps. Defaults to two splits: '
                              'ret_leaf_jaccard.dist/ret_sisters_jaccard.dist and '
-                             'edit_distance_multree/num_rets_diff.')
+                             'mu_distance/num_rets_diff.')
     parser.add_argument('--dpi', type=int, default=300)
 
     args = parser.parse_args()
@@ -182,7 +181,7 @@ def main():
     if args.split is None:
         args.split = [
             ['ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist'],
-            ['edit_distance_multree', 'num_rets_diff'],
+            ['mu_distance', 'num_rets_diff'],
         ]
 
     # Load data

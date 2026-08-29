@@ -69,13 +69,13 @@ METHOD_COLORS = {
 }
 
 METRICS = [
-    'edit_distance_multree',
+    'mu_distance',
     'num_rets_diff',
     'polyploid_species_jaccard',
 ]
 
 METRIC_LABELS = {
-    'edit_distance_multree':    'Edit Distance',
+    'mu_distance':              '$\\mu$-distance',
     'num_rets_diff':            'Reticulation Count Difference (abs)',
     'polyploid_species_jaccard':'Polyploid Species Distance (Jaccard)',
 }
