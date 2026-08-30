@@ -1325,9 +1325,13 @@ class ReticulateTree:
         different taxon sets, raise rather than returning a number the theorem
         does not licence.
 
-        With normalize=True the count is divided by the total number of
-        mu-vectors, giving a value in [0, 1] that can be averaged across
-        networks of different sizes.
+        With normalize=True the count is divided by the number of INTERNAL
+        nodes of the two networks, |V1| + |V2| - 2n for n taxa, which is the
+        largest the count can be. That gives a value in [0, 1] on every pair,
+        reaching 1 when the networks share no internal structure, and it is
+        what makes the value comparable across networks of different sizes.
+        See the comment on the normalization below for why the leaves are
+        excluded. normalize=False returns the published raw count.
         '''
         network_self = self._mu_network()
         network_other = other._mu_network()
@@ -1351,9 +1355,34 @@ class ReticulateTree:
                              if vector not in set_self or vector not in set_other))
 
         if normalize:
-            normalization = len(mu_self) + len(mu_other)
-            if normalization == 0:
-                raise ValueError('Both networks have empty mu-representations.')
+            # Normalize by the INTERNAL nodes of both networks, not every node.
+            #
+            # _check_mu_preconditions requires every leaf to have in-degree 1, so
+            # the modified mu-vector of the leaf labelled x is (1, e_x) in any
+            # network that reaches this point, and both networks are on the same
+            # taxa (checked above). All 2n leaf vectors are therefore shared by
+            # construction and can never enter the symmetric difference. Counting
+            # them in the denominator caps the distance at 1 - 2n/(|V1|+|V2|),
+            # which depends on the leaf-to-node ratio of the pair and runs from
+            # about 0.48 to 0.76 over our 21 reference networks. That defeats the
+            # point of normalizing, since values on networks of different shapes
+            # then sit on different scales and cannot be averaged.
+            #
+            # Dividing by the internal nodes makes the denominator equal to the
+            # largest value the numerator can take, so the range is [0, 1] for
+            # every pair and 1 means the two networks share no internal structure.
+            #
+            # The numerator is untouched. Removing a sub-multiset that is
+            # identical on both sides cannot change whether the representations
+            # are equal, so Theorem 1 still gives 0 exactly for isomorphic
+            # networks. normalize=False remains the published raw count.
+            n_taxa = len(taxa_self)  # == len(taxa_other), enforced above
+            normalization = (len(mu_self) - n_taxa) + (len(mu_other) - n_taxa)
+            if normalization <= 0:
+                raise ValueError(
+                    'No internal nodes to normalize by: the networks have no node '
+                    'above their leaves, so there is no structure to compare.'
+                )
             distance /= normalization
 
         return distance

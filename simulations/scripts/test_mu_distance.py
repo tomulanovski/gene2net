@@ -111,6 +111,33 @@ def test_unnormalized_distance_is_a_whole_count():
 
 
 @requires_reference
+def test_normalization_divides_by_internal_nodes_only():
+    """
+    The denominator is the internal nodes of both networks, not every node.
+
+    Every leaf has in-degree 1 by the semi-binary precondition, so its modified
+    mu-vector is (1, e_x) in both networks and can never enter the symmetric
+    difference. Including the 2n leaf vectors in the denominator would cap the
+    distance at 1 - 2n/(|V1|+|V2|), a bound that varies with each pair's
+    leaf-to-node ratio, so distances on differently shaped networks would sit on
+    different scales and could not be averaged. This pins the fix.
+    """
+    a, b = tree(HEXAPLOID), tree(TETRAPLOID)
+    mu_a, mu_b = a.get_modified_mu_representation(), b.get_modified_mu_representation()
+    n_taxa = len(a._mu_taxa(a._mu_network()))
+
+    raw = a.get_mu_distance(b, normalize=False)
+    normalized = a.get_mu_distance(b, normalize=True)
+
+    internal = (len(mu_a) - n_taxa) + (len(mu_b) - n_taxa)
+    assert normalized == pytest.approx(raw / internal)
+
+    # The old all-node denominator was strictly larger, so it reported a
+    # strictly smaller distance and could never reach 1.
+    assert normalized > raw / (len(mu_a) + len(mu_b))
+
+
+@requires_reference
 @pytest.mark.parametrize('path', sorted(glob.glob(str(NETWORKS_DIR / '*.tre'))),
                          ids=lambda p: os.path.basename(p).replace('.tre', ''))
 def test_ground_truth_has_zero_self_distance(path):
