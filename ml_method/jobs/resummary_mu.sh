@@ -7,7 +7,7 @@
 #SBATCH --output=resummary_mu_%j.out
 
 # Re-score the COMPETITOR comparisons under the new headline metric (normalized
-# mu-distance), for all nine configs. The mu metric lives in the shared
+# mu-distance), for all 15 configs. The mu metric lives in the shared
 # compare_reticulations.pairwise_compare, so this re-run picks it up on the
 # competitor side, exactly as score_reconstructions does on the GNN side.
 #
@@ -29,8 +29,19 @@ conda activate gene2net
 # run_full_summary resolves simulations/summary_config.yaml relative to the repo ROOT.
 cd /groups/itay_mayrose/tomulanovski/gene2net
 
+# All 15 configs. The manuscript's grid is the first 12, namely 3 ILS levels
+# (set by Ne) x 4 duplication and loss levels (none, low, medium, high). The
+# "none" column is the conf_ils_* family and the other three columns are the
+# conf_dup_loss_* families, one per Ne. The last 3 are the fractionation runs.
+#
+# This list previously held 9 and omitted the base and ne2M dup/loss families,
+# which are 6 of the manuscript's 12. Re-scoring a subset is worse than not
+# re-scoring at all, because 3.2.2 and 3.2.3 compare values ACROSS
+# configurations and a half-converted set mixes two scales that look alike.
 CONFIGS="conf_ils_low_10M conf_ils_medium_10M conf_ils_high_10M \
+conf_dup_loss_low_10M conf_dup_loss_medium_10M conf_dup_loss_high_10M \
 conf_dup_loss_low_10M_ne1M conf_dup_loss_medium_10M_ne1M conf_dup_loss_high_10M_ne1M \
+conf_dup_loss_low_10M_ne2M conf_dup_loss_medium_10M_ne2M conf_dup_loss_high_10M_ne2M \
 conf_dup_loss_medium_10M_ne1M_fix025 conf_dup_loss_medium_10M_ne1M_fix050 conf_dup_loss_medium_10M_ne1M_fix075"
 
 for CFG in $CONFIGS; do
