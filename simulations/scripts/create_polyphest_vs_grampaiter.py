@@ -736,11 +736,9 @@ class PolyphestVsGrampaIter:
         four-family grid would imply fractionation was crossed with the other
         axes, which it was not.
 
-        Polyploid species agreement is included as a fourth panel because
-        fractionation removes duplicate gene copies, which is the evidence a
-        method uses to call a species polyploid at all. If detection degrades
-        faster than placement, that is a different failure mode from the
-        duplication and loss threshold effect and the panels should show it.
+        Panels run left to right as reticulation descendants, reticulation
+        sister, then the mu-distance, matching the row order of the main
+        degradation figure.
         """
         configs = [cfg for _, cfg in FRACTIONATION_SERIES]
         missing = [c for c in configs if not (SUMMARY_BASE / c).exists()]
@@ -761,7 +759,6 @@ class PolyphestVsGrampaIter:
             ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
             ('ret_sisters_jaccard.dist', 'Ret. Sister Measure'),
             ('mu_distance', '$\\mu$-distance'),
-            ('polyploid_species_jaccard', 'Polyploid Species Distance'),
         ]
         labels = [lab for lab, _ in FRACTIONATION_SERIES]
 
@@ -777,9 +774,9 @@ class PolyphestVsGrampaIter:
             print('  [7] Fractionation skipped, none of the metrics are present')
             return
 
-        ncols = 2 if len(line_metrics) > 1 else 1
-        nrows = -(-len(line_metrics) // ncols)
-        fig, axes = plt.subplots(nrows, ncols, figsize=(6 * ncols, 4.5 * nrows),
+        # One row, one panel per metric, left to right: descendants, sister, mu.
+        ncols = len(line_metrics)
+        fig, axes = plt.subplots(1, ncols, figsize=(5.2 * ncols, 4.6),
                                  squeeze=False)
         flat = axes.ravel()
         for spare in flat[len(line_metrics):]:
