@@ -644,11 +644,13 @@ class PolyphestVsGrampaIter:
         if self.comparisons.empty:
             return
 
+        # Row order follows the argument: the two measures that localize the
+        # disagreement first, the single global scalar last.
         line_metrics = [
-            # was: ('edit_distance_multree', 'Edit Distance'),   (superseded by the mu-distance)
-            ('mu_distance', '$\\mu$-distance'),
             ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
             ('ret_sisters_jaccard.dist', 'Ret. Sister Measure'),
+            # was: ('edit_distance_multree', 'Edit Distance'),   (superseded by the mu-distance)
+            ('mu_distance', '$\\mu$-distance'),
         ]
 
         fig, axes = plt.subplots(len(line_metrics), len(CONFIG_FAMILIES),
@@ -753,16 +755,36 @@ class PolyphestVsGrampaIter:
             print("  [7] Fractionation skipped, no comparisons loaded")
             return
 
+        # Row order follows the argument: the two measures that localize the
+        # disagreement first, the single global scalar last.
         line_metrics = [
-            ('mu_distance', '$\\mu$-distance'),
             ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
             ('ret_sisters_jaccard.dist', 'Ret. Sister Measure'),
+            ('mu_distance', '$\\mu$-distance'),
             ('polyploid_species_jaccard', 'Polyploid Species Distance'),
         ]
         labels = [lab for lab, _ in FRACTIONATION_SERIES]
 
-        fig, axes = plt.subplots(2, 2, figsize=(12, 9))
-        for ax, (metric_key, metric_label) in zip(axes.ravel(), line_metrics):
+        # Drop metrics with no rows rather than drawing an empty panel. A metric
+        # the comparison engine could not produce for these configs is a finding
+        # worth printing, not a blank square in a figure.
+        have = set(comparisons.loc[comparisons['status'] == 'SUCCESS', 'metric'])
+        absent = [lab for k, lab in line_metrics if k not in have]
+        if absent:
+            print(f"  [7] no rows for: {', '.join(absent)} - panel(s) omitted")
+        line_metrics = [(k, lab) for k, lab in line_metrics if k in have]
+        if not line_metrics:
+            print('  [7] Fractionation skipped, none of the metrics are present')
+            return
+
+        ncols = 2 if len(line_metrics) > 1 else 1
+        nrows = -(-len(line_metrics) // ncols)
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6 * ncols, 4.5 * nrows),
+                                 squeeze=False)
+        flat = axes.ravel()
+        for spare in flat[len(line_metrics):]:
+            spare.set_visible(False)
+        for ax, (metric_key, metric_label) in zip(flat, line_metrics):
             metric_data = comparisons[
                 (comparisons['metric'] == metric_key) &
                 (comparisons['status'] == 'SUCCESS')
@@ -787,7 +809,7 @@ class PolyphestVsGrampaIter:
             ax.set_ylabel(metric_label, fontsize=11, fontweight='bold')
             ax.set_xlabel('Post-WGD retention rate', fontsize=11, fontweight='bold')
 
-        handles, lbls = axes[0, 0].get_legend_handles_labels()
+        handles, lbls = flat[0].get_legend_handles_labels()
         fig.legend(handles, lbls, loc='upper center', ncol=2, fontsize=12,
                    framealpha=0.9, bbox_to_anchor=(0.5, 1.02))
         fig.suptitle('Accuracy against post-WGD retention\n'
