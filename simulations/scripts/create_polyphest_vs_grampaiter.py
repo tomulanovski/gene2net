@@ -82,6 +82,18 @@ CONFIG_FAMILIES = {
     },
 }
 
+# Fractionation series. Deliberately NOT in ALL_CONFIGS or CONFIG_FAMILIES: it has
+# four levels where the families have three, and it varies only retention, holding
+# ILS and duplication and loss at medium. The first entry is the unfractionated
+# baseline, which is the same config as the med-ILS / medium dup-loss cell.
+# Numbers are retention rates, so lower means MORE fractionation.
+FRACTIONATION_SERIES = [
+    ('1.00', 'conf_dup_loss_medium_10M_ne1M'),
+    ('0.75', 'conf_dup_loss_medium_10M_ne1M_fix075'),
+    ('0.50', 'conf_dup_loss_medium_10M_ne1M_fix050'),
+    ('0.25', 'conf_dup_loss_medium_10M_ne1M_fix025'),
+]
+
 LEVEL_ORDER = ['Low', 'Medium', 'High']
 
 METHODS = ['polyphest', 'grandma_split']
@@ -265,6 +277,7 @@ class PolyphestVsGrampaIter:
         self.plot_metric_boxplots()
         self.plot_per_network_comparison()
         self.plot_degradation_lines()
+        self.plot_fractionation_degradation()
         self.generate_summary_table()
 
         print(f"\n{'='*70}")
@@ -617,8 +630,8 @@ class PolyphestVsGrampaIter:
         ax.set_ylim(0, 1.05)
 
         plt.tight_layout()
-        fig.savefig(self.plots_dir / "05_per_network_edit_distance.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "05_per_network_edit_distance.png", bbox_inches='tight', dpi=300)
+        fig.savefig(self.plots_dir / "05_per_network_mu_distance.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "05_per_network_mu_distance.png", bbox_inches='tight', dpi=300)
         plt.close('all')
         gc.collect()
         print("  [5] Per-network mu-distance")
@@ -706,6 +719,88 @@ class PolyphestVsGrampaIter:
         plt.close('all')
         gc.collect()
         print("  [6] Degradation lines")
+
+    # ------------------------------------------------------------------
+    # 7. Fractionation degradation (retention series)
+    # ------------------------------------------------------------------
+    def plot_fractionation_degradation(self):
+        """
+        Degradation against post-WGD retention, from no fractionation down to severe.
+
+        This is a separate figure rather than a fifth CONFIG_FAMILY because the
+        series has four levels where every other family has three, and because it
+        is a one-dimensional slice: ILS and duplication and loss are both held at
+        medium throughout, so only retention varies. Presenting it inside the
+        four-family grid would imply fractionation was crossed with the other
+        axes, which it was not.
+
+        Polyploid species agreement is included as a fourth panel because
+        fractionation removes duplicate gene copies, which is the evidence a
+        method uses to call a species polyploid at all. If detection degrades
+        faster than placement, that is a different failure mode from the
+        duplication and loss threshold effect and the panels should show it.
+        """
+        configs = [cfg for _, cfg in FRACTIONATION_SERIES]
+        missing = [c for c in configs if not (SUMMARY_BASE / c).exists()]
+        if missing:
+            print(f"  [7] Fractionation skipped, configs not found: {', '.join(missing)}")
+            return
+
+        # Loaded separately: the fractionation configs are deliberately absent
+        # from ALL_CONFIGS so they cannot leak into the 12-configuration figures.
+        _, comparisons = load_data(configs, SUMMARY_BASE)
+        if comparisons.empty:
+            print("  [7] Fractionation skipped, no comparisons loaded")
+            return
+
+        line_metrics = [
+            ('mu_distance', '$\\mu$-distance'),
+            ('ret_leaf_jaccard.dist', 'Ret. Descendants Measure'),
+            ('ret_sisters_jaccard.dist', 'Ret. Sister Measure'),
+            ('polyploid_species_jaccard', 'Polyploid Species Distance'),
+        ]
+        labels = [lab for lab, _ in FRACTIONATION_SERIES]
+
+        fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+        for ax, (metric_key, metric_label) in zip(axes.ravel(), line_metrics):
+            metric_data = comparisons[
+                (comparisons['metric'] == metric_key) &
+                (comparisons['status'] == 'SUCCESS')
+            ]
+            for method in METHODS:
+                centers, errs = [], []
+                for _, cfg in FRACTIONATION_SERIES:
+                    vals = metric_data[
+                        (metric_data['method'] == method) &
+                        (metric_data['config'] == cfg)
+                    ].pipe(per_network)
+                    if len(vals) > 0:
+                        centers.append(vals.mean())
+                        errs.append(vals.std() / np.sqrt(len(vals)) if len(vals) > 1 else 0)
+                    else:
+                        centers.append(np.nan)
+                        errs.append(0)
+                ax.errorbar(labels, centers, yerr=errs, marker='o', markersize=8,
+                            capsize=4, color=METHOD_COLORS[method], linewidth=2.5,
+                            label=dn(method))
+            ax.grid(True, alpha=0.25, linestyle='--')
+            ax.set_ylabel(metric_label, fontsize=11, fontweight='bold')
+            ax.set_xlabel('Post-WGD retention rate', fontsize=11, fontweight='bold')
+
+        handles, lbls = axes[0, 0].get_legend_handles_labels()
+        fig.legend(handles, lbls, loc='upper center', ncol=2, fontsize=12,
+                   framealpha=0.9, bbox_to_anchor=(0.5, 1.02))
+        fig.suptitle('Accuracy against post-WGD retention\n'
+                     '(medium ILS, medium duplication and loss throughout)',
+                     fontsize=13, y=1.06)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.97])
+        fig.savefig(self.plots_dir / "07_fractionation_degradation.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / "07_fractionation_degradation.png",
+                    bbox_inches='tight', dpi=300)
+        plt.close('all')
+        gc.collect()
+        print("  [7] Fractionation degradation lines")
 
     # ------------------------------------------------------------------
     # Summary table
