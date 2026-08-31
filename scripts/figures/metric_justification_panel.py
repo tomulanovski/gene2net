@@ -353,6 +353,25 @@ def main():
     assert m3['num_rets_bias'] == 1, m3
     assert 0.4 <= m3['polyploid_species_jaccard'] <= 0.6, m3
 
+    # Section 3.1 opens by saying the mu-distance is nonzero in all three cases
+    # but reports only that the networks differ, so the two new measures are what
+    # localize the disagreement. The first half of that sentence is a claim about
+    # these three examples and nothing else here checked it. A zero anywhere would
+    # not just change a table value, it would remove the premise the section is
+    # built on, so it fails loudly rather than printing a 0.0000 into the table.
+    for label, metrics in cached.items():
+        assert metrics['mu_distance'] > 0.0, (
+            f'{label}: mu_distance is {metrics["mu_distance"]}, but Section 3.1 '
+            'claims the mu-distance is nonzero in all three cases.'
+        )
+    # Distinct values matter too. The old text leaned on edit distance returning
+    # 0.28 for two different error kinds; the argument was rewritten so it no
+    # longer needs that, but a tie is still worth knowing about before it appears
+    # in print.
+    mu_values = [round(m['mu_distance'], 4) for m in cached.values()]
+    if len(set(mu_values)) < len(mu_values):
+        print(f'[warning] mu-distance ties across examples: {mu_values}')
+
     print("\n[assertions] all metric signatures match the spec.")
 
     pdf_path, png_path = render_panel(EXAMPLES, OUTPUT_DIR)
