@@ -809,9 +809,6 @@ class PolyphestVsGrampaIter:
         handles, lbls = flat[0].get_legend_handles_labels()
         fig.legend(handles, lbls, loc='upper center', ncol=2, fontsize=12,
                    framealpha=0.9, bbox_to_anchor=(0.5, 1.02))
-        fig.suptitle('Accuracy against post-WGD retention\n'
-                     '(medium ILS, medium duplication and loss throughout)',
-                     fontsize=13, y=1.06)
 
         plt.tight_layout(rect=[0, 0, 1, 0.97])
         fig.savefig(self.plots_dir / "07_fractionation_degradation.pdf", bbox_inches='tight')
