@@ -3,7 +3,7 @@
 #SBATCH --partition=itaym-pool
 #SBATCH --mem=64G
 #SBATCH --cpus-per-task=8
-#SBATCH --time=8:00:00
+#SBATCH --time=20:00:00
 #SBATCH --output=finalize_score_%j.out
 
 # Scoring half of the finalization sweep, for when the benchmark (STEP 1) already ran.
@@ -18,8 +18,12 @@ source "$CONDA/etc/profile.d/conda.sh"
 conda activate gene2net
 cd /groups/itay_mayrose/tomulanovski/gene2net/ml_method
 
+# All 15: 12 base (3 ILS-only, plus 3 dup/loss rates at each of Ne 200k, 1M, 2M)
+# and 3 fractionation. Scoring only: inference and competitor comparisons already exist.
 CONFIGS="conf_ils_low_10M conf_ils_medium_10M conf_ils_high_10M \
+conf_dup_loss_low_10M conf_dup_loss_medium_10M conf_dup_loss_high_10M \
 conf_dup_loss_low_10M_ne1M conf_dup_loss_medium_10M_ne1M conf_dup_loss_high_10M_ne1M \
+conf_dup_loss_low_10M_ne2M conf_dup_loss_medium_10M_ne2M conf_dup_loss_high_10M_ne2M \
 conf_dup_loss_medium_10M_ne1M_fix025 conf_dup_loss_medium_10M_ne1M_fix050 conf_dup_loss_medium_10M_ne1M_fix075"
 
 echo "================ score ($(date +%H:%M:%S)) ================"
