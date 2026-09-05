@@ -147,14 +147,21 @@ def common_subset_md(combined, config):
         if gnn_label not in wide.columns:
             continue
         both = wide[[gnn_label, "Polyphest"]].dropna()
-        n_gnn = int(wide[gnn_label].notna().sum())
         if len(both):
             lines.append(
                 f"| {gnn_label} vs Polyphest | {both[gnn_label].mean():.3f} "
                 f"| {both['Polyphest'].mean():.3f} | {len(both)} |"
             )
     lines.append("")
-    lines.append(f"_Completion: GNN 21, Polyphest {n_poly} (of 21)._")
+    # Was hardcoded "GNN 21", which overstated completion wherever the GNN did not
+    # reconstruct every network. The fractionation configs top out at 20 by design and
+    # fix025 has 19, so the literal contradicted the n column in the same block.
+    parts = [f"{lab} {int(wide[lab].notna().sum())}"
+             for lab in ("GNN (ploidy-informed)", "GNN (ploidy-free)")
+             if lab in wide.columns]
+    parts.append(f"Polyphest {n_poly}")
+    lines.append("_Completion, networks with a finite mu-distance out of "
+                 f"{len(wide)} scored in this configuration: " + ", ".join(parts) + "._")
     lines.append("")
     return "\n".join(lines)
 
