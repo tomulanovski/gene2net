@@ -52,7 +52,13 @@ def load_inverse_taxa_map(taxa_map_path):
     """
     inv = {}
     if not os.path.exists(taxa_map_path):
-        return inv
+        # Silently returning {} made rename_leaves a no-op and degraded the scores
+        # without any sign. prep_grampa always writes this file, so its absence is
+        # a pipeline problem, not a network without substring collisions.
+        raise FileNotFoundError(
+            f"taxa map not found: {taxa_map_path}. Predicted leaves cannot be "
+            "renamed back to the ground-truth names, which would make the "
+            "mu-distance undefined and inflate the reticulation Jaccards.")
     with open(taxa_map_path) as f:
         for line in f:
             line = line.strip()
@@ -66,12 +72,29 @@ def load_inverse_taxa_map(taxa_map_path):
 
 
 def rename_leaves(tree, inv_map):
-    """Rename leaves replacement->original in place (no-op if map empty)."""
+    """Rename leaves replacement->original in place (no-op if map empty).
+
+    taxa_map.txt records SUBSTRING replacements, because fix_substrings_grampa.py
+    rewrites a label that is a substring of another rather than a whole name. So
+    the reverse has to be a substring replacement too. Matching whole names only
+    left leaves like "filixX-mas" untouched, because the map key is "filixX", and
+    the mismatch against the ground truth then made the mu-distance undefined and
+    silently inflated the reticulation Jaccards on those networks.
+
+    Longest keys first, so a key that is a prefix of another cannot claim the
+    match. Whole-name hits are still preferred over substring hits.
+    """
     if not inv_map:
         return
+    keys = sorted(inv_map, key=len, reverse=True)
     for leaf in tree.get_leaves():
         if leaf.name in inv_map:
             leaf.name = inv_map[leaf.name]
+            continue
+        for k in keys:
+            if k in leaf.name:
+                leaf.name = leaf.name.replace(k, inv_map[k], 1)
+                break
 
 
 def load_gene_trees(path, max_trees=500):
@@ -380,7 +403,8 @@ def main():
             if os.path.exists(gt_path):
                 with open(gt_path, encoding='utf-8') as f:
                     gt = f.read()
-                with open(os.path.join(case_dir, "ground_truth.nex"), "w") as f:
+                with open(os.path.join(case_dir, "ground_truth.nex"), "w",
+                          encoding="utf-8") as f:
                     f.write(gt)
             total_dropped[strat] = total_dropped.get(strat, 0) + n_dropped
             counts.append(f"{strat}={n_auto + n_allo}" + (f" (dropped {n_dropped})" if n_dropped else ""))

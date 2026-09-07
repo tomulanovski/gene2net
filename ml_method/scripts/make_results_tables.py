@@ -98,8 +98,14 @@ def per_method_means(combined):
     with one column per metric plus n (networks with a finite value)."""
     means = (combined.groupby(["method", "metric"])["value"].mean()
                      .unstack("metric"))
-    n = (combined.dropna(subset=["value"]).groupby("method")["network"].nunique())
-    means["n"] = n
+    # n must be PER METRIC. Pooling across metrics counted a network toward
+    # mu_distance whenever any other metric was finite for it, which reported 21
+    # for the GNN in configurations where mu was undefined on two networks.
+    n = (combined.dropna(subset=["value"])
+                 .groupby(["method", "metric"])["network"].nunique()
+                 .unstack("metric"))
+    for metric in means.columns:
+        means[f"n_{metric}"] = n[metric] if metric in n.columns else 0
     return means
 
 
