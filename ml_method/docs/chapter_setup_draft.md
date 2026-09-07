@@ -43,13 +43,14 @@ results on them are a test of generalization rather than of fit.
 ## Evaluation
 
 Evaluation uses the same benchmark of 21 networks, the same distance measures, and the same
-baselines as the previous chapters. The primary overall measure is the normalized mu-distance, and
-the reticulation-leaf and reticulation-sister Jaccard distances measure whether the reticulations
-involve the right lineages. Each reticulation Jaccard is reported in two forms, a penalized form
-that charges a method for reticulations it never finds, and a matched form that scores only the
-reticulations a method commits to, so that placement quality can be separated from completeness.
-The reticulation-count difference, the mean number of reticulations by which a method misses the
-truth, is reported alongside them as the completeness signal. The baselines are Polyphest and iterative
+baselines as the previous chapters. The primary measures are the reticulation-descendants and
+reticulation-sister Jaccard distances, which ask whether the reticulations involve the right
+lineages and whether those lineages descend from the right parents. The reticulation-count
+difference, the mean number of reticulations by which a method misses the truth, is reported
+alongside them as the completeness signal. The normalized
+mu-distance follows as a summary of overall structural agreement, and because every node of the
+network contributes to it, it also reflects the placement of the diploid species that the
+reticulation measures do not see. The baselines are Polyphest and iterative
 GRAMPA, both of which infer their ploidy from the gene trees rather than being given it, as does
 the present method, so no method is handed the true ploidy and the comparison is fair on that count. The evaluation spans fifteen
 configurations, namely three levels of incomplete lineage sorting, three rates of duplication and

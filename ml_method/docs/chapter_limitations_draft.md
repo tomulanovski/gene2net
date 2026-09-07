@@ -9,12 +9,12 @@ The central limitation of the method is structural and is established directly b
 section, and it holds under the mu-distance. The reconstruction is built by stamping events onto a
 fixed ASTRAL backbone and never rearranges that backbone, so every backbone error is inherited by
 the final network. Under an oracle that supplies the true events with their true parents, placing
-them on the ASTRAL backbone still leaves a mu-distance of 0.099, while placing the same events on
-the true backbone reaches 0.028. The backbone therefore contributes 0.071 of the error, against
-only 0.014 that the trained model loses beyond the ceiling. No detector and no placement head can
+them on the ASTRAL backbone still leaves a mu-distance of 0.1765, while placing the same events on
+the true backbone reaches 0.0474. The backbone therefore contributes 0.1291 of the error, against
+only 0.0252 that the trained model loses beyond the ceiling. No detector and no placement head can
 cross the backbone gap, because the method does not rebuild the backbone. This is why better
 detection, better thresholds, and better event selection move the reconstruction distance by at
-most 0.014, and it is the frame for everything below.
+most 0.025, and it is the frame for everything below.
 
 ## Placement is bounded by the same backbone
 

@@ -7,8 +7,8 @@ follow from the results and the diagnostic.
 ## Rebuild the backbone
 
 The diagnostic identifies the ASTRAL backbone as the binding limitation. On the validation split
-the backbone contributes 0.071 of the model's 0.113 mu-distance, while the model's own event
-prediction contributes only 0.014, so the species tree, not the events, is what caps
+the backbone contributes 0.1291 of the model's 0.2017 mu-distance, while the model's own event
+prediction contributes only 0.0252, so the species tree, not the events, is what caps
 in-distribution quality. The method stamps events onto a fixed backbone and never rearranges it, so
 every backbone error is inherited. The natural next step is to rebuild the backbone before or during
 reconstruction, for example by phasing the polyploid subgenomes so that ASTRAL sees single-copy
@@ -76,7 +76,7 @@ saturated at full data. On the validation split it rises from 0.449 at a tenth o
 data through 0.596, 0.704, and 0.774 to 0.828 at the full data, and the slope from three quarters
 to full data is still clearly positive. So more or more diverse training data would raise the
 partner head further. The gain is not free, however. The diagnostic shows that better event and
-partner prediction can recover at most the 0.014 of mu-distance the model loses beyond the backbone
+partner prediction can recover at most the 0.025 of mu-distance the model loses beyond the backbone
 ceiling on in-distribution networks, so more data is most valuable in combination with a rebuilt
 backbone, which is what would let a better partner head actually lower the reconstruction distance.
 

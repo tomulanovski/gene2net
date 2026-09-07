@@ -19,9 +19,12 @@ summarising the gene trees, and predicts on every backbone edge whether a WGD oc
 so, which lineage is the second parent. The predicted events are grafted onto the backbone to
 produce a MUL tree, which is the output of the method.
 
-On the overall distance measure, the mu-distance, Polyphest reconstructs more accurately across the
-benchmark. What PlaceNet offers is a different and practical profile. It runs in seconds for every
-input where Polyphest can run for days. It completes every benchmark network, whereas the completion
+PlaceNet identifies the polyploid lineages more accurately than any existing method wherever gene
+tree discordance is high or fractionation has degraded the copy number, which is the regime real
+polyploid data occupy. On the cleanest simulated conditions Polyphest identifies them better, and
+on the parental context and the overall mu-distance it is ahead throughout. Alongside that accuracy
+profile PlaceNet offers a practical one. It runs in seconds for every
+input where Polyphest can run for days. It completes every network in the discordance benchmark, whereas the completion
 rate of the other methods varies, and in our implementation only GRAMPA-Iter also reached full
 completion. It recovers the reticulate lineages more faithfully than any other method where the copy
 number is corrupted, through a decode that can be run in a mode that does not use the copy count at

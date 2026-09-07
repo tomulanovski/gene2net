@@ -1,8 +1,9 @@
 # Reconstruction under fractionation
 
 DRAFT for the thesis. Prose style follows the thesis convention of no semicolons, no
-non-mathematical parentheses, and no em-dashes. The numbers below are on the 21 benchmark
-networks under three fractionation configurations, five replicates. The headline metric is the
+non-mathematical parentheses, and no em-dashes. The numbers below are on the 20 benchmark
+networks that carry a fractionated condition, under three fractionation configurations, five
+replicates. The headline metric is the
 normalized mu-distance, and the reticulation-leaf and reticulation-sister Jaccard distances
 measure whether the reticulations involve the right lineages. Lower is better throughout.
 
@@ -58,45 +59,40 @@ out. The threshold of the ploidy-free mode is fixed at the value used throughout
 The tables report the mean of each measure across the benchmark networks at the three fractionation
 levels. Lower is better. Both decode modes of PlaceNet are shown. The reticulation-count
 difference is the mean number of reticulations by which a method misses the truth, the
-reticulation-leaf Jaccard penalizes a method for reticulations it never finds, and the matched
-reticulation-leaf Jaccard scores only the reticulations a method commits to.
+reticulation-leaf and reticulation-sister Jaccards are the two event measures.
 
 Retention 0.75, the mild condition:
 
-| method | mu | num_rets | ret_leaf | ret_leaf matched |
+| method | ret_leaf | ret_sis | num_rets | mu |
 | --- | --- | --- | --- | --- |
-| PlaceNet ploidy-informed | 0.271 | 3.79 | 0.170 | 0.067 |
-| PlaceNet ploidy-free | 0.285 | 4.24 | 0.242 | 0.105 |
-| Polyphest | 0.161 | 2.46 | 0.233 | 0.170 |
-| GRAMPA-iter | 0.345 | 4.42 | 0.499 | 0.272 |
-| GRAMPA-iter with prior | 0.310 | 4.40 | 0.266 | 0.129 |
+| PlaceNet ploidy-informed | 0.170 | 0.497 | 3.79 | 0.430 |
+| PlaceNet ploidy-free | 0.242 | 0.542 | 4.24 | 0.460 |
+| Polyphest | 0.233 | 0.329 | 2.46 | 0.249 |
+| GRAMPA-iter | 0.499 | 0.709 | 4.42 | 0.553 |
+| GRAMPA-iter with prior | 0.266 | 0.593 | 4.40 | 0.500 |
 
 Retention 0.50, the medium condition:
 
-| method | mu | num_rets | ret_leaf | ret_leaf matched |
+| method | ret_leaf | ret_sis | num_rets | mu |
 | --- | --- | --- | --- | --- |
-| PlaceNet ploidy-informed | 0.346 | 7.51 | 0.670 | 0.340 |
-| PlaceNet ploidy-free | 0.322 | 6.07 | 0.506 | 0.227 |
-| Polyphest | 0.254 | 5.94 | 0.594 | 0.299 |
-| GRAMPA-iter | 0.343 | 5.11 | 0.556 | 0.350 |
-| GRAMPA-iter with prior | 0.341 | 7.33 | 0.677 | 0.326 |
+| PlaceNet ploidy-informed | 0.670 | 0.827 | 7.51 | 0.587 |
+| PlaceNet ploidy-free | 0.506 | 0.723 | 6.07 | 0.538 |
+| Polyphest | 0.594 | 0.755 | 5.94 | 0.422 |
+| GRAMPA-iter | 0.556 | 0.742 | 5.11 | 0.553 |
+| GRAMPA-iter with prior | 0.677 | 0.840 | 7.33 | 0.574 |
 
 Retention 0.25, the severe condition:
 
-| method | mu | num_rets | ret_leaf | ret_leaf matched |
+| method | ret_leaf | ret_sis | num_rets | mu |
 | --- | --- | --- | --- | --- |
-| PlaceNet ploidy-informed | 0.329 | 9.58 | 0.903 | 0.617 |
-| PlaceNet ploidy-free | 0.326 | 8.51 | 0.832 | 0.561 |
-| Polyphest | 0.277 | 8.58 | 0.922 | 0.670 |
-| GRAMPA-iter | 0.354 | 5.40 | 0.615 | 0.402 |
-| GRAMPA-iter with prior | 0.354 | 8.93 | 0.902 | 0.645 |
+| PlaceNet ploidy-informed | 0.903 | 0.958 | 9.58 | 0.563 |
+| PlaceNet ploidy-free | 0.832 | 0.933 | 8.51 | 0.554 |
+| Polyphest | 0.922 | 0.952 | 8.58 | 0.476 |
+| GRAMPA-iter | 0.615 | 0.781 | 5.40 | 0.574 |
+| GRAMPA-iter with prior | 0.902 | 0.953 | 8.93 | 0.608 |
 
-Two readings, one for each family of metric.
-
-On the mu-distance Polyphest is the most accurate method at all three levels, 0.161, 0.254, and
-0.277 as retention falls. This is the same pattern as the rest of the benchmark, and for the same
-reason, namely that the mu-distance rewards the copy-number structure that folding a multiset
-recovers. So on the overall metric no method beats Polyphest here.
+Two readings, one for each family of measure. The reticulation measures come first, since
+they are the ones fractionation puts under pressure.
 
 On reticulation recovery, which is the question fractionation actually poses, the three levels form
 a map of which method to prefer, and the decode modes move across it. The reticulation-leaf figures
@@ -105,14 +101,17 @@ retention the copy number is still informative, and the ploidy-informed mode has
 reticulation-leaf distance of any method, 0.170 against Polyphest's 0.233. At medium retention the
 copy number has begun to fail, the ploidy-informed mode degrades to 0.670, and the ploidy-free mode
 takes over at 0.506, which is the lowest of any method, below Polyphest's 0.594 and GRAMPA-iter's
-0.556. The matched Jaccard, which scores only the reticulations each method commits to, tells the
-same story at the crossover, with the ploidy-free mode at 0.227 against Polyphest's 0.299, so the
-ploidy-free advantage at medium retention is in placement and not only in count. At severe retention
+0.556. At severe retention
 the copy number is largely destroyed, and iterative GRAMPA, which searches for reticulations one at
 a time without a copy-number estimate, recovers the most at 0.615, with the ploidy-free mode second
 at 0.832 and still ahead of Polyphest's 0.922. So the ploidy-free mode owns the middle of the map,
 the crossover where copy number fails but detection can still recover the events, and it is
 competitive at the extremes.
+
+On the mu-distance Polyphest is the most accurate method at all three levels, 0.249, 0.422, and
+0.476 as retention falls. This is the same pattern as the rest of the benchmark, and for the same
+reason, namely that the mu-distance rewards the copy-number structure that folding a multiset
+recovers. So on the overall metric no method beats Polyphest here.
 
 One result cuts across all three levels. Giving iterative GRAMPA the inferred ploidy prior helps
 only at mild fractionation and hurts as fractionation grows. With the prior its reticulation-leaf
@@ -123,8 +122,9 @@ confirms from a second direction that under fractionation the copy number is the
 method that does not lean on it, whether the free search or the learned detection head in its
 ploidy-free mode, degrades more gracefully.
 
-The PlaceNet also completes every network at all three levels, 21 of 21, against Polyphest's
-18, 19, and 19. Robustness of completion is a practical advantage that the mean scores do not
+The PlaceNet completes 20 of the 20 fractionated networks at mild and medium retention and 19 at
+severe retention, where one network's ASTRAL backbone could not be parsed, against Polyphest's
+19, 19, and 18. Robustness of completion is a practical advantage that the mean scores do not
 capture.
 
 ## Summary
