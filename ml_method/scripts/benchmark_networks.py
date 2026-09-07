@@ -52,13 +52,10 @@ def load_inverse_taxa_map(taxa_map_path):
     """
     inv = {}
     if not os.path.exists(taxa_map_path):
-        # Silently returning {} made rename_leaves a no-op and degraded the scores
-        # without any sign. prep_grampa always writes this file, so its absence is
-        # a pipeline problem, not a network without substring collisions.
-        raise FileNotFoundError(
-            f"taxa map not found: {taxa_map_path}. Predicted leaves cannot be "
-            "renamed back to the ground-truth names, which would make the "
-            "mu-distance undefined and inflate the reticulation Jaccards.")
+        # prep_grampa writes this file only "if substring fixes needed", so its
+        # absence means no label collided and nothing needs renaming. An empty map
+        # is the correct answer here, not a failure.
+        return inv
     with open(taxa_map_path) as f:
         for line in f:
             line = line.strip()

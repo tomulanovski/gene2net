@@ -33,9 +33,14 @@ STRATEGIES = ("bound_driven", "detect_only")
 
 
 def inverse_taxa_map(path):
-    """REPLACEMENT -> ORIGINAL from taxa_map.txt. Raises if the file is absent."""
+    """REPLACEMENT -> ORIGINAL from taxa_map.txt.
+
+    prep_grampa writes this file only when a label collided as a substring of
+    another, so its absence means no renaming is needed for that network and an
+    empty map is correct. A malformed line still raises.
+    """
     if not os.path.exists(path):
-        raise FileNotFoundError(f"taxa map not found: {path}")
+        return {}
     inv = {}
     with open(path, encoding="utf-8") as f:
         for line in f:
