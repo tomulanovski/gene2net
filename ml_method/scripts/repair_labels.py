@@ -16,13 +16,18 @@ taxon to a Jaccard.
 This repairs both in place so the existing reconstructions can be re-scored without
 re-running inference. Reports by default; pass --apply to write.
 
+Roughly 3000 reconstruction directories are walked, so the work is kept off the network
+filesystem where possible: the reference networks are read once, each taxa map is read
+once per (network, config, replicate) rather than once per decode mode, and output.tre is
+parsed only when its text actually contains a replacement key. Most networks have no
+substring fix at all and cost one read.
+
 Run from ml_method/:
     python scripts/repair_labels.py
     python scripts/repair_labels.py --apply
 """
 import argparse
 import os
-import sys
 
 from ete3 import Tree
 
@@ -30,6 +35,9 @@ BASE = "output/reconstruct_final/final"
 SIM = os.path.join("..", "simulations", "simulations")
 NETWORKS = os.path.join("..", "simulations", "networks")
 STRATEGIES = ("bound_driven", "detect_only")
+
+_map_cache = {}
+_ref_cache = {}
 
 
 def inverse_taxa_map(path):
@@ -39,22 +47,40 @@ def inverse_taxa_map(path):
     another, so its absence means no renaming is needed for that network and an
     empty map is correct. A malformed line still raises.
     """
-    if not os.path.exists(path):
-        return {}
+    if path in _map_cache:
+        return _map_cache[path]
     inv = {}
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split("\t")
-            if len(parts) != 2:
-                raise ValueError(f"malformed line in {path}: {line!r}")
-            inv[parts[1].strip()] = parts[0].strip()
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("\t")
+                if len(parts) != 2:
+                    raise ValueError(f"malformed line in {path}: {line!r}")
+                inv[parts[1].strip()] = parts[0].strip()
+    _map_cache[path] = inv
     return inv
 
 
+def reference(net):
+    """Contents of simulations/networks/<net>.tre, read once."""
+    if net not in _ref_cache:
+        src = os.path.join(NETWORKS, f"{net}.tre")
+        if not os.path.exists(src):
+            raise FileNotFoundError(f"reference network not found: {src}")
+        _ref_cache[net] = open(src, encoding="utf-8").read()
+    return _ref_cache[net]
+
+
 def repair_output(tre_path, inv, apply_changes):
+    """Rename replacement->original. Parses only if a key is present in the text."""
+    if not inv:
+        return []
+    text = open(tre_path, encoding="utf-8").read()
+    if not any(k in text for k in inv):
+        return []
     tree = Tree(tre_path, format=9)
     keys = sorted(inv, key=len, reverse=True)
     changed = []
@@ -75,12 +101,10 @@ def repair_output(tre_path, inv, apply_changes):
 
 
 def repair_ground_truth(gt_copy, net, apply_changes):
-    src = os.path.join(NETWORKS, f"{net}.tre")
-    if not os.path.exists(src):
-        raise FileNotFoundError(f"reference network not found: {src}")
-    want = open(src, encoding="utf-8").read()
-    have = open(gt_copy, encoding="utf-8").read() if os.path.exists(gt_copy) else None
-    if have == want:
+    want = reference(net)
+    if not os.path.exists(gt_copy):
+        return False
+    if open(gt_copy, encoding="utf-8").read() == want:
         return False
     if apply_changes:
         with open(gt_copy, "w", encoding="utf-8") as f:
@@ -98,6 +122,7 @@ def main():
 
     n_out, n_gt, seen = 0, 0, set()
     for config in sorted(os.listdir(BASE)):
+        print(f"  scanning {config} ...", flush=True)
         for rep in range(1, 6):
             for strat in STRATEGIES:
                 d = os.path.join(BASE, config, f"rep{rep}", strat)
@@ -106,22 +131,22 @@ def main():
                 for net in sorted(os.listdir(d)):
                     net_dir = os.path.join(d, net)
                     tre = os.path.join(net_dir, "output.tre")
-                    if not os.path.isdir(net_dir) or not os.path.exists(tre):
+                    if not os.path.isfile(tre):
                         continue
-                    tmap = os.path.join(SIM, net, "processed", config,
-                                        "grampa_input", f"replicate_{rep}", "taxa_map.txt")
-                    inv = inverse_taxa_map(tmap)
+                    inv = inverse_taxa_map(os.path.join(
+                        SIM, net, "processed", config, "grampa_input",
+                        f"replicate_{rep}", "taxa_map.txt"))
                     for old, new in repair_output(tre, inv, args.apply):
                         n_out += 1
                         if (net, old, new) not in seen:
                             seen.add((net, old, new))
-                            print(f"  label  {net:22} {old!r} -> {new!r}")
+                            print(f"    label  {net:22} {old!r} -> {new!r}", flush=True)
                     if repair_ground_truth(os.path.join(net_dir, "ground_truth.nex"),
                                            net, args.apply):
                         n_gt += 1
                         if (net, "gt") not in seen:
                             seen.add((net, "gt"))
-                            print(f"  truth  {net:22} stale copy refreshed from networks/")
+                            print(f"    truth  {net:22} stale copy refreshed", flush=True)
 
     verb = "repaired" if args.apply else "would repair"
     print(f"\n{verb}: {n_out} leaf labels, {n_gt} ground-truth copies")
