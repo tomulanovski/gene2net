@@ -75,7 +75,7 @@ networks. Improving the event head cannot, because it is already within 0.025 of
 
 The numbers above are on the validation split, which is drawn from the same simulator as the
 training data. On the empirical benchmark of 21 published networks the model reaches a higher
-mu-distance, around 0.42 to 0.60, and that gap from the validation 0.202 is not explained by the
+mu-distance, around 0.39 to 0.61, and that gap from the validation 0.202 is not explained by the
 decomposition above. It is distribution shift. The benchmark topologies differ from the simulated
 training topologies, and the model generalises to them imperfectly. This is a distinct source of
 error from the backbone and the events, and it is analysed in the results chapter. The point here

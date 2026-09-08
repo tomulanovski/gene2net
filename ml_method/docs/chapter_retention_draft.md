@@ -56,40 +56,39 @@ out. The threshold of the ploidy-free mode is fixed at the value used throughout
 
 ## Comparison to existing methods
 
-The tables report the mean of each measure across the benchmark networks at the three fractionation
-levels. Lower is better. Both decode modes of PlaceNet are shown. The reticulation-count
-difference is the mean number of reticulations by which a method misses the truth, the
-reticulation-leaf and reticulation-sister Jaccards are the two event measures.
+The tables report the mean of each measure at the three fractionation levels, with every method
+restricted to the networks all of them completed, 18 at mild and medium retention and 16 at
+severe. Lower is better. Both decode modes of PlaceNet are shown.
 
 Retention 0.75, the mild condition:
 
-| method | ret_leaf | ret_sis | num_rets | mu |
-| --- | --- | --- | --- | --- |
-| PlaceNet ploidy-informed | 0.170 | 0.497 | 3.79 | 0.430 |
-| PlaceNet ploidy-free | 0.242 | 0.542 | 4.24 | 0.460 |
-| Polyphest | 0.233 | 0.329 | 2.46 | 0.249 |
-| GRAMPA-iter | 0.499 | 0.709 | 4.42 | 0.553 |
-| GRAMPA-iter with prior | 0.266 | 0.593 | 4.40 | 0.500 |
+| method | ret_leaf | ret_sis | mu |
+| --- | --- | --- | --- |
+| PlaceNet ploidy-informed | 0.160 | 0.474 | 0.430 |
+| PlaceNet ploidy-free | 0.233 | 0.519 | 0.460 |
+| Polyphest | 0.244 | 0.335 | 0.251 |
+| GRAMPA-iter | 0.492 | 0.705 | 0.546 |
+| GRAMPA-iter with prior | 0.249 | 0.585 | 0.491 |
 
 Retention 0.50, the medium condition:
 
-| method | ret_leaf | ret_sis | num_rets | mu |
-| --- | --- | --- | --- | --- |
-| PlaceNet ploidy-informed | 0.670 | 0.827 | 7.51 | 0.587 |
-| PlaceNet ploidy-free | 0.506 | 0.723 | 6.07 | 0.538 |
-| Polyphest | 0.594 | 0.755 | 5.94 | 0.422 |
-| GRAMPA-iter | 0.556 | 0.742 | 5.11 | 0.553 |
-| GRAMPA-iter with prior | 0.677 | 0.840 | 7.33 | 0.574 |
+| method | ret_leaf | ret_sis | mu |
+| --- | --- | --- | --- |
+| PlaceNet ploidy-informed | 0.682 | 0.829 | 0.577 |
+| PlaceNet ploidy-free | 0.506 | 0.720 | 0.532 |
+| Polyphest | 0.609 | 0.766 | 0.420 |
+| GRAMPA-iter | 0.542 | 0.733 | 0.535 |
+| GRAMPA-iter with prior | 0.672 | 0.836 | 0.562 |
 
 Retention 0.25, the severe condition:
 
-| method | ret_leaf | ret_sis | num_rets | mu |
-| --- | --- | --- | --- | --- |
-| PlaceNet ploidy-informed | 0.903 | 0.958 | 9.58 | 0.563 |
-| PlaceNet ploidy-free | 0.832 | 0.933 | 8.51 | 0.554 |
-| Polyphest | 0.922 | 0.952 | 8.58 | 0.476 |
-| GRAMPA-iter | 0.615 | 0.781 | 5.40 | 0.574 |
-| GRAMPA-iter with prior | 0.902 | 0.953 | 8.93 | 0.608 |
+| method | ret_leaf | ret_sis | mu |
+| --- | --- | --- | --- |
+| PlaceNet ploidy-informed | 0.922 | 0.964 | 0.548 |
+| PlaceNet ploidy-free | 0.876 | 0.942 | 0.538 |
+| Polyphest | 0.917 | 0.948 | 0.462 |
+| GRAMPA-iter | 0.602 | 0.774 | 0.547 |
+| GRAMPA-iter with prior | 0.923 | 0.962 | 0.592 |
 
 Two readings, one for each family of measure. The reticulation measures come first, since
 they are the ones fractionation puts under pressure.
@@ -98,25 +97,25 @@ On reticulation recovery, which is the question fractionation actually poses, th
 a map of which method to prefer, and the decode modes move across it. The reticulation-leaf figures
 here are the penalized Jaccard, which charges a method for reticulations it never finds. At mild
 retention the copy number is still informative, and the ploidy-informed mode has the lowest
-reticulation-leaf distance of any method, 0.170 against Polyphest's 0.233. At medium retention the
-copy number has begun to fail, the ploidy-informed mode degrades to 0.670, and the ploidy-free mode
-takes over at 0.506, which is the lowest of any method, below Polyphest's 0.594 and GRAMPA-iter's
-0.556. At severe retention
+reticulation-leaf distance of any method, 0.160 against Polyphest's 0.244. At medium retention the
+copy number has begun to fail, the ploidy-informed mode degrades to 0.682, and the ploidy-free mode
+takes over at 0.506, which is the lowest of any method, below Polyphest's 0.609 and GRAMPA-iter's
+0.542. At severe retention
 the copy number is largely destroyed, and iterative GRAMPA, which searches for reticulations one at
-a time without a copy-number estimate, recovers the most at 0.615, with the ploidy-free mode second
-at 0.832 and still ahead of Polyphest's 0.922. So the ploidy-free mode owns the middle of the map,
+a time without a copy-number estimate, recovers the most at 0.602, with the ploidy-free mode second
+at 0.876 and still ahead of Polyphest's 0.917. So the ploidy-free mode owns the middle of the map,
 the crossover where copy number fails but detection can still recover the events, and it is
 competitive at the extremes.
 
-On the mu-distance Polyphest is the most accurate method at all three levels, 0.249, 0.422, and
-0.476 as retention falls. This is the same pattern as the rest of the benchmark, and for the same
+On the mu-distance Polyphest is the most accurate method at all three levels, 0.251, 0.420, and
+0.462 as retention falls. This is the same pattern as the rest of the benchmark, and for the same
 reason, namely that the mu-distance rewards the copy-number structure that folding a multiset
 recovers. So on the overall metric no method beats Polyphest here.
 
 One result cuts across all three levels. Giving iterative GRAMPA the inferred ploidy prior helps
 only at mild fractionation and hurts as fractionation grows. With the prior its reticulation-leaf
-distance is 0.266 at mild loss but 0.677 and 0.902 at medium and severe loss, against 0.499, 0.556,
-and 0.615 for the free version. The prior is the same collapsed multiset that limits Polyphest, so
+distance is 0.249 at mild loss but 0.672 and 0.923 at medium and severe loss, against 0.492, 0.542,
+and 0.602 for the free version. The prior is the same collapsed multiset that limits Polyphest, so
 handing it to the search constrains it to the wrong ploidy exactly when the ploidy is wrong. This
 confirms from a second direction that under fractionation the copy number is the problem, and a
 method that does not lean on it, whether the free search or the learned detection head in its

@@ -4,11 +4,12 @@ This chapter developed a learned detect-then-place method for polyploid network 
 evaluated it against the existing methods on fifteen simulated configurations under the mu-distance.
 The honest summary is a map of where each method is preferable rather than a single winner.
 
-On the reticulation descendants measure, which asks which lineages are polyploid, PlaceNet leads
-Polyphest in eight of the fifteen configurations and is level in a ninth. Those are not a scattered
-subset. They are the configurations with the highest gene tree discordance and all three levels of
-fractionation, which is the regime real polyploid data occupy, and the crossover point is the
-reliability of the copy number that Polyphest builds its reconstruction around. Against iterative
+On the reticulation descendants measure, which asks which lineages are polyploid, the ploidy-free
+decode leads Polyphest in eleven of the fifteen configurations, at a single fixed threshold rather
+than by choosing the better mode per condition. The four it loses are the four with the least
+discordance and an intact copy number, and the crossover point is the reliability of the copy
+number that Polyphest builds its reconstruction around, which is degraded in the data real studies
+produce. Against iterative
 GRAMPA, the peer that also works without a supplied ploidy, PlaceNet leads on every measure in
 almost every configuration.
 
