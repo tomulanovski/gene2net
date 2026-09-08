@@ -14,6 +14,7 @@ Usage (final_project env, needs torch):
 """
 import argparse
 import os
+import re
 import sys
 import time
 from collections import Counter
@@ -83,15 +84,14 @@ def rename_leaves(tree, inv_map):
     """
     if not inv_map:
         return
-    keys = sorted(inv_map, key=len, reverse=True)
-    for leaf in tree.get_leaves():
-        if leaf.name in inv_map:
-            leaf.name = inv_map[leaf.name]
-            continue
-        for k in keys:
-            if k in leaf.name:
-                leaf.name = leaf.name.replace(k, inv_map[k], 1)
-                break
+    # Same boundary rule as postprocess_results._reverse_substring_fix, so the two
+    # pipelines undo the fix identically: the key must be followed by a non-word
+    # character or the end of the name, which stops "filixX" matching "filixXY".
+    for replacement, original in sorted(inv_map.items(),
+                                        key=lambda kv: len(kv[0]), reverse=True):
+        pattern = rf"{re.escape(replacement)}(?=[^a-zA-Z0-9_]|$)"
+        for leaf in tree.get_leaves():
+            leaf.name = re.sub(pattern, original, leaf.name)
 
 
 def load_gene_trees(path, max_trees=500):
