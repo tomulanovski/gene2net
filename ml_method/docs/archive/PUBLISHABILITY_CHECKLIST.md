@@ -9,7 +9,7 @@ this doc is working notes.
 
 ---
 
-## Part A — the backbone go/no-go (spend the optimism here first)
+## Part A — the backbone go/no-go (spend the optimizm here first)
 
 The true-backbone floor (~0.11 sim) is well below Polyphest (~0.42), so a correct backbone
 WOULD beat it. The only lever is placing polyploids right on the (good) diploid scaffold.

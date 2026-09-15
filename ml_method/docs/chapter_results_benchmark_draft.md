@@ -12,177 +12,63 @@ distance. PlaceNet appears in its two decode modes, ploidy-informed and ploidy-f
 infers its own ploidy from the gene trees, so Polyphest here is the inferred-ploidy variant and the
 comparison is prior-free on both sides. Scores are the mean over five replicates.
 
-The competitors do not complete every network, and the networks they abandon are the harder ones,
-so a mean taken over each method's own completions would flatter whichever method completes least.
-Every table below therefore restricts all methods to the networks that all of them completed, and
-reports the size of that subset as n. It is limited by Polyphest and by iterative GRAMPA with the
-ploidy prior rather than by PlaceNet, which completes every network. What the restriction leaves
-out is reported separately at the end of the section.
+The competitors do not complete every network, and the networks they skip are the harder ones.
+Every comparison below therefore restricts all methods to the networks that all of them completed.
+That subset is limited by Polyphest and by iterative GRAMPA with the ploidy prior, since PlaceNet
+completes every network, and the networks it leaves out are discussed at the end of the section.
 
 ## Where the method wins
 
-The comparison spans fifteen configurations, twelve of discordance and three of fractionation, and
-the result is not uniform across them. It is ordered by difficulty.
+@fig:discordance plots the three measures across the twelve discordance configurations, and
+@tab:descendants, @tab:sisters and @tab:mu in the appendix give the exact values.
 
-On the reticulation descendants measure, which asks which lineages are polyploid, the ploidy-free
-decode is more accurate than Polyphest in eleven of the fifteen configurations. It is a single fixed
-decode at a single fixed threshold, so this is not a matter of choosing the better mode per
-condition. The four it loses are the four with the least discordance and an intact copy number,
-namely low and medium sorting and the low and medium duplication and loss rates at the smallest
-effective population size. The ploidy-informed decode wins nine of the fifteen, so both modes are
-ahead of Polyphest on the majority of conditions and the choice between them changes the margin
-rather than the outcome.
+The comparison spans the fifteen configurations (soon 17). On the reticulation descendants measure
+the ploidy-free decode is more accurate than Polyphest in eleven of the fifteen configurations. The
+four losses occur under the simplest conditions across two ILS levels: low ILS with no, low, or
+medium duplication and loss rates, and medium ILS with no duplication or loss. The ploidy-informed
+decode wins nine of the fifteen, so both modes are ahead of Polyphest on most configurations.
 
-The dividing line is the reliability of the copy number. Polyphest builds its reconstruction around
-an inferred multiset of copy counts, and where the gene trees support that multiset it recovers the
-events better than any learned model. As discordance rises and as fractionation deletes duplicate
-copies, the multiset degrades and PlaceNet overtakes it. Against iterative GRAMPA, the peer that
-also reconstructs without a supplied ploidy, PlaceNet is ahead on this measure in fourteen of the
-fifteen configurations, and ahead of iterative GRAMPA given the inferred ploidy prior in all
-fifteen.
+Against iterative GRAMPA, the other method that needs no supplied ploidy, the ploidy-free decode is
+more accurate on every measure in at least thirteen of the fifteen configurations, and it is ahead
+of iterative GRAMPA with the ploidy prior in most of them. On the reticulation sister measure it is
+also more accurate than Polyphest at the two more severe fractionation levels. PlaceNet gains on
+Polyphest as the conditions get harder, which is where published polyploid datasets sit.
 
-This matters for the intended use. Published polyploid datasets are not the clean end of the sweep.
-They carry substantial gene tree discordance, and fractionation has removed duplicate copies from
-most polyploid genomes, which is why the copy number is unreliable in practice and not only in
-principle. The conditions in which PlaceNet leads are the conditions real data present.
+Figure: {#fig:discordance} figures/discordance_degradation.png | Reconstruction accuracy across the twelve discordance configurations. Rows are the reticulation descendants distance, the reticulation sister distance and the mu-distance, and columns are the four configuration families. Each point is the mean on the networks that every method completed, with error bars showing the standard error across those networks. Dashed lines with open markers are the variants that use ploidy information. Lower is better.
 
-## Which lineages are reticulate
+## Accuracy on each measure
 
-| Configuration | PlaceNet informed | PlaceNet free | Polyphest | GRAMPA-iter | GRAMPA-iter + prior | n |
-| --- | --- | --- | --- | --- | --- | --- |
-| ILS low | 0.112 | 0.174 | 0.022 | 0.418 | 0.223 | 17 |
-| ILS medium | 0.134 | 0.205 | 0.148 | 0.452 | 0.228 | 16 |
-| ILS high | 0.157 | 0.207 | 0.245 | 0.573 | 0.210 | 16 |
-| dup/loss low, Ne 200k | 0.111 | 0.166 | 0.127 | 0.374 | 0.210 | 16 |
-| dup/loss medium, Ne 200k | 0.122 | 0.190 | 0.135 | 0.405 | 0.188 | 16 |
-| dup/loss high, Ne 200k | 0.782 | 0.284 | 0.319 | 0.527 | 0.306 | 17 |
-| dup/loss low, Ne 1M | 0.154 | 0.188 | 0.194 | 0.467 | 0.222 | 16 |
-| dup/loss medium, Ne 1M | 0.136 | 0.195 | 0.243 | 0.473 | 0.237 | 16 |
-| dup/loss high, Ne 1M | 0.776 | 0.247 | 0.405 | 0.549 | 0.356 | 18 |
-| dup/loss low, Ne 2M | 0.137 | 0.208 | 0.251 | 0.557 | 0.228 | 16 |
-| dup/loss medium, Ne 2M | 0.148 | 0.195 | 0.249 | 0.550 | 0.232 | 16 |
-| dup/loss high, Ne 2M | 0.817 | 0.230 | 0.368 | 0.585 | 0.316 | 16 |
+The top row of @fig:discordance shows the reticulation descendants measure. The better of PlaceNet's
+two modes is ahead of both GRAMPA variants in every configuration, usually by more than a factor of
+two against iterative GRAMPA. Against Polyphest the lines cross as the conditions get harder.
+Polyphest leads only in the mildest configurations, and from there the ploidy-free decode is ahead,
+at high duplication and loss 0.284 against 0.319, 0.247 against 0.405 and 0.230 against 0.368 as ILS
+rises. At those same high rates the corrupted copy number drives the ploidy-informed mode up to
+between 0.776 and 0.817, while the ploidy-free mode stays between 0.230 and 0.284, which is why the
+method offers both modes.
 
-PlaceNet is far ahead of the GRAMPA family throughout. The better of its two modes is below
-GRAMPA-iter in every configuration, usually by a factor of two, and below iterative GRAMPA given the
-inferred ploidy prior in every configuration as well.
+The middle row shows the reticulation sister measure. The ploidy-free decode is more accurate than
+iterative GRAMPA in eleven of the twelve configurations, and the same crossover between the decode
+modes appears at every high duplication and loss rate. Polyphest leads on this measure throughout,
+because the partner head is the weaker of PlaceNet's two heads and inherits the error of the ASTRAL
+backbone, as the diagnostic section shows.
 
-Against Polyphest the ordering turns on difficulty and it reverses. Polyphest is ahead at low and
-medium sorting and at the two lower duplication and loss rates at the smallest population size. From
-there PlaceNet is ahead everywhere, at high sorting 0.207 against 0.245, and at high duplication and
-loss 0.284 against 0.319 at the smallest population size, 0.247 against 0.405 at the middle size and
-0.230 against 0.368 at the largest, all with the ploidy-free decode.
+The bottom row shows the mu-distance. The ploidy-free decode is more accurate than iterative GRAMPA
+in every configuration, and than iterative GRAMPA with the ploidy prior in all but the three
+duplication and loss rates at low ILS. Polyphest is ahead on this measure throughout, because the
+mu-distance scores every node of the network, including the backbone that PlaceNet takes from ASTRAL
+and never rebuilds.
 
-The two decode modes trade off with copy-number reliability, and this measure shows it most sharply.
-On the clean and moderate configurations the ploidy-informed mode is ahead. At every high
-duplication and loss rate the copy number is corrupted, the ploidy-informed mode collapses to
-between 0.776 and 0.817, and the ploidy-free mode holds between 0.230 and 0.284. That collapse is
-the corrupted copy bound rather than a failure of the detection head, and it shows in the
-reticulation count as well, where the ploidy-informed mode over-predicts events sharply once the
-bound stops constraining it. This is the decode principle developed in the decode section, and it is
-why the method offers two modes rather than one.
+## Completion and runtime
 
-## Where the reticulate lineages came from
+Restricting to the common subset removes four to five networks per configuration, all of them
+reconstructed by PlaceNet and missed by at least one competitor. PlaceNet completes all 21 in every
+discordance configuration, against 17 to 20 for Polyphest. These networks are harder, with a
+PlaceNet mu-distance of 0.56 to 0.73 against 0.39 to 0.61 on the common subset, so what PlaceNet
+offers on them is an answer where the competitors return none.
 
-| Configuration | PlaceNet informed | PlaceNet free | Polyphest | GRAMPA-iter | GRAMPA-iter + prior | n |
-| --- | --- | --- | --- | --- | --- | --- |
-| ILS low | 0.382 | 0.428 | 0.052 | 0.594 | 0.471 | 17 |
-| ILS medium | 0.511 | 0.555 | 0.196 | 0.656 | 0.540 | 16 |
-| ILS high | 0.522 | 0.563 | 0.310 | 0.729 | 0.565 | 16 |
-| dup/loss low, Ne 200k | 0.482 | 0.524 | 0.156 | 0.574 | 0.464 | 16 |
-| dup/loss medium, Ne 200k | 0.505 | 0.558 | 0.171 | 0.597 | 0.485 | 16 |
-| dup/loss high, Ne 200k | 0.942 | 0.696 | 0.444 | 0.680 | 0.581 | 17 |
-| dup/loss low, Ne 1M | 0.516 | 0.540 | 0.244 | 0.646 | 0.543 | 16 |
-| dup/loss medium, Ne 1M | 0.515 | 0.554 | 0.274 | 0.682 | 0.559 | 16 |
-| dup/loss high, Ne 1M | 0.925 | 0.671 | 0.529 | 0.725 | 0.618 | 18 |
-| dup/loss low, Ne 2M | 0.514 | 0.553 | 0.316 | 0.741 | 0.590 | 16 |
-| dup/loss medium, Ne 2M | 0.520 | 0.556 | 0.299 | 0.708 | 0.580 | 16 |
-| dup/loss high, Ne 2M | 0.925 | 0.652 | 0.495 | 0.756 | 0.604 | 16 |
-
-The parental context is harder for PlaceNet than the reticulate lineage, and this is the measure on
-which Polyphest leads throughout. Unlike the descendants measure the ordering does not reverse at
-high discordance. PlaceNet remains below the GRAMPA family in every configuration, so it is still
-the most accurate of the methods that infer their own ploidy, but the gap to Polyphest is real and
-it does not close.
-
-The cause is known rather than mysterious, and the diagnostic section quantifies it. The method
-predicts two things on every edge, whether an event occurred and which lineage the duplicated
-lineage merged with. The detection head is strong, which is what the descendants measure reflects.
-The partner head is the weaker of the two, which is what this measure reflects. An ablation of the
-partner features reaches the same conclusion from the model side, and the oracle experiment shows
-that the parental context inherits the error of an ASTRAL backbone the method never rebuilds.
-Improving it is therefore a backbone problem before it is a partner-head problem, and that is the
-direction the future-work section takes.
-
-The decode crossover appears here as well. At every high duplication and loss rate the ploidy-free
-mode overtakes the ploidy-informed mode, from about 0.93 to about 0.67, so the pattern is the same
-as on the descendants measure even though the level is worse.
-
-## Overall structural agreement
-
-| Configuration | PlaceNet informed | PlaceNet free | Polyphest | GRAMPA-iter | GRAMPA-iter + prior | n |
-| --- | --- | --- | --- | --- | --- | --- |
-| ILS low | 0.393 | 0.404 | 0.027 | 0.480 | 0.429 | 17 |
-| ILS medium | 0.417 | 0.436 | 0.062 | 0.487 | 0.437 | 16 |
-| ILS high | 0.413 | 0.442 | 0.150 | 0.567 | 0.465 | 16 |
-| dup/loss low, Ne 200k | 0.402 | 0.423 | 0.052 | 0.447 | 0.398 | 16 |
-| dup/loss medium, Ne 200k | 0.410 | 0.445 | 0.057 | 0.466 | 0.419 | 16 |
-| dup/loss high, Ne 200k | 0.607 | 0.523 | 0.317 | 0.563 | 0.507 | 17 |
-| dup/loss low, Ne 1M | 0.404 | 0.416 | 0.075 | 0.511 | 0.442 | 16 |
-| dup/loss medium, Ne 1M | 0.414 | 0.430 | 0.098 | 0.505 | 0.447 | 16 |
-| dup/loss high, Ne 1M | 0.567 | 0.477 | 0.351 | 0.567 | 0.497 | 18 |
-| dup/loss low, Ne 2M | 0.408 | 0.430 | 0.144 | 0.574 | 0.475 | 16 |
-| dup/loss medium, Ne 2M | 0.421 | 0.437 | 0.132 | 0.575 | 0.472 | 16 |
-| dup/loss high, Ne 2M | 0.579 | 0.456 | 0.348 | 0.574 | 0.505 | 16 |
-
-PlaceNet beats GRAMPA-iter on the mu-distance in every configuration, and iterative GRAMPA with the
-ploidy prior in thirteen of the fifteen, so among the prior-free methods it is again the most
-accurate. Polyphest is ahead of it everywhere, and the reason is structural rather than about the
-events. The mu-distance scores every node of the network, so it charges PlaceNet for the placement
-of the diploid species as well as for the polyploidization events, and PlaceNet stamps its events
-onto an ASTRAL backbone it never rebuilds. The diagnostic section measures that backbone term
-directly and finds it dominant, five times the error the event prediction contributes. A method can
-therefore reach a lower mu-distance while recovering the polyploidization events less accurately,
-and from moderate difficulty onward that is what happens.
-
-## What the common subset leaves out
-
-Restricting every method to the networks all of them completed removes four to five networks per
-configuration, and those are networks PlaceNet reconstructed and at least one competitor did not.
-PlaceNet completes all 21 in every discordance configuration, against 17 to 20 for Polyphest.
-
-Those networks are harder, and honestly so. PlaceNet's mu-distance on them runs from 0.56 to 0.73,
-against 0.39 to 0.61 on the common subset, so they are not networks it finds easy while the
-competitors merely declined them. The claim is that it returns an answer where the alternatives
-return nothing, not that the answer is as good as its average.
-
-## Runtime
-
-PlaceNet reconstructs a network in seconds. Its per-network compute beyond the ASTRAL step
-is about eight seconds on the benchmark, of which the graph neural network forward pass is a fraction
-of a second and the remainder is feature extraction from the gene trees. ASTRAL adds a few seconds.
-Polyphest, by contrast, has a runtime that ranges over four orders of magnitude and often does not
-terminate at all. On one configuration's twenty-one networks its wall time ran from about four
-minutes on the easiest network to more than three days on the hardest network that completed, and a
-majority did not complete within reasonable limits. Five networks reached a five-day time limit
-without finishing, nine exhausted memory, and several of those that did complete took between one
-and three and a half days. So the method offers a bounded runtime of seconds per network against a
-search whose runtime is variable, can reach days, and frequently ends in a timeout or an
-out-of-memory failure rather than an answer.
-
-## Summary
-
-PlaceNet identifies the polyploid lineages more accurately than any existing method in the
-conditions that real polyploid data present. With a single fixed decode it is ahead of Polyphest on
-the reticulation descendants measure in eleven of the fifteen configurations, losing only the four
-with the least discordance and an intact copy number. Against iterative GRAMPA, the peer that also
-works without a supplied ploidy, it leads on every measure in almost every configuration. It
-reconstructs every network in seconds with a bounded runtime, where Polyphest is variable, can take
-days, and often returns nothing at all.
-
-Two limits are worth stating plainly. Polyphest recovers the parental context better in every
-configuration, and it is ahead on the mu-distance in every configuration as well. Both have the same
-cause. The partner head is the weaker of the method's two heads, and the mu-distance scores every
-node of the network, so both charge PlaceNet for the ASTRAL backbone it never rebuilds. The
-diagnostic section measures that term and finds it five times the error the event prediction
-contributes, which makes rebuilding the backbone the single change that would move both.
+PlaceNet reconstructs a network in about eight seconds beyond the ASTRAL step, almost all of it
+feature extraction from the gene trees, and ASTRAL adds a few seconds. Polyphest's runtime spans
+four orders of magnitude. On one configuration's 21 networks it ran from about four minutes to more
+than three days, and fourteen of the 21 never finished, five at the five-day time limit and nine out
+of memory.

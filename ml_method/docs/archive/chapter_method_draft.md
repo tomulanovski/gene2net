@@ -20,14 +20,14 @@ pairwise features, described with the placement head, are attached to ordered pa
 
 ### Node features
 
-The 13 node features are computed per species from the gene trees. Eight of them summarise copy
+The 13 node features are computed per species from the gene trees. Eight of them summarize copy
 number. For each species we count, in each gene tree, how many leaves carry that species label,
-and we summarise the resulting distribution by its mean, variance, mode, maximum, and the
+and we summarize the resulting distribution by its mean, variance, mode, maximum, and the
 fraction of gene trees in which the species is absent, present once, present twice, or present
 three or more times. A species that underwent a whole genome duplication tends to appear as two
 copies, so these features carry the primary duplication signal.
 
-The remaining five node features summarise co-clustering. For a target species and every other
+The remaining five node features summarize co-clustering. For a target species and every other
 species we measure the fraction of gene trees in which a copy of the target is a direct
 leaf-sister of that other species. This yields one value per other species. Because the number
 of species varies, we reduce this vector to a fixed summary of five statistics, namely its mean,
@@ -55,7 +55,7 @@ clade-duplicated fraction is the mean, per gene tree, of the fraction of the cla
 that tree that are duplicated, which measures how pervasive the duplication is. The mirrored-sister
 fraction is the fraction of gene trees in which part of the clade appears as two identical sister
 subtrees, the signature of an autopolyploidy. The copy-pair divergence is the mean distance between a
-species' two closest copies, taken over the duplicated clade species and gene trees and normalised by
+species' two closest copies, taken over the duplicated clade species and gene trees and normalized by
 the tree scale. It is a tree-based analogue of the synonymous-site divergence, or Ks, used to date
 duplications, so it estimates the typical age of the copies. The copy-pair divergence coefficient of
 variation measures how consistent those ages are, low for a single shared event and high for
@@ -75,7 +75,7 @@ aggregation.
 Second, the node features are projected to a hidden dimension of 256 by a two-layer MLP.
 
 Third, four graph attention layers refine the node representations. Each layer uses four attention
-heads, a dropout of 0.1, a residual connection, and layer normalisation. The attention passes
+heads, a dropout of 0.1, a residual connection, and layer normalization. The attention passes
 messages between nodes, so after these layers each node representation carries information from
 across the whole tree. Because the edge embeddings built in the next stage are formed from their two
 endpoint nodes, the per-edge predictions inherit that global context indirectly, through the nodes,
@@ -87,7 +87,7 @@ parent representation, the child representation, and the 9 edge features of that
 
 Fifth, two prediction heads read the branch embeddings. The detection head is a two-layer MLP that
 maps each branch embedding to a binary decision, whether a whole genome duplication occurred on
-that branch. The placement head scores, for each detected branch, every other branch as a
+that branch. The placement head scores, for each detected branch, every branch as a
 candidate second parent. For a source branch i and a candidate branch j, the score is produced by
 a two-layer MLP applied to the concatenation of the embedding of i, the embedding of j, and the
 pairwise features of the ordered pair i and j. Applying a softmax over the candidates gives a
@@ -98,21 +98,36 @@ chosen branch.
 ### Pairwise placement features
 
 For a clade the detection head has flagged as duplicated, the placement head scores every other edge
-as the candidate second parent, the edge onto which a copy of that clade is grafted. This choice is
-relational. It depends on how the duplicated clade sits relative to a candidate parent rather than on
-either edge alone, so it needs a signal defined on the ordered pair of the source clade and the
-candidate, which no single-edge feature can provide. That signal is co-clustering, the frequency
-across the gene trees with which a species from the source clade appears as a sister to a species from
-the candidate. It is informative because an
-allopolyploid grafts a copy of its clade next to its second parent, so the two co-cluster there. There
-are four pairwise features, in two pairs. The first pair is the mean and the maximum, across the
-species of the two clades, of this co-clustering. The second pair is a copy-aware cluster-support
-signal. When a species is duplicated, one copy tends to stay home among its own clade while the other
-lands away near its allopolyploid partner. For each such away copy we measure the fraction of its
-local neighborhood in the gene tree that belongs to the candidate partner clade, and we summarise that
-fraction over the gene trees as an intensity and as a per-copy peak. This second pair is the sharper
-allopolyploid signal, because it reads the neighborhood of the copy that actually moved rather than
-symmetric sisterhood alone.
+as the candidate second lineage, itself included. No feature of either edge on its own can answer this. Whether a
+candidate is right depends on how the duplicated clade relates to it, so the head needs a signal
+computed on the pair. Two signals are used, and both rest on the same fact. An allopolyploidization
+leaves a copy of the duplicated clade beside each of the two lineages that contributed to it, so in
+the gene trees species of the clade keep appearing next to species of the true partner.
+
+The first signal is co-clustering. Two species are sisters in a gene tree when their branches meet
+directly, with no other lineage splitting off in between. For two species, co-clustering is the
+fraction of gene trees in which they are sisters. For a pair of edges we take every species pair
+with one species from each clade and reduce those fractions twice, to their mean and to their
+maximum. The mean asks whether the two clades sit together in general. The maximum asks whether some
+species pairs sit together very often. Both are needed because the signal is uneven across the
+block. The copy grafts at one position inside the candidate clade rather than beside all of it, and
+fractionation and discordance leave only some species pairs recovering the sister relationship at
+all, so averaging over every cross pair dilutes what the maximum keeps.
+
+The second signal is cluster support. Co-clustering is a measure on pairs of species, so it rises
+only when a copy and a species of the candidate clade are sisters. A copy often lands beside a whole
+group from that clade instead. It is then the sister of the group rather than of any single species,
+so no pair forms and that gene tree adds nothing. Cluster support asks a looser
+question. It looks at the small group of leaves around a copy and measures how much of that group
+comes from the candidate clade.
+
+The group around a copy is the largest clade holding it that has no more than ten leaves. The cap
+matters because the group has to reach past the duplicated clade before anything outside it becomes
+visible, which it does for small clades and not for large ones. We keep a copy only when fewer than half the leaves in its group
+belong to the duplicated clade. A copy buried among its own clade shows nothing about where the
+duplicate went. For each copy we keep we record the fraction of its group that belongs to the
+candidate clade. The two features are those fractions added over all kept copies and divided by the
+number of gene trees, and the largest single fraction among them.
 
 ## Training objective
 
@@ -126,15 +141,22 @@ rare relative to non-event branches. The focal term downweights easy branches by
 grows with the model confidence, so the effective difficulty of each branch is derived from the
 prediction rather than being labeled in advance.
 
-Placement uses a cross-entropy loss over the candidate branches, and it is applied only on
-branches that carry a true event. The target for an autopolyploidy is the branch itself, and the
-target for an allopolyploidy is the second parent branch.
+Placement is trained one duplicated branch at a time. For a branch that carries a true event we score
+every branch in the tree as a candidate, including the branch itself, and a softmax turns those
+scores into a distribution over the candidates. The loss for that branch is the cross-entropy, the
+negative log of the probability the model gave the correct candidate. That correct candidate is the
+branch itself for an autopolyploidy and the second parent branch for an allopolyploidy. A network
+with n events gives n such losses and we average them. Branches with no event are left out, because
+there is no correct candidate for them.
 
-Optimisation uses Adam with a learning rate of 0.0005 and weight decay of 0.00001. Each species
-tree is one graph, and gradients are accumulated over eight graphs before each optimiser step. The
-hyperparameters given here and in the architecture, namely the hidden dimension, the number of
-layers, the learning rate, and the weight decay, were selected by a two-stage hyperparameter search
-on the validation split.
+Optimization uses Adam with a learning rate of 0.0005 and weight decay of 0.00001. Each species
+tree is one graph, and gradients are accumulated over eight graphs before each optimizer step. Six
+settings were tuned with Optuna on the validation split, the convolution type, the hidden dimension,
+the number of layers, the dropout, the learning rate, and the weight decay. The search ran in two
+rounds. The first converged on the edge of its range, at a hidden dimension of 256 and a depth of
+four, so the second widened the range to 512 and to a depth of five and confirmed that nothing
+larger was better. Everything else was held fixed, among it the batch size, the loss weights, and
+the constants of the features.
 
 ## From predictions to a network
 

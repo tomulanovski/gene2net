@@ -1,9 +1,21 @@
 """Assemble the method-chapter drafts into one Word .docx.
 
 Reads the section markdown files in order, strips each file's meta "DRAFT for the thesis..."
-paragraph, and renders headings, paragraphs, bold, inline code, bullet lists, and pipe tables into
-a docx. The method-architecture section is salvaged from the archived method draft, truncated
-before its old "From predictions to a network" section, which the decode section supersedes.
+paragraph, and renders headings, paragraphs, bold, inline code, bullet lists, pipe tables, and
+figures into a docx. The method-architecture section is salvaged from the archived method draft,
+truncated before its old "From predictions to a network" section, which the decode section
+supersedes.
+
+Tables and figures are captioned, numbered in document order, and cross-referenced:
+
+    Table: {#tab:oracle} Caption text.              directly above a pipe table
+    Figure: {#fig:frac} figures/frac.png | Caption.  on its own line
+    ... as @tab:oracle shows ...                    in running text, becomes "Table 4"
+
+Table captions go above the table and figure captions below the figure, each with a live SEQ
+field so Word can renumber them and build a list of tables or figures. The build stops if a
+table has no caption, a caption has no label, a label is used twice or never referenced in the
+running text, a reference names no label, or a figure file is missing.
 
 No em-dashes: the drafts contain none, and the script warns if any en-dash or em-dash appears.
 
@@ -14,7 +26,10 @@ import os
 import re
 
 from docx import Document
-from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Inches, Pt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DOCS = os.path.join(HERE, "..", "docs")
@@ -32,10 +47,15 @@ SECTIONS = [
     ("chapter_limitations_draft.md", None),
     ("chapter_future_work_draft.md", None),
     ("chapter_conclusion_draft.md", None),
+    ("chapter_appendix_tables_draft.md", None),
 ]
 
 CHAPTER_TITLE = "A learned detect-then-place method for polyploid network reconstruction"
 OUT = os.path.join(DOCS, "gene2net_method_chapter.docx")
+FIGURE_WIDTH = Inches(6.3)
+
+CAPTION_RE = re.compile(r"^(Table|Figure):\s*\{#((?:tab|fig):[A-Za-z0-9_-]+)\}\s*(.*)$")
+REF_RE = re.compile(r"@((?:tab|fig):[A-Za-z0-9_-]+)")
 
 
 def strip_meta(text):
@@ -89,6 +109,66 @@ def is_sep(line):
     return re.match(r"^\s*\|?[\s:|-]+\|?[\s:|-]*$", line) is not None and set(line.strip()) <= set("|-: ")
 
 
+def is_caption(line):
+    return line.strip().startswith(("Table:", "Figure:"))
+
+
+def collect_labels(texts):
+    """Number every captioned table and figure in document order: label -> (kind, number)."""
+    labels, count = {}, {"Table": 0, "Figure": 0}
+    for text in texts:
+        for line in text.split("\n"):
+            if not is_caption(line):
+                continue
+            m = CAPTION_RE.match(line.strip())
+            if not m:
+                raise SystemExit(f"Caption has no {{#tab:...}} or {{#fig:...}} label: {line.strip()[:80]}")
+            kind, label, _ = m.groups()
+            if (kind == "Table") != label.startswith("tab:"):
+                raise SystemExit(f"Label prefix does not match the caption kind: {line.strip()[:80]}")
+            if label in labels:
+                raise SystemExit(f"Label used twice: {label}")
+            count[kind] += 1
+            labels[label] = (kind, count[kind])
+    return labels
+
+
+def check_references(texts, labels):
+    """Every reference must name a label, and every label must be referenced in running text."""
+    used = set()
+    for text in texts:
+        for line in text.split("\n"):
+            refs = REF_RE.findall(line)
+            for ref in refs:
+                if ref not in labels:
+                    raise SystemExit(f"Reference to an unknown label: @{ref}")
+            if not is_caption(line):
+                used.update(refs)
+    unused = sorted(set(labels) - used)
+    if unused:
+        raise SystemExit("Never referenced in the running text: " + ", ".join("@" + u for u in unused))
+
+
+def resolve(text, labels):
+    return REF_RE.sub(lambda m: "{} {}".format(*labels[m.group(1)]), text)
+
+
+def add_caption(doc, kind, number, text, labels, above):
+    """Caption paragraph "Kind N. text", N as a live SEQ field so Word can renumber it."""
+    p = doc.add_paragraph(style="Caption")
+    p.paragraph_format.keep_with_next = above
+    p.add_run(f"{kind} ")
+    fld = OxmlElement("w:fldSimple")
+    fld.set(qn("w:instr"), f" SEQ {kind} \\* ARABIC ")
+    run = OxmlElement("w:r")
+    txt = OxmlElement("w:t")
+    txt.text = str(number)
+    run.append(txt)
+    fld.append(run)
+    p._p.append(fld)
+    add_runs(p, ". " + resolve(text, labels))
+
+
 def add_table(doc, rows):
     ncols = max(len(r) for r in rows)
     table = doc.add_table(rows=len(rows), cols=ncols)
@@ -103,14 +183,25 @@ def add_table(doc, rows):
                     run.bold = True
 
 
-def render_markdown(doc, text):
+def add_figure(doc, rel_path, caption, number, labels):
+    path = os.path.normpath(os.path.join(DOCS, rel_path))
+    if not os.path.exists(path):
+        raise SystemExit(f"Figure file not found: {path}")
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.keep_with_next = True
+    p.add_run().add_picture(path, width=FIGURE_WIDTH)
+    add_caption(doc, "Figure", number, caption, labels, above=False)
+
+
+def render_markdown(doc, text, labels):
     lines = text.split("\n")
-    i, para = 0, []
+    i, para, pending = 0, [], None   # pending: (number, caption) of the next table
 
     def flush():
         nonlocal para
         if para:
-            add_runs(doc.add_paragraph(), " ".join(para).strip())
+            add_runs(doc.add_paragraph(), resolve(" ".join(para).strip(), labels))
             para = []
 
     while i < len(lines):
@@ -124,20 +215,41 @@ def render_markdown(doc, text):
             flush(); doc.add_heading(clean_heading(s[3:]), level=2); i += 1; continue
         if s.startswith("# "):
             flush(); doc.add_heading(clean_heading(s[2:]), level=1); i += 1; continue
+        if is_caption(s):
+            flush()
+            kind, label, rest = CAPTION_RE.match(s).groups()
+            number = labels[label][1]
+            i += 1
+            if kind == "Figure":
+                if " | " not in rest:
+                    raise SystemExit(f"Figure line needs 'path | caption': {s[:80]}")
+                rel_path, caption = rest.split(" | ", 1)
+                add_figure(doc, rel_path.strip(), caption.strip(), number, labels)
+                continue
+            while i < len(lines) and not lines[i].strip():
+                i += 1
+            if i >= len(lines) or not lines[i].strip().startswith("|"):
+                raise SystemExit(f"Table caption is not followed by a table: {s[:80]}")
+            pending = (number, rest.strip())
+            continue
         if s.startswith("|"):
             flush()
+            if pending is None:
+                raise SystemExit(f"Table has no caption line above it: {s[:80]}")
             block = []
             while i < len(lines) and lines[i].strip().startswith("|"):
                 block.append(lines[i]); i += 1
             rows = [parse_row(b) for b in block if not is_sep(b)]
             if rows:
+                add_caption(doc, "Table", pending[0], pending[1], labels, above=True)
                 add_table(doc, rows)
+            pending = None
             continue
         if re.match(r"^\s*-\s+", line):
             flush()
             while i < len(lines) and re.match(r"^\s*-\s+", lines[i]):
                 item = re.sub(r"^\s*-\s+", "", lines[i]).strip()
-                add_runs(doc.add_paragraph(style="List Bullet"), item)
+                add_runs(doc.add_paragraph(style="List Bullet"), resolve(item, labels))
                 i += 1
             continue
         para.append(s); i += 1
@@ -145,29 +257,34 @@ def render_markdown(doc, text):
 
 
 def main():
-    doc = Document()
-    normal = doc.styles["Normal"]
-    normal.font.name = "Times New Roman"
-    normal.font.size = Pt(12)
-
-    doc.add_heading(CHAPTER_TITLE, level=0)
-
-    warned = False
+    texts = []
     for fname, marker in SECTIONS:
         path = os.path.join(DOCS, fname)
         if not os.path.exists(path):
             raise SystemExit(f"Missing section file: {path}")
         text = open(path, encoding="utf-8").read()
-        text = truncate_before(text, marker)
-        text = strip_meta(text).strip()
+        texts.append((fname, strip_meta(truncate_before(text, marker)).strip()))
+
+    labels = collect_labels([t for _, t in texts])
+    check_references([t for _, t in texts], labels)
+
+    doc = Document()
+    normal = doc.styles["Normal"]
+    normal.font.name = "Times New Roman"
+    normal.font.size = Pt(12)
+    doc.add_heading(CHAPTER_TITLE, level=0)
+
+    warned = False
+    for fname, text in texts:
         if ("—" in text or "–" in text) and not warned:
             print(f"WARNING: dash character found in {fname} (em/en dash)")
             warned = True
-        render_markdown(doc, text)
+        render_markdown(doc, text, labels)
 
     doc.save(OUT)
+    kinds = [k for k, _ in labels.values()]
     print(f"Wrote {OUT}")
-    print(f"Sections: {len(SECTIONS)}")
+    print(f"Sections: {len(SECTIONS)}, tables: {kinds.count('Table')}, figures: {kinds.count('Figure')}")
 
 
 if __name__ == "__main__":

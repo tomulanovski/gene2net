@@ -24,7 +24,7 @@ Assembly decisions worth flagging to the author:
 The method reconstructs a polyploid phylogenetic network from a set of gene trees. It follows a
 detect-then-place strategy. First it builds a single-copy species tree backbone from the gene
 trees with ASTRAL. Then a graph neural network reads that backbone together with features
-summarising the gene trees, and it makes two predictions on every backbone edge. The first
+summarizing the gene trees, and it makes two predictions on every backbone edge. The first
 prediction is detection, namely whether a whole genome duplication occurred on that edge. The
 second is placement, namely which other lineage is the second parent of the duplicated lineage.
 The predicted events are then stamped onto the backbone to produce a multi-labeled tree, and that
@@ -97,14 +97,14 @@ described with the placement head, are attached to ordered pairs of branches.
 
 #### Node features
 
-The 13 node features are computed per species from the gene trees. Eight of them summarise copy
+The 13 node features are computed per species from the gene trees. Eight of them summarize copy
 number. For each species we count, in each gene tree, how many leaves carry that species label,
-and we summarise the resulting distribution by its mean, variance, mode, maximum, and the fraction
+and we summarize the resulting distribution by its mean, variance, mode, maximum, and the fraction
 of gene trees in which the species is absent, present once, present twice, or present three or more
 times. A species that underwent a whole genome duplication tends to appear as two copies, so these
 features carry the primary duplication signal.
 
-The remaining five node features summarise co-clustering. For a target species and every other
+The remaining five node features summarize co-clustering. For a target species and every other
 species we measure the fraction of gene trees in which a copy of the target is a direct
 leaf-sister of that other species. This yields one value per other species. Because the number of
 species varies, we reduce this vector to a fixed summary of five statistics, namely its mean,
@@ -126,7 +126,7 @@ duplicated. A shared event makes the clade species duplicate together, so synchr
 mirrored-sister fraction is the fraction of gene trees in which a subset of the clade appears as
 two identical sister subtrees, which is the signature of autopolyploidy. The copy-pair divergence
 mean is the mean, over duplicated clade species and gene trees, of the branch-length distance
-between the two closest copies of a species, normalised by the tree scale. This is a tree-based
+between the two closest copies of a species, normalized by the tree scale. This is a tree-based
 analogue of the synonymous-site divergence used to date duplication events, so it estimates the
 typical age of the duplication. The copy-pair divergence coefficient of variation measures whether
 those ages are consistent, which is low for one shared event and high for scattered gene
@@ -148,7 +148,7 @@ aggregation.
 Second, the node features are projected to the hidden dimension by a two-layer perceptron.
 
 Third, a stack of graph message-passing layers refines the node representations. Each layer uses a
-residual connection and layer normalisation. Message passing over the tree lets the representation
+residual connection and layer normalization. Message passing over the tree lets the representation
 of each edge endpoint be informed by the whole tree, so the per-edge predictions that follow are
 made in global context rather than from local features alone. The layer type, the width, and the
 depth are selected by the hyperparameter search.
@@ -174,7 +174,7 @@ placement head needs and that no per-branch feature can express. It has four cha
 two are the mean and maximum, over the species in clade i crossed with the species in clade j, of
 the leaf-sister co-clustering matrix. For a candidate that is a single species this reduces to the
 exact co-clustering value between the two species. The other two are a copy-aware cluster-support
-feature, namely a support intensity and a peak support computed from the local neighbourhoods of
+feature, namely a support intensity and a peak support computed from the local neighborhoods of
 the duplicated copies in the gene trees, which sharpens the allopolyploid signal. The feature
 importance analysis in Section 8 shows the trained model draws on both the co-clustering channels
 and the cluster-support channels for placement.
@@ -191,15 +191,19 @@ rare relative to non-event branches. The focal term downweights easy branches by
 grows with the model confidence, so the effective difficulty of each branch is derived from the
 prediction rather than being labeled in advance.
 
-Placement uses a cross-entropy loss over the candidate branches, and it is applied only on
-branches that carry a true event. The target for an autopolyploidy is the branch itself. The
+Placement uses a cross-entropy loss over the candidate branches, one softmax for each branch
+that carries a true event. Only such a branch has a correct partner to point at, so a branch
+with no event poses no classification problem and is left out rather than being scored against
+nothing. Within a branch that does carry an event every candidate contributes, through the
+normalizing term of the softmax, so the wrong candidates are pushed down as the true one is
+pushed up. The target for an autopolyploidy is the branch itself. The
 target for an allopolyploidy is the away parent, namely the true parent that is not the lineage
 ASTRAL placed the polyploid beside. The reason this specific target is used, rather than the
-parent drawn as the reticulation in the true network, is a labeling defect analysed in Section 6.
+parent drawn as the reticulation in the true network, is a labeling defect analyzed in Section 6.
 
-Optimisation uses Adam. `[PENDING HPO: the learning rate and weight decay are selected by the
+Optimization uses Adam. `[PENDING HPO: the learning rate and weight decay are selected by the
 hyperparameter search in Section 4.]` Each species tree is one graph, and gradients are accumulated
-over eight graphs before each optimiser step.
+over eight graphs before each optimizer step.
 
 ### 3.4 From predictions to a network
 
@@ -236,7 +240,7 @@ space (graph-convolution type in gat, gin, gcn; hidden dimension in 64, 128, 192
 to 4; learning rate; dropout; weight decay), the bounded budget of about 100 trials with a
 Bayesian sampler and no pruner, the objective, which is validation allopolyploid partner accuracy
 subject to a detection-F1 guard, and the selected configuration with its seed-confirmed
-performance. Early trials show the selected model at the high-capacity, low-regularisation corner
+performance. Early trials show the selected model at the high-capacity, low-regularization corner
 of the space, with a large gain in partner accuracy over the untuned model, to be confirmed on the
 benchmark.]`
 
@@ -347,7 +351,7 @@ the ceiling is its event-prediction error.
 Two structural facts stand out. The floor is exactly 0.109 in every configuration. This is
 expected, because the floor uses the true species tree and the true events, which are the same
 underlying networks across configurations, and only the gene trees change. So 0.109 is the
-irreducible residual of the build and the scoring convention, not a modelling error. The ceiling
+irreducible residual of the build and the scoring convention, not a modeling error. The ceiling
 rises from 0.251 at low incomplete lineage sorting to 0.391 at high, and sits near 0.31 to 0.34
 under gene duplication and loss. The ceiling depends on the gene trees only through ASTRAL, so its
 rise is the degradation of ASTRAL as discordance grows.
@@ -368,7 +372,7 @@ backbone, is where most of its edit distance is lost. This is encouraging, becau
 prediction is improvable within the present design. Filling each species to its inferred copy
 number rather than capping at a detection threshold recovers events the threshold suppressed and
 improves copy number and reticulation together. Better placement of the second parent is the
-remaining lever, and it is the partner problem analysed next.
+remaining lever, and it is the partner problem analyzed next.
 
 ### A note on the metric
 
@@ -441,7 +445,7 @@ made without reference to where ASTRAL placed the polyploid. ASTRAL places the p
 whichever subgenome is stronger, which is not correlated with the network drawing, so the two
 disagree about half the time. A direct audit against ground truth confirms it. In 0.566 of
 single-species allopolyploid events at low incomplete lineage sorting and 0.539 at high duplication
-and loss, the labelled partner is the same lineage ASTRAL placed the target next to. In those
+and loss, the labeled partner is the same lineage ASTRAL placed the target next to. In those
 events the target is asked to reticulate to the parent it is already attached to, which is
 degenerate, and the correct partner is the other parent.
 
@@ -453,7 +457,7 @@ parents, which is a backbone error that no partner choice can repair.
 ### The repair and its effect
 
 The repair is to recompute the target as the parent that is not the polyploid's ASTRAL home. When
-the ASTRAL home is the labelled partner, the target is retargeted to the other true parent.
+the ASTRAL home is the labeled partner, the target is retargeted to the other true parent.
 Otherwise it is left unchanged. The true tree is used only to construct the corrected label. At
 inference the model sees only the ASTRAL tree, the gene trees, and the features, so it learns the
 rule that the partner is the parent it was not placed beside, which is inferable from its inputs.

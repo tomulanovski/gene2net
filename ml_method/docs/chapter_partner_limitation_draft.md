@@ -63,7 +63,7 @@ label. This choice is made without reference to where ASTRAL placed the polyploi
 places the polyploid next to whichever subgenome is stronger, which is not correlated with the
 network drawing, so the two disagree about half the time. A direct audit against ground truth
 confirms it. In 0.566 of single-species allopolyploid events at low incomplete lineage sorting
-and 0.539 at high duplication and loss, the labelled partner is the same lineage ASTRAL placed
+and 0.539 at high duplication and loss, the labeled partner is the same lineage ASTRAL placed
 the target next to. In those events the target is asked to reticulate to the parent it is
 already attached to, which is degenerate, and the correct partner is the other parent.
 
@@ -75,7 +75,7 @@ from both parents, which is a backbone error that no partner choice can repair.
 ## The repair and its effect
 
 The repair is to recompute the target as the parent that is not the polyploid's ASTRAL home.
-When the ASTRAL home is the labelled partner, the target is retargeted to the other true
+When the ASTRAL home is the labeled partner, the target is retargeted to the other true
 parent. Otherwise it is left unchanged. The true tree is used only to construct the corrected
 label. At inference the model sees only the ASTRAL tree, the gene trees, and the features, so
 it learns the rule that the partner is the parent it was not placed beside, which is inferable

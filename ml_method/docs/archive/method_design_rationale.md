@@ -21,7 +21,7 @@ merged (allopolyploidy) or a lineage duplicated itself (autopolyploidy).
 - Homeologs are therefore **ortholog-like** to their progenitors (they diverged at the
   *parental speciation*, not at a duplication) — a fact that matters for backbone choice (§2.1).
 
-**Output object:** a MUL-tree (multi-labelled tree; a polyploid appears as multiple leaves)
+**Output object:** a MUL-tree (multi-labeled tree; a polyploid appears as multiple leaves)
 that folds into the reticulate network. Scored against the true network.
 
 ---
@@ -42,7 +42,7 @@ backbone that collapses each allopolyploid into one tip.
 
 ### 2.1 Backbone: species tree from gene trees
 
-**What:** ASTRAL-IV ("ASTRAL 4") summarises the gene trees into a species tree; that tree is
+**What:** ASTRAL-IV ("ASTRAL 4") summarizes the gene trees into a species tree; that tree is
 the scaffold the GNN reasons over and the build stamps onto.
 
 **Why ASTRAL:** fast, statistically consistent under ILS, standard in the field.
@@ -91,7 +91,7 @@ with two heads:
 2. **Partner head** — for a WGD edge, a pairwise score over other edges → the partner.
 
 ~82k parameters. **Why a GNN:** the input is a tree (graph); message passing lets each edge's
-prediction use its topological neighbourhood. **Alternatives:** set/transformer over gene trees
+prediction use its topological neighborhood. **Alternatives:** set/transformer over gene trees
 (Phyloformer-style) — more flexible, less inductive bias, harder to train (§7 direction C).
 
 ### 2.4 Labels
@@ -194,8 +194,8 @@ numbers are comparable to Polyphest/GRAMPA-Iter.
 - **ret_sisters_jaccard** — reticulation *sisters*: do we identify the parental lineages
   (placement). This is the hard one.
 - **ploidy_diff** — per-species copy-count error.
-Lower is better throughout. **Strict vs partial match:** strict penalises unmatched
-reticulations; partial normalises over matched pairs only (lenient, for count-limited methods).
+Lower is better throughout. **Strict vs partial match:** strict penalizes unmatched
+reticulations; partial normalizes over matched pairs only (lenient, for count-limited methods).
 
 ---
 
@@ -209,7 +209,7 @@ reticulations; partial normalises over matched pairs only (lenient, for count-li
 - **DATA CAVEAT:** a duplication-rate simulation bug means **only the Ne = 1M family is a valid
   low→med→high dup sweep**; the `_10M` and `ne2M` dup configs were simulated at the wrong rates.
   So the reportable grid is 6 configs: ils {low, med, high} + dup ne1M {low, med, high}.
-- **Threshold note:** the operating threshold was selected on the benchmark (optimistic); the
+- **Threshold note:** the operating threshold was selected on the benchmark (optimiztic); the
   key finding is threshold-independent (§5), so it does not affect conclusions — but state it plainly.
 
 ---
