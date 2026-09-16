@@ -96,6 +96,30 @@ FRACTIONATION_SERIES = [
 
 LEVEL_ORDER = ['Low', 'Medium', 'High']
 
+# Degradation grid: one panel per fixed ILS level, x-axis sweeps dup/loss rate.
+# 'None' is the ILS-only config at the same Ne (low=200K, med=1M, high=2M).
+DUPLOSS_ORDER = ['None', 'Low', 'Medium', 'High']
+ILS_FIXED_PANELS = {
+    'Low ILS': {
+        'None': 'conf_ils_low_10M',
+        'Low': 'conf_dup_loss_low_10M',
+        'Medium': 'conf_dup_loss_medium_10M',
+        'High': 'conf_dup_loss_high_10M',
+    },
+    'Medium ILS': {
+        'None': 'conf_ils_medium_10M',
+        'Low': 'conf_dup_loss_low_10M_ne1M',
+        'Medium': 'conf_dup_loss_medium_10M_ne1M',
+        'High': 'conf_dup_loss_high_10M_ne1M',
+    },
+    'High ILS': {
+        'None': 'conf_ils_high_10M',
+        'Low': 'conf_dup_loss_low_10M_ne2M',
+        'Medium': 'conf_dup_loss_medium_10M_ne2M',
+        'High': 'conf_dup_loss_high_10M_ne2M',
+    },
+}
+
 METHODS = ['polyphest', 'grandma_split']
 METHOD_COLORS = {
     'polyphest': '#DE8F05',
@@ -653,8 +677,8 @@ class PolyphestVsGrampaIter:
             ('mu_distance', '$\\mu$-distance'),
         ]
 
-        fig, axes = plt.subplots(len(line_metrics), len(CONFIG_FAMILIES),
-                                 figsize=(5 * len(CONFIG_FAMILIES), 4 * len(line_metrics)),
+        fig, axes = plt.subplots(len(line_metrics), len(ILS_FIXED_PANELS),
+                                 figsize=(5 * len(ILS_FIXED_PANELS), 4 * len(line_metrics)),
                                  squeeze=False, sharey='row')
 
         for row_idx, (metric_key, metric_label) in enumerate(line_metrics):
@@ -663,7 +687,7 @@ class PolyphestVsGrampaIter:
                 (self.comparisons['status'] == 'SUCCESS')
             ]
 
-            for fam_idx, (fam_name, fam_info) in enumerate(CONFIG_FAMILIES.items()):
+            for fam_idx, (fam_name, level_configs) in enumerate(ILS_FIXED_PANELS.items()):
                 ax = axes[row_idx, fam_idx]
 
                 use_median = (metric_key == 'num_rets_bias')
@@ -672,8 +696,8 @@ class PolyphestVsGrampaIter:
                     centers = []
                     errs_low = []
                     errs_high = []
-                    for level in LEVEL_ORDER:
-                        cfg = fam_info['configs'].get(level)
+                    for level in DUPLOSS_ORDER:
+                        cfg = level_configs[level]
                         vals = metric_data[
                             (metric_data['method'] == method) &
                             (metric_data['config'] == cfg)
@@ -695,7 +719,7 @@ class PolyphestVsGrampaIter:
                             errs_low.append(0)
                             errs_high.append(0)
 
-                    ax.errorbar(LEVEL_ORDER, centers, yerr=[errs_low, errs_high],
+                    ax.errorbar(range(len(DUPLOSS_ORDER)), centers, yerr=[errs_low, errs_high],
                                marker='o', markersize=8, capsize=4,
                                label=dn(method) if row_idx == 0 and fam_idx == 0 else None,
                                color=METHOD_COLORS[method], linewidth=2.5)
@@ -703,11 +727,14 @@ class PolyphestVsGrampaIter:
                 if metric_key == 'num_rets_bias':
                     ax.axhline(y=0, color='black', linewidth=1, linestyle='--', alpha=0.5)
 
+                ax.set_xticks(range(len(DUPLOSS_ORDER)))
+                ax.set_xticklabels(DUPLOSS_ORDER)
+                ax.set_xlim(-0.3, len(DUPLOSS_ORDER) - 0.7)
                 ax.grid(True, alpha=0.25, linestyle='--')
                 if row_idx == 0:
                     ax.set_title(fam_name, fontsize=13, fontweight='bold', pad=10)
                 if row_idx == len(line_metrics) - 1:
-                    ax.set_xlabel(fam_info['label'], fontsize=11, fontweight='bold')
+                    ax.set_xlabel('Dup/Loss Rate', fontsize=11, fontweight='bold')
                 if fam_idx == 0:
                     ax.set_ylabel(metric_label, fontsize=11, fontweight='bold')
 
