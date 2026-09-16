@@ -120,6 +120,15 @@ ILS_FIXED_PANELS = {
     },
 }
 
+# Same grid transposed: one panel per fixed dup/loss rate, x-axis sweeps ILS.
+ILS_ORDER = ['Low', 'Medium', 'High']
+DUPLOSS_FIXED_PANELS = {
+    ('No Dup/Loss' if dl == 'None' else f'{dl} Dup/Loss'): {
+        ils: ILS_FIXED_PANELS[f'{ils} ILS'][dl] for ils in ILS_ORDER
+    }
+    for dl in DUPLOSS_ORDER
+}
+
 METHODS = ['polyphest', 'grandma_split']
 METHOD_COLORS = {
     'polyphest': '#DE8F05',
@@ -300,7 +309,10 @@ class PolyphestVsGrampaIter:
         self.plot_combined_accuracy_panel()
         self.plot_metric_boxplots()
         self.plot_per_network_comparison()
-        self.plot_degradation_lines()
+        self.plot_degradation_lines(ILS_FIXED_PANELS, DUPLOSS_ORDER, 'Dup/Loss Rate',
+                                    "06_degradation_lines")
+        self.plot_degradation_lines(DUPLOSS_FIXED_PANELS, ILS_ORDER, 'ILS Level',
+                                    "06b_degradation_lines_fixed_duploss")
         self.plot_fractionation_degradation()
         self.generate_summary_table()
 
@@ -663,8 +675,11 @@ class PolyphestVsGrampaIter:
     # ------------------------------------------------------------------
     # 6. Degradation lines (how accuracy changes across conditions)
     # ------------------------------------------------------------------
-    def plot_degradation_lines(self):
-        """Line plots showing how each metric degrades across condition levels."""
+    def plot_degradation_lines(self, panels, x_order, x_label, stem):
+        """Line plots showing how each metric degrades across condition levels.
+
+        panels maps panel title -> {x level -> config}; x_order is the x-axis level order.
+        """
         if self.comparisons.empty:
             return
 
@@ -677,8 +692,8 @@ class PolyphestVsGrampaIter:
             ('mu_distance', '$\\mu$-distance'),
         ]
 
-        fig, axes = plt.subplots(len(line_metrics), len(ILS_FIXED_PANELS),
-                                 figsize=(5 * len(ILS_FIXED_PANELS), 4 * len(line_metrics)),
+        fig, axes = plt.subplots(len(line_metrics), len(panels),
+                                 figsize=(5 * len(panels), 4 * len(line_metrics)),
                                  squeeze=False, sharey='row')
 
         for row_idx, (metric_key, metric_label) in enumerate(line_metrics):
@@ -687,7 +702,7 @@ class PolyphestVsGrampaIter:
                 (self.comparisons['status'] == 'SUCCESS')
             ]
 
-            for fam_idx, (fam_name, level_configs) in enumerate(ILS_FIXED_PANELS.items()):
+            for fam_idx, (fam_name, level_configs) in enumerate(panels.items()):
                 ax = axes[row_idx, fam_idx]
 
                 use_median = (metric_key == 'num_rets_bias')
@@ -696,7 +711,7 @@ class PolyphestVsGrampaIter:
                     centers = []
                     errs_low = []
                     errs_high = []
-                    for level in DUPLOSS_ORDER:
+                    for level in x_order:
                         cfg = level_configs[level]
                         vals = metric_data[
                             (metric_data['method'] == method) &
@@ -719,7 +734,7 @@ class PolyphestVsGrampaIter:
                             errs_low.append(0)
                             errs_high.append(0)
 
-                    ax.errorbar(range(len(DUPLOSS_ORDER)), centers, yerr=[errs_low, errs_high],
+                    ax.errorbar(range(len(x_order)), centers, yerr=[errs_low, errs_high],
                                marker='o', markersize=8, capsize=4,
                                label=dn(method) if row_idx == 0 and fam_idx == 0 else None,
                                color=METHOD_COLORS[method], linewidth=2.5)
@@ -727,14 +742,14 @@ class PolyphestVsGrampaIter:
                 if metric_key == 'num_rets_bias':
                     ax.axhline(y=0, color='black', linewidth=1, linestyle='--', alpha=0.5)
 
-                ax.set_xticks(range(len(DUPLOSS_ORDER)))
-                ax.set_xticklabels(DUPLOSS_ORDER)
-                ax.set_xlim(-0.3, len(DUPLOSS_ORDER) - 0.7)
+                ax.set_xticks(range(len(x_order)))
+                ax.set_xticklabels(x_order)
+                ax.set_xlim(-0.3, len(x_order) - 0.7)
                 ax.grid(True, alpha=0.25, linestyle='--')
                 if row_idx == 0:
                     ax.set_title(fam_name, fontsize=13, fontweight='bold', pad=10)
                 if row_idx == len(line_metrics) - 1:
-                    ax.set_xlabel('Dup/Loss Rate', fontsize=11, fontweight='bold')
+                    ax.set_xlabel(x_label, fontsize=11, fontweight='bold')
                 if fam_idx == 0:
                     ax.set_ylabel(metric_label, fontsize=11, fontweight='bold')
 
@@ -743,11 +758,11 @@ class PolyphestVsGrampaIter:
                    framealpha=0.9, bbox_to_anchor=(0.5, 1.02))
 
         plt.tight_layout(rect=[0, 0, 1, 0.97])
-        fig.savefig(self.plots_dir / "06_degradation_lines.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "06_degradation_lines.png", bbox_inches='tight', dpi=300)
+        fig.savefig(self.plots_dir / f"{stem}.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / f"{stem}.png", bbox_inches='tight', dpi=300)
         plt.close('all')
         gc.collect()
-        print("  [6] Degradation lines")
+        print(f"  [6] Degradation lines ({stem})")
 
     # ------------------------------------------------------------------
     # 7. Fractionation degradation (retention series)
