@@ -197,7 +197,12 @@ METHOD_DISPLAY = {
 }
 
 # Excluded from the main cross-config analysis — analyzed separately in create_prior_vs_noprior_figures.py
-CROSS_CONFIG_EXCLUDE = {'grandma_split_prior'}
+# and (real-prior runs) create_real_vs_inferred_figures.py
+CROSS_CONFIG_EXCLUDE = {
+    'grandma_split_prior',
+    'grandma_split_prior_real',
+    'polyphest_real_p50', 'polyphest_real_p70', 'polyphest_real_p90',
+}
 
 
 def per_network(df):
