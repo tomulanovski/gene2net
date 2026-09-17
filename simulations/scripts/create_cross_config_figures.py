@@ -136,6 +136,25 @@ CONFIG_FAMILIES_BY_DUP = {
     },
 }
 
+# Fractionation series (med ILS, med dup/loss, varying post-WGD retention). Used only by the
+# extended completion heatmap; the 1.00 baseline is conf_dup_loss_medium_10M_ne1M, already shown.
+# Configs not yet summarized are skipped with a warning by load_all_data.
+FRACTIONATION_FAMILIES = {
+    'Retention\n(med ILS, med D/L)': {
+        'label': 'Retention Rate',
+        'description': 'Post-WGD fractionation, medium ILS and medium dup/loss',
+        'configs': {
+            '0.75': 'conf_dup_loss_medium_10M_ne1M_fix075',
+            '0.50': 'conf_dup_loss_medium_10M_ne1M_fix050',
+            '0.25': 'conf_dup_loss_medium_10M_ne1M_fix025',
+            '0.10': 'conf_dup_loss_medium_10M_ne1M_fix010',
+            '0.00': 'conf_dup_loss_medium_10M_ne1M_fix000',
+        }
+    },
+}
+FRACTIONATION_CONFIGS = [cfg for fam in FRACTIONATION_FAMILIES.values()
+                         for cfg in fam['configs'].values()]
+
 # Visual style — consistent with create_analysis_figures.py
 METHOD_COLORS = {
     'grampa': '#0173B2',
@@ -470,15 +489,32 @@ class CrossConfigAnalyzer:
     # FIGURE 1: Completion Rate Heatmap
     # ========================================================================
 
-    def plot_completion_heatmap(self):
+    def plot_completion_heatmap_with_fractionation(self, frac_data: Dict):
+        """Completion heatmap over the base configs plus the fractionation series."""
+        frac_inventory = build_combined_inventory(frac_data)
+        if frac_inventory.empty:
+            print("  WARNING: No fractionation inventory data, skipping extended heatmap")
+            return
+        frac_inventory = frac_inventory[~frac_inventory['method'].isin(CROSS_CONFIG_EXCLUDE)]
+        inventory = pd.concat([self.inventory, frac_inventory], ignore_index=True)
+        self.plot_completion_heatmap(
+            inventory=inventory,
+            families={**CONFIG_FAMILIES, **FRACTIONATION_FAMILIES},
+            stem="01b_completion_rate_heatmap_all_configs",
+        )
+
+    def plot_completion_heatmap(self, inventory=None, families=None,
+                                stem="01_completion_rate_heatmap"):
         """Heatmap: rows=methods, columns=configs, cells=completion %."""
-        if self.inventory.empty:
+        inventory = self.inventory if inventory is None else inventory
+        families = CONFIG_FAMILIES if families is None else families
+        if inventory.empty:
             print("  WARNING: No inventory data, skipping")
             return
 
         # Compute completion rate per method × config
         completion = (
-            self.inventory
+            inventory
             .groupby(['method', 'config'])['inferred_exists']
             .mean()
             .unstack(fill_value=0) * 100
@@ -486,10 +522,9 @@ class CrossConfigAnalyzer:
 
         # Order configs by family then level
         config_order = []
-        for fam_name, fam_info in CONFIG_FAMILIES.items():
-            for level in LEVEL_ORDER:
-                cfg = fam_info['configs'].get(level)
-                if cfg and cfg in completion.columns:
+        for fam_name, fam_info in families.items():
+            for cfg in fam_info['configs'].values():
+                if cfg in completion.columns:
                     config_order.append(cfg)
         # Add any remaining
         for c in completion.columns:
@@ -498,7 +533,7 @@ class CrossConfigAnalyzer:
         completion = completion[config_order]
 
         # Short config labels
-        config_to_level = {cfg: lvl for fam in CONFIG_FAMILIES.values()
+        config_to_level = {cfg: lvl for fam in families.values()
                            for lvl, cfg in fam['configs'].items()}
         short_labels = [config_to_level.get(c, c.replace('conf_', '').replace('_10M', ''))
                         for c in config_order]
@@ -523,8 +558,8 @@ class CrossConfigAnalyzer:
         # Add family separators
         family_boundaries = []
         col_idx = 0
-        for fam_name, fam_info in CONFIG_FAMILIES.items():
-            n_configs = sum(1 for l in LEVEL_ORDER if fam_info['configs'].get(l) in config_order)
+        for fam_name, fam_info in families.items():
+            n_configs = sum(1 for cfg in fam_info['configs'].values() if cfg in config_order)
             if n_configs > 0:
                 family_boundaries.append((col_idx, col_idx + n_configs, fam_name))
                 col_idx += n_configs
@@ -542,8 +577,8 @@ class CrossConfigAnalyzer:
 
         ax.set_title('Method Completion Rate Across Configurations', fontsize=15, fontweight='bold', pad=55)
         plt.tight_layout()
-        fig.savefig(self.plots_dir / "01_completion_rate_heatmap.pdf", bbox_inches='tight')
-        fig.savefig(self.plots_dir / "01_completion_rate_heatmap.png", bbox_inches='tight', dpi=300)
+        fig.savefig(self.plots_dir / f"{stem}.pdf", bbox_inches='tight')
+        fig.savefig(self.plots_dir / f"{stem}.png", bbox_inches='tight', dpi=300)
         plt.close('all')
         gc.collect()
 
@@ -1964,6 +1999,11 @@ Examples:
     # Generate cross-config figures
     analyzer = CrossConfigAnalyzer(data, output_dir, network_stats)
     analyzer.generate_all()
+
+    # Extended completion heatmap (base configs + fractionation series)
+    print(f"\nLoading fractionation configs for extended completion heatmap...")
+    frac_data = load_all_data(FRACTIONATION_CONFIGS, SUMMARY_BASE)
+    analyzer.plot_completion_heatmap_with_fractionation(frac_data)
 
     # Generate Polyphest threshold analysis
     polyphest_dir = output_dir / "polyphest"
