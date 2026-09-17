@@ -447,6 +447,8 @@ class PolyphestVsGrampaIter:
             if fam_idx == 0:
                 ax.set_ylabel(metric_label, fontsize=12, fontweight='bold')
                 ax.legend(fontsize=10, framealpha=0.9)
+            if metric_key in ('mu_distance', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist'):
+                ax.set_ylim(0, 1)
 
         plt.tight_layout()
         safe = metric_key.replace('.', '_')
@@ -528,6 +530,8 @@ class PolyphestVsGrampaIter:
                 ax.set_xticks(x)
                 ax.set_xticklabels(LEVEL_ORDER, fontsize=10)
                 ax.grid(True, alpha=0.25, linestyle='--', axis='y')
+                if metric_key in ('mu_distance', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist'):
+                    ax.set_ylim(0, 1)
 
                 if row_idx == 0:
                     ax.set_title(fam_name, fontsize=13, fontweight='bold', pad=10)
@@ -597,6 +601,8 @@ class PolyphestVsGrampaIter:
             ax.set_title(metric_label, fontsize=13, fontweight='bold')
             ax.grid(True, alpha=0.25, linestyle='--', axis='y')
             ax.set_ylim(bottom=0)
+            if metric_key in ('mu_distance', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist'):
+                ax.set_ylim(0, 1)
 
         fig.suptitle('Overall Distribution (All Configurations)',
                      fontsize=14, fontweight='bold', y=1.02)
@@ -746,6 +752,8 @@ class PolyphestVsGrampaIter:
                 ax.set_xticklabels(x_order)
                 ax.set_xlim(-0.3, len(x_order) - 0.7)
                 ax.grid(True, alpha=0.25, linestyle='--')
+                if metric_key in ('mu_distance', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist'):
+                    ax.set_ylim(0, 1)
                 if row_idx == 0:
                     ax.set_title(fam_name, fontsize=13, fontweight='bold', pad=10)
                 if row_idx == len(line_metrics) - 1:
@@ -847,6 +855,8 @@ class PolyphestVsGrampaIter:
             ax.grid(True, alpha=0.25, linestyle='--')
             ax.set_ylabel(metric_label, fontsize=11, fontweight='bold')
             ax.set_xlabel('Post-WGD retention rate', fontsize=11, fontweight='bold')
+            if metric_key in ('mu_distance', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist'):
+                ax.set_ylim(0, 1)
 
         handles, lbls = flat[0].get_legend_handles_labels()
         fig.legend(handles, lbls, loc='upper center', ncol=2, fontsize=12,

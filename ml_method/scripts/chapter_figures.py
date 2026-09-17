@@ -76,10 +76,14 @@ SERIES = [  # (key, legend label, color, linestyle)
 ]
 KEYS = [s[0] for s in SERIES]
 
-# Sized for a Word page, so the text stays legible when the figure is placed at 6.3 inches.
+# Panel size and mark weights copied from simulations/scripts/create_polyphest_vs_grampaiter.py,
+# so these figures look like the rest of the thesis figures.
+PANEL = (5.0, 4.0)      # inches per panel in the grid
+YLIM = (0.0, 1.0)       # every measure is a distance in [0, 1], so the axis is fixed
 plt.rcParams.update({
-    "font.family": "sans-serif", "font.size": 9, "axes.linewidth": 1.0,
-    "savefig.dpi": 300, "lines.linewidth": 2.0, "lines.markersize": 6.0,
+    "font.family": "sans-serif", "font.size": 11, "axes.linewidth": 1.2,
+    "figure.dpi": 100, "savefig.dpi": 300, "lines.linewidth": 2.5,
+    "lines.markersize": 8,
 })
 
 # ---------------------------------------------------------------- appendix tables
@@ -202,8 +206,9 @@ def draw(ax, points):
         errs = [p[key][1] for p in points]
         ax.errorbar(xs + dx, y, yerr=None if None in errs else errs, color=color, linestyle=ls,
                     marker="o", markerfacecolor=color if ls == "-" else "white",
-                    markeredgewidth=1.6, capsize=3, label=label)
+                    markeredgewidth=2.0, capsize=4, label=label)
     ax.set_xticks(xs)
+    ax.set_ylim(*YLIM)
     ax.grid(True, alpha=0.25, linestyle="--")
 
 
@@ -216,7 +221,7 @@ def legend(fig, ax):
     handles, labels = ax.get_legend_handles_labels()
     order = [KEYS.index(k) for k in LEGEND_ORDER]
     fig.legend([handles[i] for i in order], [labels[i] for i in order], loc="upper center",
-               ncol=3, fontsize=9, framealpha=0.9, bbox_to_anchor=(0.5, 1.0))
+               ncol=5, fontsize=12, framealpha=0.9, bbox_to_anchor=(0.5, 1.02))
 
 
 def save(fig, out_dir, name):
@@ -228,7 +233,8 @@ def save(fig, out_dir, name):
 
 
 def discordance_figure(data, out_dir):
-    fig, axes = plt.subplots(len(MEASURES), len(FAMILIES), figsize=(7.0, 8.0),
+    fig, axes = plt.subplots(len(MEASURES), len(FAMILIES),
+                             figsize=(PANEL[0] * len(FAMILIES), PANEL[1] * len(MEASURES)),
                              sharey="row", squeeze=False)
     for r, (metric, ylabel) in enumerate(MEASURES):
         for c, (title, xlabel, cfgs) in enumerate(FAMILIES):
@@ -236,25 +242,26 @@ def discordance_figure(data, out_dir):
             draw(ax, [data[(cfgs[level], metric)] for level in LEVELS])
             ax.set_xticklabels(LEVELS)
             if r == 0:
-                ax.set_title(title, fontsize=10, fontweight="bold")
+                ax.set_title(title, fontsize=13, fontweight="bold", pad=10)
             if r == len(MEASURES) - 1:
-                ax.set_xlabel(xlabel, fontweight="bold")
+                ax.set_xlabel(xlabel, fontsize=11, fontweight="bold")
             if c == 0:
-                ax.set_ylabel(ylabel, fontweight="bold")
+                ax.set_ylabel(ylabel, fontsize=11, fontweight="bold")
     legend(fig, axes[0, 0])
-    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    fig.tight_layout(rect=[0, 0, 1, 0.97])
     save(fig, out_dir, "discordance_degradation")
 
 
 def fractionation_figure(data, out_dir):
-    fig, axes = plt.subplots(1, len(MEASURES), figsize=(7.0, 3.4), squeeze=False)
+    fig, axes = plt.subplots(1, len(MEASURES), figsize=(5.2 * len(MEASURES), 4.6),
+                             squeeze=False)
     for ax, (metric, ylabel) in zip(axes[0], MEASURES):
         draw(ax, [data[(config, metric)] for _, config in FRACTIONATION])
         ax.set_xticklabels([label for label, _ in FRACTIONATION])
-        ax.set_xlabel("Retention rate", fontweight="bold")
-        ax.set_ylabel(ylabel, fontweight="bold")
+        ax.set_xlabel("Retention rate", fontsize=11, fontweight="bold")
+        ax.set_ylabel(ylabel, fontsize=11, fontweight="bold")
     legend(fig, axes[0, 0])
-    fig.tight_layout(rect=[0, 0, 1, 0.84])
+    fig.tight_layout(rect=[0, 0, 1, 0.97])
     save(fig, out_dir, "fractionation_degradation")
 
 

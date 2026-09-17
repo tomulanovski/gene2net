@@ -663,6 +663,8 @@ class CrossConfigAnalyzer:
             ax.set_xticklabels(LEVEL_ORDER, fontsize=12)
             ax.grid(True, alpha=0.25, linestyle='--', axis='y')
             ax.legend(fontsize=9, framealpha=0.9, loc='best')
+            if metric_key in ('mu_distance', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist'):
+                ax.set_ylim(0, 1)
 
         fig.suptitle(f'{metric_label} Across Simulation Conditions',
                      fontsize=15, fontweight='bold', y=1.02)
@@ -915,6 +917,8 @@ class CrossConfigAnalyzer:
             ax.set_title(fam_info['description'], fontsize=13, fontweight='bold', pad=10)
             ax.grid(True, alpha=0.25, linestyle='--')
             ax.legend(fontsize=7, framealpha=0.9, loc='best', ncol=2)
+            if metric_key in ('mu_distance', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist'):
+                ax.set_ylim(0, 1)
 
         fig.suptitle(f'Network Complexity × Condition Interaction\n'
                      f'(Simple: H_Strict ≤ {median_h:.0f}, Complex: H_Strict > {median_h:.0f})',
@@ -1449,6 +1453,8 @@ class PolyphestThresholdAnalyzer:
             ax.set_xticklabels(LEVEL_ORDER, fontsize=11)
             ax.grid(True, alpha=0.25, linestyle='--', axis='y')
             ax.legend(fontsize=10, framealpha=0.9)
+            if metric_key in ('mu_distance', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist'):
+                ax.set_ylim(0, 1)
 
             if metric_key == 'num_rets_bias':
                 ax.axhline(y=0, color='black', linewidth=1, linestyle='-')
@@ -1872,6 +1878,8 @@ class TetraploidSubsetAnalyzer:
             ax.set_ylabel(metric_label, fontsize=11, fontweight='bold')
             ax.set_xlabel('ILS Level', fontsize=11, fontweight='bold')
             ax.grid(True, alpha=0.25, linestyle='--', axis='y')
+            if metric_key in ('mu_distance', 'ret_leaf_jaccard.dist', 'ret_sisters_jaccard.dist'):
+                ax.set_ylim(0, 1)
 
             if row_idx == 0:
                 ax.legend(fontsize=9, framealpha=0.9, loc='upper left',
