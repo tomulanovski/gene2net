@@ -3,8 +3,8 @@
 
 Two figures, in the style of simulations/scripts/create_polyphest_vs_grampaiter.py:
 
-  discordance_degradation     3 x 4 grid. Rows are the three measures, columns the four
-                              configuration families, x the Low, Medium, High level.
+  discordance_degradation     3 x 4 grid. Rows are the three measures, columns the duplication
+                              and loss rate from none to high, x the ILS level.
   fractionation_degradation   1 x 3 panels over retention 1.00, 0.75, 0.50, 0.25. The 1.00
                               point is the unfractionated medium dup/loss, medium ILS config.
 
@@ -42,18 +42,20 @@ MEASURES = [  # (metric key in the score files, y-axis label); row order of the 
     ("ret_sisters_jaccard", "Ret. sister distance"),
     ("mu_distance", r"$\mu$-distance"),
 ]
-LEVELS = ["Low", "Medium", "High"]
-FAMILIES = [  # (column title, x-axis label, level -> config)
-    ("ILS only", "ILS level",
+LEVELS = ["Low", "Medium", "High"]     # the ILS levels, which are the x-axis of every panel
+# One column per duplication and loss rate, with the ILS sweep inside each panel. The ILS level
+# is the effective population size: low is Ne 200k, medium Ne 1M, high Ne 2M.
+FAMILIES = [  # (column title, x-axis label, ILS level -> config)
+    ("No dup/loss", "ILS level",
      {"Low": "conf_ils_low_10M", "Medium": "conf_ils_medium_10M", "High": "conf_ils_high_10M"}),
-    ("Dup/loss, low ILS", "Dup/loss rate",
-     {"Low": "conf_dup_loss_low_10M", "Medium": "conf_dup_loss_medium_10M",
-      "High": "conf_dup_loss_high_10M"}),
-    ("Dup/loss, medium ILS", "Dup/loss rate",
-     {"Low": "conf_dup_loss_low_10M_ne1M", "Medium": "conf_dup_loss_medium_10M_ne1M",
-      "High": "conf_dup_loss_high_10M_ne1M"}),
-    ("Dup/loss, high ILS", "Dup/loss rate",
-     {"Low": "conf_dup_loss_low_10M_ne2M", "Medium": "conf_dup_loss_medium_10M_ne2M",
+    ("Low dup/loss", "ILS level",
+     {"Low": "conf_dup_loss_low_10M", "Medium": "conf_dup_loss_low_10M_ne1M",
+      "High": "conf_dup_loss_low_10M_ne2M"}),
+    ("Medium dup/loss", "ILS level",
+     {"Low": "conf_dup_loss_medium_10M", "Medium": "conf_dup_loss_medium_10M_ne1M",
+      "High": "conf_dup_loss_medium_10M_ne2M"}),
+    ("High dup/loss", "ILS level",
+     {"Low": "conf_dup_loss_high_10M", "Medium": "conf_dup_loss_high_10M_ne1M",
       "High": "conf_dup_loss_high_10M_ne2M"}),
 ]
 FRACTIONATION = [  # (retention label, config); lower retention means more fractionation
