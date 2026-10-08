@@ -21,8 +21,7 @@ the backbone is built, so it is a different method rather than a change to this 
 head that predicted both parents jointly did not improve the benchmark, which supports placing the
 fix in the copy assignment.
 
-Smaller limitations remain. The clade-level target repair covers only clades that ASTRAL keeps
-monophyletic. Cluster support carries no signal when the duplicated clade is a single species,
+Smaller limitations remain. Cluster support carries no signal when the duplicated clade is a single species,
 because nothing can be excluded there, and it fades once the clade holds about five species, because
 the ten-leaf group can no longer reach past the clade. The threshold of the ploidy-free decode is a
 fixed default, because the corrupted regime it targets does not match the clean distribution the

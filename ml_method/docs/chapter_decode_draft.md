@@ -12,9 +12,7 @@ detection probability, the model's confidence that a whole genome duplication oc
 edge. The second is a partner distribution, which for a confirmed event names the edge the
 duplicated lineage merged with. These are per-edge predictions. A reconstructed network is a
 global object. The decode is the step that turns the per-edge predictions into one multi-labeled
-tree, and its only real decision is which edges become events. Once the events are chosen the
-partners follow from the partner head and the network is built by grafting each event onto the
-backbone.
+tree, and its only real decision is which edges become events.
 
 The ploidy level of a species is not always known. It can come from chromosome counts or from an
 earlier study, and for many datasets there is nothing reliable to go on. The decode therefore works
@@ -95,11 +93,14 @@ model predicts one partner rather than two. This is the structural root of the p
 discussed later, since the home position of the polyploid is fixed by the backbone and never chosen
 by the model.
 
-Each graft has to find the node whose leaves are exactly the source clade, and the node for the
-partner clade. An earlier graft can add copies inside one of those clades, and then no node has
-exactly those leaves any more. Such an event is dropped and counted. The dropped count is small and
-concentrated on networks with nested or overlapping events, and it is the source of the small build
-residual reported in the diagnostic.
+An event is recorded as a clade, a set of species, because that is what a backbone edge is. Each
+graft changes the tree, so every later graft has to locate its clade again in the tree as it now
+stands, and the same holds for its partner clade. Usually the species still match exactly. When an
+earlier graft has added copies inside the clade they no longer do, and the builder falls back to the
+smallest clade that still contains all of them, which is that clade grown by the earlier graft. An
+event is skipped only when the search reaches the root. Both cases are rare and sit on networks with
+nested or overlapping events, and together they are what the build residual in the error analysis
+measures.
 
 ## Summary
 

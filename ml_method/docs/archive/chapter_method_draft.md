@@ -28,8 +28,8 @@ three or more times. A species that underwent a whole genome duplication tends t
 copies, so these features carry the primary duplication signal.
 
 The remaining five node features summarize co-clustering. For a target species and every other
-species we measure the fraction of gene trees in which a copy of the target is a direct
-leaf-sister of that other species. This yields one value per other species. Because the number
+species we measure the fraction of gene trees in which a copy of the target is a direct sister of
+that other species, meaning the two branches meet with no other lineage in between. This yields one value per other species. Because the number
 of species varies, we reduce this vector to a fixed summary of five statistics, namely its mean,
 standard deviation, maximum, minimum, and median. This summary describes how concentrated a
 species co-clusters, not with whom, so it behaves as a status descriptor that separates a clean
@@ -38,9 +38,10 @@ single-ancestry lineage from one with divided ancestry.
 ### Edge features
 
 The nine edge features are computed per backbone edge, where each edge corresponds to the clade of
-species below it. Four of them are structural. The concordance factor is the fraction of the
-informative gene trees that recover the species-level bipartition the edge induces, where a gene
-tree is informative for an edge when it has species on both sides of that bipartition. The branch
+species below it. Four of them are structural. Each edge splits the species into the clade
+below it and everything else, and concordance is the fraction of gene trees that show that same
+split. A gene tree holding species from only one side cannot show it either way, so it is left out
+of the fraction. The branch
 length is the length of the edge in the ASTRAL species tree. The clade size is the number of species
 below the edge, and the depth is the number of edges from the root down to it. The clade size and
 depth give the model context for where in the tree an edge sits.
@@ -75,11 +76,12 @@ aggregation.
 Second, the node features are projected to a hidden dimension of 256 by a two-layer MLP.
 
 Third, four graph attention layers refine the node representations. Each layer uses four attention
-heads, a dropout of 0.1, a residual connection, and layer normalization. The attention passes
-messages between nodes, so after these layers each node representation carries information from
-across the whole tree. Because the edge embeddings built in the next stage are formed from their two
-endpoint nodes, the per-edge predictions inherit that global context indirectly, through the nodes,
-rather than resting on the local edge features alone.
+heads, a dropout of 0.1, a residual connection, and layer normalization. Each layer passes messages one branch, so
+four layers reach four branches out. Context beyond that comes from the first step, where every
+internal node already holds the mean of the leaves below it, so a node carries a summary of its
+subtree before any attention is applied. Because the edge embeddings built in the next stage are
+formed from their two endpoint nodes, the per-edge predictions inherit that context indirectly,
+through the nodes, rather than resting on the local edge features alone.
 
 Fourth, each branch is given an embedding. For a branch with parent node representation and child
 node representation, the embedding is produced by a two-layer MLP applied to the concatenation of the
@@ -104,15 +106,13 @@ computed on the pair. Two signals are used, and both rest on the same fact. An a
 leaves a copy of the duplicated clade beside each of the two lineages that contributed to it, so in
 the gene trees species of the clade keep appearing next to species of the true partner.
 
-The first signal is co-clustering. Two species are sisters in a gene tree when their branches meet
-directly, with no other lineage splitting off in between. For two species, co-clustering is the
-fraction of gene trees in which they are sisters. For a pair of edges we take every species pair
-with one species from each clade and reduce those fractions twice, to their mean and to their
-maximum. The mean asks whether the two clades sit together in general. The maximum asks whether some
-species pairs sit together very often. Both are needed because the signal is uneven across the
-block. The copy grafts at one position inside the candidate clade rather than beside all of it, and
-fractionation and discordance leave only some species pairs recovering the sister relationship at
-all, so averaging over every cross pair dilutes what the maximum keeps.
+The first signal is the co-clustering of the node features, summarized over a pair of clades rather
+than per species. We take every species pair with one species from each clade and reduce those
+fractions to their mean and to their maximum. The mean asks whether the two clades sit together in
+general. The maximum asks whether some species pairs sit together very often. Both are needed
+because the signal is uneven. The copy grafts at one position inside the candidate clade rather than
+beside all of it, and fractionation and discordance leave only some species pairs recovering the
+sister relationship at all, so averaging over every cross pair dilutes what the maximum keeps.
 
 The second signal is cluster support. Co-clustering is a measure on pairs of species, so it rises
 only when a copy and a species of the candidate clade are sisters. A copy often lands beside a whole

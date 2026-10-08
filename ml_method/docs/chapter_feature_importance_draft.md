@@ -20,7 +20,7 @@ Partner prediction draws on many features. The pairwise co-clustering mean leads
 drop of 0.40. Clade size, depth and mean copy number follow at 0.31 to 0.36, the pairwise
 co-clustering maximum is at 0.27, and the copy-number distribution, the node co-clustering maximum,
 concordance and copy-pair divergence each contribute 0.17 to 0.25. Cluster support adds 0.17 through
-its summed channel. Depth stands out, since it does nothing for detection but is among the strongest
+its total rather than its peak. Depth stands out, since it does nothing for detection but is among the strongest
 inputs to partner prediction.
 
 Only two groups of features contribute nothing. Branch length and duplication synchrony lower

@@ -6,6 +6,12 @@ Numbers are computed on the held-out validation split, n = 300 networks pooled a
 training configurations, and the oracle events are read from the ground-truth simulation metadata
 in clade-level form rather than decomposed from the MUL-tree.
 
+The two event measures report how often PlaceNet finds the right lineages and the right parents, but
+they cannot say where the error comes from, because they score only the reticulations. The
+mu-distance can, because it scores every node of the network. The property that makes it the least
+direct measure of event recovery is what makes it the right instrument here, so this section works
+in mu-distance throughout.
+
 A reconstruction can lose mu-distance in three places. The build and fold can leave a residual even
 on a perfect input, the ASTRAL backbone can misplace lineages, and the predicted events can be
 wrong. We separate the three with an oracle. Feeding the true events, read from the simulation
@@ -14,8 +20,8 @@ Feeding the same events onto the ASTRAL backbone adds only the backbone error an
 the best any event predictor could reach on that backbone. Whatever the model loses beyond the
 ceiling is its own event error.
 
-@tab:oracle gives the three points on the validation split, 300 networks pooled across the six
-training configurations.
+@tab:oracle gives the three points on the held-out validation split, pooled across the six training
+configurations.
 
 Table: {#tab:oracle} Mu-distance of three reconstructions on the pooled validation split. The floor places the true events on the true backbone, the ceiling places them on the ASTRAL backbone, and the model places its predicted events on the ASTRAL backbone. Lower is better.
 | Setting | mu-distance |
@@ -42,3 +48,13 @@ discordance, because the oracle on the true species tree never uses the gene tre
 These numbers describe error on networks drawn from the training simulator. The benchmark networks
 are published topologies rather than simulated ones, and PlaceNet's mu-distance there is higher,
 around 0.39 to 0.61, so this decomposition does not account for that gap.
+
+A second question is what the detection head sees once fractionation has deleted the copies. We read
+the detection probability the model assigned to every lineage in the ground truth and separated the
+polyploids whose copies fractionation had deleted, which copy counting reads as diploid, from the
+true diploids. On those lost events the head fires at 0.55 on average and clears the decode's 0.5
+threshold for 59 percent of them at 0.50 retention, against 0.09 and 6 percent on true diploids. At
+0.25 retention it still averages 0.30. The two numbers only mean anything as a pair, since a
+detector keyed on copy number would score both groups alike. This is why the ploidy-free decode
+recovers events under fractionation that the ploidy-informed decode cannot use at all, since that
+mode fills each species only up to a copy number fractionation has reduced to one.

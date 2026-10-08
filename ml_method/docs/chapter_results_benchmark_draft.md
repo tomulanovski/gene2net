@@ -19,7 +19,7 @@ completes every network, and the networks it leaves out are discussed at the end
 
 ## Where the method wins
 
-The comparison spans the fifteen configurations (soon 17). On the reticulation descendants measure
+On the reticulation descendants measure
 the ploidy-free decode is more accurate than Polyphest in eleven of the fifteen configurations. The
 four losses occur under the simplest conditions across two ILS levels: low ILS with no, low, or
 medium duplication and loss rates, and medium ILS with no duplication or loss. The ploidy-informed
@@ -48,16 +48,16 @@ row and the mu-distance in the bottom row. Both gaps have one cause. The partner
 of PlaceNet's two heads, and the mu-distance scores every node of the network, so both charge
 PlaceNet for the ASTRAL backbone it never rebuilds, which the diagnostic section measures directly.
 
-## Completion and runtime
+The figures are restricted to the networks every method completed, a subset PlaceNet never limits,
+since it reconstructs all 21 in every discordance configuration. The networks left out are harder,
+and PlaceNet's mu-distance on them is 0.56 to 0.73 against 0.39 to 0.61 on the common subset, so
+what it offers there is an answer where the competitors return none.
 
-Restricting to the common subset removes four to five networks per configuration, all of them
-reconstructed by PlaceNet and missed by at least one competitor. PlaceNet completes all 21 in every
-discordance configuration, against 17 to 20 for Polyphest. These networks are harder, with a
-PlaceNet mu-distance of 0.56 to 0.73 against 0.39 to 0.61 on the common subset, so what PlaceNet
-offers on them is an answer where the competitors return none.
+## Runtime
 
 PlaceNet reconstructs a network in about eight seconds beyond the ASTRAL step, almost all of it
-feature extraction from the gene trees, and ASTRAL adds a few seconds. Polyphest's runtime spans
-four orders of magnitude. On one configuration's 21 networks it ran from about four minutes to more
-than three days, and fourteen of the 21 never finished, five at the five-day time limit and nine out
-of memory.
+feature extraction from the gene trees. The model itself is one forward pass and the decode is a
+single sweep over the edges, so the cost follows the size of the input rather than the difficulty of
+the instance. Polyphest searches instead, and its runtime spans four orders of magnitude. On one
+configuration's 21 networks it ran from about four minutes to more than three days, and fourteen of
+the 21 never finished, five at the five-day time limit and nine out of memory.

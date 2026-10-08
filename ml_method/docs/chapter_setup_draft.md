@@ -22,11 +22,12 @@ real polyploid networks. The number of events is drawn from a weighted set of co
 counts dominate, two events being the most common draw at 31 percent, and 6 percent of the networks
 are drawn with no events at all and serve as negative examples. The count is capped at one fewer
 than the number of species. Each event picks a target clade uniformly at random and is
-an autopolyploidy or an allopolyploidy with equal probability. An allopolyploidy additionally picks
-a second parent uniformly at random among the clades that do not overlap the target, and falls back
-to an autopolyploidy when no such clade exists. The event is grafted so that the tree stays
-ultrametric, an autopolyploidy by attaching an identical copy of the target clade as a sibling and
-an allopolyploidy by attaching a copy of the target clade on the second parent's edge. Fractionation
+an autopolyploidy or an allopolyploidy with equal probability. An allopolyploidy picks a second
+parent uniformly at random among the clades that do not overlap the target. When the target clade
+holds every species there is no such clade, and the event becomes an autopolyploidy. The event is
+grafted so that the tree stays ultrametric, an autopolyploidy by attaching an identical copy of the
+target clade as a sibling and an allopolyploidy by attaching a copy of it on the second parent's
+edge. Fractionation
 is not applied at this stage, so the training networks retain both copies of every duplication.
 
 From each network the gene trees are then simulated under each configuration, the ASTRAL backbone is
