@@ -580,7 +580,7 @@ class CrossConfigAnalyzer:
         cbar = fig.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
         cbar.set_label('Completion Rate (%)', fontsize=12)
 
-        ax.set_title('Method Completion Rate Across Configurations', fontsize=15, fontweight='bold', pad=55)
+        # No title: the manuscript caption carries it (Figure 5).
         plt.tight_layout()
         fig.savefig(self.plots_dir / f"{stem}.pdf", bbox_inches='tight')
         fig.savefig(self.plots_dir / f"{stem}.png", bbox_inches='tight', dpi=300)
