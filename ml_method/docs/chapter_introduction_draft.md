@@ -1,32 +1,36 @@
 # Introduction
 
-Up to this point we benchmarked the existing methods for polyploid phylogenetic network inference.
-Building on that comparison, this chapter develops and evaluates a new method of our own, which we
-call PlaceNet.
+NOTE: move candidate. The first paragraph below motivates PlaceNet from the two limitations the
+benchmarking chapter exposed. Once the shared introduction to both chapters is written, that
+paragraph belongs there and can be lifted verbatim, leaving this chapter to open at "To address both
+limitations".
 
-The benchmark exposed two practical limitations that a new method could try to address. The first is
-runtime. Polyphest for example solves an expensive integer linear program and can run for days on a
-single network, and on the hardest networks it does not finish at all, reaching a time limit or
-exhausting memory. The second concerns the copy number in the gene trees. Some methods lean on a
-supplied per species copy number and build their reconstruction around it. Copy number is a reliable
-signal on clean data, but it is degraded by fractionation, the gradual loss of one duplicate copy
-after a WGD, and real polyploids fractionate extensively. A method whose reconstruction does not
-depend on the copy number could therefore be more robust in the regime that real data occupies.
+The preceding chapter benchmarked the available methods for polyploid network reconstruction and
+exposed two practical limitations. The first is runtime. The existing methods search a space of
+candidate networks, so their cost grows with the number of candidate polyploid clades rather than
+with the size of the input, and on the larger simulated networks Polyphest, the most accurate of
+them, reached the five-day limit or exhausted memory instead of returning a result. The second is
+the reliance on gene copy number. Polyphest and AlloppNET require the ploidy level of every taxon
+as input, and where it is unknown it must be inferred from the number of gene copies observed per
+taxon. Copy number is a reliable proxy on clean data, but fractionation, the gradual loss of one
+duplicate after a polyploidization event, erodes it, and published polyploid complexes are
+extensively fractionated. A method whose reconstruction does not rest on per-taxon copy number
+should therefore be more robust on empirical data.
 
-PlaceNet is a graph neural network (GNN) that follows a detect-then-place strategy. It builds a
-single-copy species tree backbone with ASTRAL-4, reads that backbone together with features
-summarizing the gene trees, and predicts on every backbone edge whether a WGD occurred there and, if
-so, which lineage is the second parent. The predicted events are grafted onto the backbone to
-produce a MUL tree, which is the output of the method.
+To address both limitations we developed PlaceNet, a graph neural network that reconstructs a
+polyploid network by detecting polyploidization events on a single-copy species tree and then
+placing them. PlaceNet infers a diploid backbone with ASTRAL-4, represents that backbone as a graph
+whose nodes are the species tree nodes and whose edges are its branches, and annotates the graph
+with features summarizing the gene trees. Two prediction heads then read every branch of the
+backbone, one deciding whether a polyploidization event occurred on it and the other naming the
+branch that contributed the second subgenome. The accepted events are grafted onto the backbone,
+yielding a MUL-tree, which is the output of the method. Inference is a single forward pass over one
+graph, so its cost follows the size of the input rather than the number of events, and the features
+driving detection measure duplication shared across a clade rather than counting copies per taxon.
 
-PlaceNet identifies the polyploid clades more accurately than Polyphest, the most accurate of the
-existing methods, wherever gene tree discordance is high or fractionation has degraded the copy
-number. On the cleanest simulated conditions Polyphest identifies them better. At 50 percent
-retention PlaceNet is the most accurate method on both event measures, recovering the polyploid
-clades and their parental lineages better than anything else. It runs in seconds for every input.
-It completes every network in the discordance benchmark, whereas the completion rate of the other
-methods varies. It can be run in a mode that does not use the copy count at all, and with the copy
-count as a prior when the user is confident of the input ploidy levels. The section presents the
-method, its comparison on the same benchmark used in the previous sections, a diagnostic that
-locates the method's error in the species tree backbone rather than in its event prediction, and
-its behavior under fractionation.
+Because the ploidy levels are sometimes known and sometimes not, PlaceNet decodes its predictions in
+either of two modes, one taking a ploidy list as an upper bound on the events touching each taxon
+and one using no ploidy information at all. The two modes read the same trained model and are
+selected at inference, which also fixes the fair baseline for each, Polyphest for the
+ploidy-informed mode and GRAMPAIter for the ploidy-free mode. PlaceNet is useful as it stands but
+remains under active development, and the directions identified below are set out in the discussion.

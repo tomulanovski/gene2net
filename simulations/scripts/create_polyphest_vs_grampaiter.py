@@ -93,6 +93,9 @@ FRACTIONATION_SERIES = [
     ('0.50', 'conf_dup_loss_medium_10M_ne1M_fix050'),
     ('0.25', 'conf_dup_loss_medium_10M_ne1M_fix025'),
 ]
+# Networks never simulated under fractionation. Dropped from the whole series,
+# including the 1.00 baseline, so every point averages over the same networks.
+FRACTIONATION_EXCLUDE_NETWORKS = ['Morales-Briones_2021']
 
 LEVEL_ORDER = ['Low', 'Medium', 'High']
 
@@ -802,6 +805,14 @@ class PolyphestVsGrampaIter:
         if comparisons.empty:
             print("  [7] Fractionation skipped, no comparisons loaded")
             return
+
+        excluded = comparisons['network'].isin(FRACTIONATION_EXCLUDE_NETWORKS)
+        frac_only = comparisons['config'] != FRACTIONATION_SERIES[0][1]
+        if (excluded & frac_only & (comparisons['status'] == 'SUCCESS')).any():
+            raise SystemExit(f"{FRACTIONATION_EXCLUDE_NETWORKS} have fractionation results, "
+                             f"but are listed as never run")
+        comparisons = comparisons[~excluded]
+        print(f"  [7] Excluding {', '.join(FRACTIONATION_EXCLUDE_NETWORKS)} from the series")
 
         # Row order follows the argument: the two measures that localize the
         # disagreement first, the single global scalar last.

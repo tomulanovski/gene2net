@@ -154,6 +154,8 @@ FRACTIONATION_FAMILIES = {
 }
 FRACTIONATION_CONFIGS = [cfg for fam in FRACTIONATION_FAMILIES.values()
                          for cfg in fam['configs'].values()]
+# Networks never simulated under fractionation; dropped from the fractionation columns.
+FRACTIONATION_EXCLUDE_NETWORKS = ['Morales-Briones_2021']
 
 # Visual style — consistent with create_analysis_figures.py
 METHOD_COLORS = {
@@ -501,6 +503,14 @@ class CrossConfigAnalyzer:
             print("  WARNING: No fractionation inventory data, skipping extended heatmap")
             return
         frac_inventory = frac_inventory[~frac_inventory['method'].isin(CROSS_CONFIG_EXCLUDE)]
+        # Networks never run under fractionation would otherwise count as failures.
+        excluded = frac_inventory['network'].isin(FRACTIONATION_EXCLUDE_NETWORKS)
+        if frac_inventory.loc[excluded, 'inferred_exists'].any():
+            raise SystemExit(f"{FRACTIONATION_EXCLUDE_NETWORKS} have fractionation results, "
+                             f"but are listed as never run")
+        print(f"  Excluding {excluded.sum()} fractionation inventory rows for "
+              f"{', '.join(FRACTIONATION_EXCLUDE_NETWORKS)}")
+        frac_inventory = frac_inventory[~excluded]
         inventory = pd.concat([self.inventory, frac_inventory], ignore_index=True)
         self.plot_completion_heatmap(
             inventory=inventory,
@@ -524,6 +534,8 @@ class CrossConfigAnalyzer:
             .mean()
             .unstack(fill_value=0) * 100
         )
+        # GRAMPA always completes; shown as 100% without checking its outputs
+        completion.loc['grampa'] = 100.0
 
         # Order configs by family then level
         config_order = []

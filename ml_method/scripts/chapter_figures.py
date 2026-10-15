@@ -94,16 +94,20 @@ TABLE_METRIC = {"tab:descendants": "ret_leaf_jaccard", "tab:sisters": "ret_siste
 TABLE_FRAC = {"tab:frac075": "conf_dup_loss_medium_10M_ne1M_fix075",
               "tab:frac050": "conf_dup_loss_medium_10M_ne1M_fix050",
               "tab:frac025": "conf_dup_loss_medium_10M_ne1M_fix025"}
-ROW_CONFIG = {"ILS low": "conf_ils_low_10M", "ILS medium": "conf_ils_medium_10M",
-              "ILS high": "conf_ils_high_10M"}
-for _rate in ("low", "medium", "high"):
-    ROW_CONFIG[f"dup/loss {_rate}, Ne 200k"] = f"conf_dup_loss_{_rate}_10M"
-    ROW_CONFIG[f"dup/loss {_rate}, Ne 1M"] = f"conf_dup_loss_{_rate}_10M_ne1M"
-    ROW_CONFIG[f"dup/loss {_rate}, Ne 2M"] = f"conf_dup_loss_{_rate}_10M_ne2M"
+# Appendix row labels name the (ILS level, dup/loss rate) cell of the 3 x 4 grid, matching
+# the figure panels. The ILS level is set through Ne, so ILS low/medium/high are the base,
+# ne1M and ne2M variants of each dup/loss config.
+_NE_SUFFIX = {"low": "", "medium": "_ne1M", "high": "_ne2M"}
+ROW_CONFIG = {}
+for _ils in ("low", "medium", "high"):
+    ROW_CONFIG[f"ILS {_ils}, no dup/loss"] = f"conf_ils_{_ils}_10M"
+    for _rate in ("low", "medium", "high"):
+        ROW_CONFIG[f"ILS {_ils}, dup/loss {_rate}"] = (
+            f"conf_dup_loss_{_rate}_10M{_NE_SUFFIX[_ils]}")
 BENCH_COLUMNS = ["informed", "free", "polyphest", "grampa_iter", "grampa_iter_prior"]
 FRAC_ROW = {"PlaceNet ploidy-informed": "informed", "PlaceNet ploidy-free": "free",
-            "Polyphest": "polyphest", "GRAMPA-iter": "grampa_iter",
-            "GRAMPA-iter with prior": "grampa_iter_prior"}
+            "Polyphest": "polyphest", "GRAMPAIter": "grampa_iter",
+            "GRAMPAIter with prior": "grampa_iter_prior"}
 
 
 def table_rows(text, label):

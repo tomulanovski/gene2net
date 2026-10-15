@@ -1,114 +1,79 @@
-# From predictions to a network: the decode
+# The Decode
 
 DRAFT for the thesis. Prose style follows the thesis convention of no semicolons, no
-non-mathematical parentheses, and no em-dashes. This section belongs in the Method chapter,
-after the architecture and before the experimental setup. It is the central methodological
-novelty of the decode, so it is written to stand on its own.
+non-mathematical parentheses, and no em-dashes.
 
-## The decode problem
+The two prediction heads return per-branch quantities, a detection probability for every branch of
+the backbone and, for every branch, a distribution over the branches that could have contributed the
+second subgenome. A reconstruction is a single global object. The decode is the step turning those
+per-branch quantities into one MUL-tree, and its only substantive decision is which branches become
+events, since the partner of an accepted branch is read off as the highest scoring candidate.
 
-The model produces two quantities on every edge of the ASTRAL species tree. The first is a
-detection probability, the model's confidence that a whole genome duplication occurred on that
-edge. The second is a partner distribution, which for a confirmed event names the edge the
-duplicated lineage merged with. These are per-edge predictions. A reconstructed network is a
-global object. The decode is the step that turns the per-edge predictions into one multi-labeled
-tree, and its only real decision is which edges become events.
+PlaceNet decodes in either of two modes, differing only in how far they trust the gene copy number.
+Both read the same trained model, so no separate training is required and the mode is selected at
+inference.
 
-The ploidy level of a species is not always known. It can come from chromosome counts or from an
-earlier study, and for many datasets there is nothing reliable to go on. The decode therefore works
-either way. One mode uses prior ploidy information when the user has it, and the other uses none.
+## Ploidy-Informed Decode
 
-## Two decode modes
+The ploidy-informed mode takes a ploidy list, one entry per taxon giving the number of subgenomes
+that taxon carries, so an entry of two marks a tetraploid. Each entry is read as an upper bound on
+the number of events that may touch the taxon. The decode sorts the branches by detection
+probability and accepts each in turn, refusing any event that would push a taxon past its entry, and
+no probability threshold is applied. A taxon therefore ends with at most as many copies as its
+entry, and with fewer only when every remaining branch that would raise it would push some other
+taxon past its own entry. This is the natural mode where the list is trustworthy and the fair
+comparison against Polyphest, since supplying both methods with the same list isolates the
+difference to the placement of the events.
 
-The first mode is ploidy-informed. It takes a ploidy list, one entry per species giving how many
-subgenomes that species carries, so an entry of two marks a tetraploid with two subgenomes. Where
-the list comes from is up to the user. The decode reads each entry as an upper bound on the events
-that may touch that species, and fills the species up to it. This is the natural mode when the list
-is trustworthy, and it is the fair comparison to Polyphest, because giving both methods the same
-list isolates the difference to placement.
+Where no external list is available it can be inferred from the gene trees, which is the route taken
+for the simulated benchmark, since the simulated datasets carry no external list. For each taxon we
+counted its copies in every gene tree, including the gene trees from which it is absent, which
+contribute a count of zero, yielding a distribution of per-tree copy numbers. Gene duplication and
+loss make that distribution noisy, so neither its maximum nor its mean reflects the number of
+subgenomes. We therefore smoothed it with a triangular kernel and took its peak, by the same
+procedure applied to the empirical datasets in the preceding chapter. A taxon observed with a single
+copy in almost every gene tree is inferred diploid and one observed with two copies in the bulk of
+gene trees is inferred to carry two, irrespective of a few outlying gene trees.
 
-The second mode is ploidy-free. It needs no list and estimates nothing in its place. An edge becomes
-an event if and only if its detection probability is at least a threshold, with no bound anywhere in
-the decode. This makes the mode genuinely free of ploidy. It is the natural mode when no trustworthy
-list exists, and it is the fair comparison
-to iterative GRAMPA, which likewise searches for reticulations without a ploidy input. It is also
-the mode that survives fractionation, the regime in which the copy number is not merely unknown
-but actively wrong, and it is analyzed in the fractionation section.
+The greedy fill is not the only way to respect the list. An exact decode would select, among all
+sets of events meeting every entry exactly, the set of highest total detection probability, which is
+a constrained optimization over the predictions rather than a sorted sweep. We report the greedy
+fill and return to the exact objective in the future work.
 
-The two modes need no separate training. They are two ways of reading the same detection and
-partner heads, so a single trained model serves both, and the choice is made at inference time.
+## Ploidy-Free Decode
 
-## Filling to the ploidy list
+The ploidy-free mode requires no list and estimates nothing in its place. A branch becomes an event
+if and only if its detection probability reaches a threshold, with no bound imposed anywhere in the
+decode, which makes the mode independent of copy number. It is the natural mode where no trustworthy
+list exists and the fair comparison against GRAMPAIter, which likewise searches for events without a
+ploidy input. It is also the mode that survives fractionation, the regime in which copy number is
+not merely unknown but systematically wrong.
 
-In ploidy-informed mode the list bounds the events but does not dictate them. The decode adds
-events in order of detection confidence and refuses any event that would push a species past its
-entry. The result is that each species ends with at most that many copies. It ends with fewer only
-when no remaining edge fits, because every edge that would raise this species would push some other
-species past its own entry. An exact version, which selects the set of events that meets every entry
-exactly and has the highest total detection confidence among all such sets, is a constrained
-optimization over the model's own predictions rather than a greedy fill. We report the greedy fill
-and discuss the exact objective in the future-work section.
+The threshold is the single parameter of this mode. We fixed it at 0.5, the natural decision
+boundary of the classifier, and exposed it as a configurable option. A fixed default was used
+because the regime the mode targets, corrupted copy number, is not the regime on which the model was
+trained and selected, so a threshold tuned on the clean training distribution would not transfer to
+it. Calibrating the threshold on data matching the intended corruption is left as future work.
 
-## Estimating the list when none is supplied
+## Building the MUL-tree
 
-A user without a ploidy list can run the ploidy-free mode, or let the method estimate a list from
-the gene trees and run ploidy-informed on that. The benchmark takes the second route, since the
-simulated datasets carry no external list. For each species we count its copies in every gene
-tree, including the trees in which it is absent, which contributes a count of zero. This gives a
-distribution of per-tree copy numbers for the species. Occasional duplication and loss make this
-distribution noisy, so we do not take its maximum or its mean. We smooth it with a triangular
-kernel and take the peak, which is robust to a few gene trees that duplicate or lose a copy. A
-species seen with a single copy in almost every tree is inferred diploid, and a species seen with
-two copies in the bulk of trees is inferred to carry two, regardless of a handful of outlier
-trees.
+Once the events are selected and their partners named, they are grafted onto a copy of the backbone.
+Events are applied smallest source clade first, so that an event nested inside another is placed
+before the outer event that may duplicate it.
 
-## The threshold in ploidy-free mode
+Every event names a source clade and a partner branch, and the graft is one operation in both cases.
+The partner branch is subdivided by a new node, and that node carries whatever the branch already
+held together with a copy of the source clade. Where the partner branch is the source branch itself,
+the copy lands beside the clade and gives two identical sibling subtrees, which is an
+autopolyploidization and folds later to a higher ploidy level without a reticulation. Where the
+partner branch is elsewhere, the copy lands beside a different lineage and folds to a reticulation,
+which is an allopolyploidization. Either way the source clade remains where ASTRAL placed it and
+only the copy moves, which is why the model predicts one partner rather than two.
 
-Ploidy-free mode has one parameter, the detection threshold at or above which an edge becomes an
-event. We fix it at 0.5, the classifier's natural decision boundary, and expose it as a configurable
-option. A fixed default is the honest choice here, because the regime in which the ploidy-free mode
-is used, namely corrupted copy number, is not the regime the model was trained and selected on, so a
-threshold tuned on the clean training distribution would not transfer to it in a principled way.
-Calibrating the threshold per regime, ideally on data that matches the corruption the mode targets,
-is left as future work.
-
-## Building the multi-labeled tree
-
-Once the events are selected and their partners named, they are grafted onto a copy of the ASTRAL
-backbone to produce the multi-labeled tree. Events are applied smallest source
-clade first, so that an event nested inside another is placed before the outer event that may
-duplicate it.
-
-Every event names a source clade and a partner edge, and the graft is one operation in both cases.
-The partner edge is subdivided by a new node, and that node holds whatever the edge already carried
-together with a copy of the source clade.
-
-When the partner edge is the source edge itself, the copy lands beside the clade and gives two
-identical sibling subtrees. This is an autopolyploidy, and it folds later to ploidy
-without a reticulation. When the partner edge is elsewhere, the copy lands beside a different
-lineage and folds to a reticulation, which is an allopolyploidy.
-
-Either way the source clade stays where ASTRAL placed it and only the copy moves, which is why the
-model predicts one partner rather than two. This is the structural root of the placement limitation
-discussed later, since the home position of the polyploid is fixed by the backbone and never chosen
-by the model.
-
-An event is recorded as a clade, a set of species, because that is what a backbone edge is. Each
-graft changes the tree, so every later graft has to locate its clade again in the tree as it now
-stands, and the same holds for its partner clade. Usually the species still match exactly. When an
-earlier graft has added copies inside the clade they no longer do, and the builder falls back to the
-smallest clade that still contains all of them, which is that clade grown by the earlier graft. An
-event is skipped only when the search reaches the root. Both cases are rare and sit on networks with
-nested or overlapping events, and together they are what the build residual in the error analysis
-measures.
-
-## Summary
-
-The decode turns per-edge detection and partner predictions into a multi-labeled tree by choosing
-which edges become events, and it is defined along how much it trusts the species copy number. The
-published method offers both, as two modes. Ploidy-informed mode fills each
-species up to a copy-number ceiling, inferred by the method or supplied by the user, and never
-forces an unsupported copy. Ploidy-free mode discards copy number and keeps the edges the
-detection head is confident about, at a fixed default threshold. The user selects the
-mode by whether a trustworthy ploidy list exists, which also fixes the fair baseline for each
-mode, Polyphest for the ploidy-informed mode and iterative GRAMPA for the ploidy-free mode.
+An event is recorded as a clade, a set of taxa, because that is what a branch of the backbone is.
+Each graft changes the tree, so every later graft must locate its source clade and its partner clade
+in the tree as it then stands. Usually the taxa still match exactly. Where an earlier graft has added
+copies inside the clade they no longer do, and the builder falls back to the smallest clade still
+containing all of them, which is that clade as grown by the earlier graft. An event is skipped only
+when the search reaches the root. Both cases are confined to networks with nested or overlapping
+events and together constitute the build residual measured in the diagnostic analysis.

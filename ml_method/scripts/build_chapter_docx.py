@@ -44,9 +44,10 @@ SECTIONS = [
     ("chapter_retention_draft.md", None),
     ("chapter_diagnostic_draft.md", None),
     ("chapter_feature_importance_draft.md", None),
+    # Discussion: limitations open it, future directions are a subsection of it. The old
+    # standalone conclusion is folded into those two, the thesis carrying its own.
     ("chapter_limitations_draft.md", None),
     ("chapter_future_work_draft.md", None),
-    ("chapter_conclusion_draft.md", None),
     ("chapter_appendix_tables_draft.md", None),
 ]
 
@@ -58,11 +59,18 @@ CAPTION_RE = re.compile(r"^(Table|Figure):\s*\{#((?:tab|fig):[A-Za-z0-9_-]+)\}\s
 REF_RE = re.compile(r"@((?:tab|fig):[A-Za-z0-9_-]+)")
 
 
+META_PREFIXES = ("DRAFT for the thesis", "NOTE:")
+
+
 def strip_meta(text):
-    """Remove the 'DRAFT for the thesis...' meta paragraph (until the next blank line)."""
+    """Drop editorial-note paragraphs, each running to the next blank line.
+
+    A paragraph opening with any META_PREFIXES marker is for the author only and never
+    reaches the document, so in-draft notes can sit beside the prose they concern.
+    """
     out, skip = [], False
     for line in text.split("\n"):
-        if line.strip().startswith("DRAFT for the thesis"):
+        if line.strip().startswith(META_PREFIXES):
             skip = True
             continue
         if skip:

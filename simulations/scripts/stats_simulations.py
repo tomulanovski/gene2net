@@ -63,6 +63,9 @@ DUPLOSS_SERIES = {
     'dup/loss, high ILS': [(0, 'conf_ils_high_10M'), (1, 'conf_dup_loss_low_10M_ne2M'),
                            (2, 'conf_dup_loss_medium_10M_ne2M'), (3, 'conf_dup_loss_high_10M_ne2M')],
 }
+# Never simulated under fractionation; dropped from blocks B and C2, including
+# the 1.0 baseline, so every retention level covers the same networks.
+FRACTIONATION_EXCLUDE_NETWORKS = ['Morales-Briones_2021']
 TETRAPLOID_NETWORKS = ['Bendiksby_2011', 'Ding_2023', 'Koenen_2020', 'Liu_2023',
                        'Shahrestani_2015', 'Wisecaver_2023', 'Wu_2015', 'Zhao_2021']
 ILS_ONLY = ['conf_ils_low_10M', 'conf_ils_medium_10M', 'conf_ils_high_10M']
@@ -185,13 +188,18 @@ def main():
 
     comp = load(BASELINE + [c for _, c in FRACTIONATION[1:]])
     P, G, M = 'polyphest', 'grandma_split', 'mpsugar'
+    excluded = comp['network'].isin(FRACTIONATION_EXCLUDE_NETWORKS)
+    if (excluded & comp['config'].isin([c for _, c in FRACTIONATION[1:]])).any():
+        raise SystemExit(f"{FRACTIONATION_EXCLUDE_NETWORKS} have fractionation results, "
+                         f"but are listed as never run")
+    comp_frac = comp[~excluded]
     blocks = [
         block_per_config(comp, BASELINE, P, G, 'A. Baseline configurations', w),
-        block_per_config(comp, [c for _, c in FRACTIONATION], P, G,
-                         'B. Fractionation levels', w),
+        block_per_config(comp_frac, [c for _, c in FRACTIONATION], P, G,
+                         'B. Fractionation levels (Morales-Briones excluded)', w),
         block_slopes(comp, DUPLOSS_SERIES, P, G,
                      'C1. Sensitivity to duplication and loss (x = level 0..3)', w),
-        block_slopes(comp, {'retention 1.0 -> 0.25': FRACTIONATION}, P, G,
+        block_slopes(comp_frac, {'retention 1.0 -> 0.25': FRACTIONATION}, P, G,
                      'C2. Sensitivity to fractionation (x = 1 - retention)', w),
         block_tetraploid(comp, M, G, 'D. Tetraploid subset, MPAllopp vs GRAMPAIter', w),
     ]
